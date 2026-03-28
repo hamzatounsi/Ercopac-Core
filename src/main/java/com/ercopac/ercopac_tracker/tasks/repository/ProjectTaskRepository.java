@@ -8,6 +8,6 @@ import java.util.List;
 public interface ProjectTaskRepository extends JpaRepository<ProjectTask, Long> {
 
     List<ProjectTask> findByProjectIdOrderByDisplayOrderAscIdAsc(Long projectId);
-
+    List<ProjectTask> findByProjectId(Long projectId);
     long countByProjectId(Long projectId);
 }
