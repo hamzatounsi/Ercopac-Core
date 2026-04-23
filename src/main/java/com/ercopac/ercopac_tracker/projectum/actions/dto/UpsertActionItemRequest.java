@@ -8,20 +8,20 @@ import java.util.List;
 
 public class UpsertActionItemRequest {
 
-    @NotBlank
+    @NotBlank(message = "Title is required")
     private String title;
 
     private String description;
 
-    @NotBlank
+    @NotBlank(message = "Action type is required")
     private String actionType;
 
     private String departmentCode;
 
-    @NotBlank
+    @NotBlank(message = "Priority is required")
     private String priority;
 
-    @NotBlank
+    @NotBlank(message = "Status is required")
     private String status;
 
     private Boolean customerVisible;
@@ -30,35 +30,86 @@ public class UpsertActionItemRequest {
 
     private List<String> assignees = new ArrayList<>();
 
-    public UpsertActionItemRequest() {}
+    public UpsertActionItemRequest() {
+    }
 
-    public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
+    public String getTitle() {
+        return title;
+    }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public void setTitle(String title) {
+        this.title = title;
+    }
 
-    public String getActionType() { return actionType; }
-    public void setActionType(String actionType) { this.actionType = actionType; }
+    public String getDescription() {
+        return description;
+    }
 
-    public String getDepartmentCode() { return departmentCode; }
-    public void setDepartmentCode(String departmentCode) { this.departmentCode = departmentCode; }
+    public void setDescription(String description) {
+        this.description = description;
+    }
 
-    public String getPriority() { return priority; }
-    public void setPriority(String priority) { this.priority = priority; }
+    public String getActionType() {
+        return actionType;
+    }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public void setActionType(String actionType) {
+        this.actionType = actionType;
+    }
 
-    public Boolean getCustomerVisible() { return customerVisible; }
-    public void setCustomerVisible(Boolean customerVisible) { this.customerVisible = customerVisible; }
+    public String getDepartmentCode() {
+        return departmentCode;
+    }
 
-    public LocalDate getInsertedDate() { return insertedDate; }
-    public void setInsertedDate(LocalDate insertedDate) { this.insertedDate = insertedDate; }
+    public void setDepartmentCode(String departmentCode) {
+        this.departmentCode = departmentCode;
+    }
 
-    public LocalDate getDueDate() { return dueDate; }
-    public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
+    public String getPriority() {
+        return priority;
+    }
 
-    public List<String> getAssignees() { return assignees; }
-    public void setAssignees(List<String> assignees) { this.assignees = assignees; }
+    public void setPriority(String priority) {
+        this.priority = priority;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public Boolean getCustomerVisible() {
+        return customerVisible;
+    }
+
+    public void setCustomerVisible(Boolean customerVisible) {
+        this.customerVisible = customerVisible;
+    }
+
+    public LocalDate getInsertedDate() {
+        return insertedDate;
+    }
+
+    public void setInsertedDate(LocalDate insertedDate) {
+        this.insertedDate = insertedDate;
+    }
+
+    public LocalDate getDueDate() {
+        return dueDate;
+    }
+
+    public void setDueDate(LocalDate dueDate) {
+        this.dueDate = dueDate;
+    }
+
+    public List<String> getAssignees() {
+        return assignees;
+    }
+
+    public void setAssignees(List<String> assignees) {
+        this.assignees = assignees == null ? new ArrayList<>() : assignees;
+    }
 }

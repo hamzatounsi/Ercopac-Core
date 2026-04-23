@@ -6,6 +6,8 @@ import com.ercopac.ercopac_tracker.projectum.actions.domain.*;
 import com.ercopac.ercopac_tracker.projectum.actions.dto.*;
 import com.ercopac.ercopac_tracker.projectum.actions.repository.ActionItemRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
+import com.ercopac.ercopac_tracker.user.UserRepository;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,13 +22,16 @@ public class ActionService {
     private final ActionItemRepository actionItemRepository;
     private final ProjectRepository projectRepository;
     private final SecurityUtils securityUtils;
+    private final UserRepository userRepository;
 
     public ActionService(ActionItemRepository actionItemRepository,
                          ProjectRepository projectRepository,
-                         SecurityUtils securityUtils) {
+                         SecurityUtils securityUtils,
+                        UserRepository userRepository) {
         this.actionItemRepository = actionItemRepository;
         this.projectRepository = projectRepository;
         this.securityUtils = securityUtils;
+        this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
@@ -208,5 +213,30 @@ public class ActionService {
     private String currentActor() {
         String username = securityUtils.getCurrentUsername();
         return username == null || username.isBlank() ? "User" : username;
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> getAvailableAssignees(Long projectId) {
+        Project project = getAccessibleProject(projectId);
+
+        if (securityUtils.isPlatformUser()) {
+            return userRepository.findAll()
+                    .stream()
+                    .map(user -> user.getFullName())
+                    .filter(name -> name != null && !name.isBlank())
+                    .distinct()
+                    .sorted()
+                    .toList();
+        }
+
+        Long organisationId = project.getOrganisation().getId();
+
+        return userRepository.findByOrganisation_IdOrderByFullNameAsc(organisationId)
+                .stream()
+                .map(user -> user.getFullName())
+                .filter(name -> name != null && !name.isBlank())
+                .distinct()
+                .sorted()
+                .toList();
     }
 }
