@@ -12,8 +12,9 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
@@ -33,7 +34,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain chain)
             throws ServletException, IOException {
 
         String header = request.getHeader("Authorization");
@@ -44,17 +47,29 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         String token = header.substring(7);
+
         String username = jwtService.extractUsername(token);
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            // Get UserDetailsService lazily (breaks circular dependency)
-            UserDetailsService userDetailsService = applicationContext.getBean(UserDetailsService.class);
+            UserDetailsService userDetailsService =
+                    applicationContext.getBean(UserDetailsService.class);
+
             UserDetails user = userDetailsService.loadUserByUsername(username);
 
-            var authToken = new UsernamePasswordAuthenticationToken(
-                    user, null, user.getAuthorities()
-            );
+            UsernamePasswordAuthenticationToken authToken =
+                    new UsernamePasswordAuthenticationToken(
+                            user,
+                            null,
+                            user.getAuthorities()
+                    );
+
+            Map<String, Object> details = new HashMap<>();
+            details.put("userId", jwtService.extractUserId(token));
+            details.put("organisationId", jwtService.extractOrganisationId(token));
+            details.put("role", jwtService.extractRole(token));
+
+            authToken.setDetails(details);
 
             SecurityContextHolder.getContext().setAuthentication(authToken);
         }

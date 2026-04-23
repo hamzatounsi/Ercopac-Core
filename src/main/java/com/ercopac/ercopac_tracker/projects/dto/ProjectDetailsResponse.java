@@ -27,6 +27,78 @@ public class ProjectDetailsResponse {
     private String keywords;
     private String subcontractors;
     private String comment;
+    private String customer;
+    private String category;
+    private String riskLevel;
+    private BigDecimal estimatedCost;
+    private String projectManagerName;
+    private String programManagerName;
+    private String salesManagerName;
+    private Boolean archived = false;
+
+    public String getCustomer() {
+        return customer;
+    }
+
+    public void setCustomer(String customer) {
+        this.customer = customer;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getRiskLevel() {
+        return riskLevel;
+    }
+
+    public void setRiskLevel(String riskLevel) {
+        this.riskLevel = riskLevel;
+    }
+
+    public BigDecimal getEstimatedCost() {
+        return estimatedCost;
+    }
+
+    public void setEstimatedCost(BigDecimal estimatedCost) {
+        this.estimatedCost = estimatedCost;
+    }
+
+    public String getProjectManagerName() {
+        return projectManagerName;
+    }
+
+    public void setProjectManagerName(String projectManagerName) {
+        this.projectManagerName = projectManagerName;
+    }
+
+    public String getProgramManagerName() {
+        return programManagerName;
+    }
+
+    public void setProgramManagerName(String programManagerName) {
+        this.programManagerName = programManagerName;
+    }
+
+    public String getSalesManagerName() {
+        return salesManagerName;
+    }
+
+    public void setSalesManagerName(String salesManagerName) {
+        this.salesManagerName = salesManagerName;
+    }
+
+    public Boolean getArchived() {
+        return archived;
+    }
+
+    public void setArchived(Boolean archived) {
+        this.archived = archived;
+    }
 
     public ProjectDetailsResponse() {
     }

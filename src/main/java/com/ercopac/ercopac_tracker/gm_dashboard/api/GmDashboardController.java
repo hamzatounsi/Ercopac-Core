@@ -26,19 +26,19 @@ public class GmDashboardController {
     }
 
     @GetMapping("/projects")
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
     public List<ProjectDashboardRowDto> projects() {
         return gmDashboardService.getProjects();
     }
 
     @GetMapping("/kpis/portfolio")
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
     public PortfolioKpiDto portfolioKpis() {
         return gmProjectumKpiService.getPortfolioKpis();
     }
 
     @GetMapping("/projects/{projectId}/kpis")
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
     public ProjectKpiDto projectKpis(@PathVariable Long projectId) {
         return gmProjectumKpiService.getProjectKpis(projectId);
     }
