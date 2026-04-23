@@ -65,4 +65,10 @@ public class ActionController {
                                                        @RequestBody Map<String, String> payload) {
         return ResponseEntity.ok(actionService.addComment(projectId, actionId, payload.get("text")));
     }
+
+    @GetMapping("/assignees")
+    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    public ResponseEntity<List<String>> getAvailableAssignees(@PathVariable Long projectId) {
+        return ResponseEntity.ok(actionService.getAvailableAssignees(projectId));
+    }
 }

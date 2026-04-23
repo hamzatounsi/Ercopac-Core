@@ -89,22 +89,43 @@ public class DepartmentDashboardService {
 
         String departmentCode = manager.getDepartmentCode();
 
-        List<DepartmentMemberDto> members = userRepository
+        List<DepartmentMemberDto> realMembers = userRepository
                 .findByOrganisation_IdAndDepartmentCodeOrderByFullNameAsc(currentOrgId, departmentCode)
                 .stream()
                 .filter(AppUser::isActive)
                 .map(this::toMemberDto)
                 .toList();
 
-        List<Long> memberIds = members.stream()
+        List<DepartmentMemberDto> members = new ArrayList<>(realMembers);
+
+        long genericBaseId = -1L;
+        for (String resourceType : getDepartmentResourceTypes(departmentCode)) {
+            members.add(new DepartmentMemberDto(
+                    genericBaseId--,
+                    "G-" + resourceType,
+                    null,
+                    null,
+                    departmentCode,
+                    resourceType,
+                    "GENERIC",
+                    null,
+                    true,
+                    8,
+                    5,
+                    List.of(1, 2, 3, 4, 5),
+                    "#6b7280"
+            ));
+        }
+
+        List<Long> realMemberIds = realMembers.stream()
                 .map(DepartmentMemberDto::id)
                 .filter(Objects::nonNull)
                 .toList();
 
-        List<DepartmentHolidayDto> holidays = departmentHolidayService.findHolidays(currentOrgId, memberIds);
+        List<DepartmentHolidayDto> holidays = departmentHolidayService.findHolidays(currentOrgId, realMemberIds);
         List<DepartmentTimelineColumnDto> timelineColumns = buildTimelineColumns(timelineView, offset, span);
 
-        List<ProjectTask> departmentTasks = loadDepartmentTasks(currentOrgId, departmentCode, memberIds);
+        List<ProjectTask> departmentTasks = loadDepartmentTasks(currentOrgId, departmentCode, realMemberIds);
         Map<Long, List<TaskResourceAssignment>> assignmentsByTaskId = loadAssignmentsByTaskId(departmentTasks);
 
         List<DepartmentResourceRowDto> resourceRows = buildResourceRows(
@@ -177,47 +198,57 @@ public class DepartmentDashboardService {
     }
 
     private List<DepartmentResourceRowDto> buildResourceRows(List<DepartmentMemberDto> members,
-                                                             List<DepartmentHolidayDto> holidays,
-                                                             List<ProjectTask> tasks,
-                                                             Map<Long, List<TaskResourceAssignment>> assignmentsByTaskId) {
-        Map<Long, List<DepartmentHolidayDto>> holidaysByMember = holidays.stream()
-                .collect(Collectors.groupingBy(DepartmentHolidayDto::memberId));
+                                                         List<DepartmentHolidayDto> holidays,
+                                                         List<ProjectTask> tasks,
+                                                         Map<Long, List<TaskResourceAssignment>> assignmentsByTaskId) {
+    Map<Long, List<DepartmentHolidayDto>> holidaysByMember = holidays.stream()
+            .collect(Collectors.groupingBy(DepartmentHolidayDto::memberId));
 
-        Map<Long, List<ProjectTask>> tasksByMemberId = new HashMap<>();
-        for (DepartmentMemberDto member : members) {
-            tasksByMemberId.put(member.id(), new ArrayList<>());
+    Map<Long, DepartmentMemberDto> membersById = members.stream()
+            .collect(Collectors.toMap(DepartmentMemberDto::id, m -> m));
+
+    Map<String, DepartmentMemberDto> genericMembersByResourceType = members.stream()
+            .filter(m -> m.id() != null && m.id() < 0)
+            .filter(m -> m.resourceType() != null && !m.resourceType().isBlank())
+            .collect(Collectors.toMap(
+                    m -> m.resourceType().toUpperCase(Locale.ROOT),
+                    m -> m,
+                    (a, b) -> a
+            ));
+
+    Map<Long, List<DepartmentTimelineItemDto>> itemsByMemberId = new LinkedHashMap<>();
+    for (DepartmentMemberDto member : members) {
+        itemsByMemberId.put(member.id(), new ArrayList<>());
+    }
+
+    for (ProjectTask task : tasks) {
+        LocalDate start = firstNonNullDate(task.getActualStart(), task.getPlannedStart(), task.getBaselineStart());
+        LocalDate end = firstNonNullDate(task.getActualEnd(), task.getPlannedEnd(), task.getBaselineEnd());
+
+        if (start == null || end == null) {
+            continue;
         }
 
-        for (ProjectTask task : tasks) {
-            if (task.getAssignedUser() != null && tasksByMemberId.containsKey(task.getAssignedUser().getId())) {
-                tasksByMemberId.get(task.getAssignedUser().getId()).add(task);
-                continue;
-            }
+        Project project = projectRepository.findById(task.getProjectId()).orElse(null);
 
-            List<TaskResourceAssignment> assignments = assignmentsByTaskId.getOrDefault(task.getId(), Collections.emptyList());
-            for (TaskResourceAssignment assignment : assignments) {
-                if (assignment.getAssignedUser() != null && tasksByMemberId.containsKey(assignment.getAssignedUser().getId())) {
-                    tasksByMemberId.get(assignment.getAssignedUser().getId()).add(task);
-                }
+        Set<Long> targetMemberIds = new LinkedHashSet<>();
+
+        if (task.getAssignedUser() != null && membersById.containsKey(task.getAssignedUser().getId())) {
+            targetMemberIds.add(task.getAssignedUser().getId());
+        }
+
+        List<TaskResourceAssignment> assignments = assignmentsByTaskId.getOrDefault(task.getId(), Collections.emptyList());
+        for (TaskResourceAssignment assignment : assignments) {
+            if (assignment.getAssignedUser() != null && membersById.containsKey(assignment.getAssignedUser().getId())) {
+                targetMemberIds.add(assignment.getAssignedUser().getId());
             }
         }
 
-        List<DepartmentResourceRowDto> rows = new ArrayList<>();
+        if (!targetMemberIds.isEmpty()) {
+            for (Long memberId : targetMemberIds) {
+                DepartmentMemberDto member = membersById.get(memberId);
 
-        for (DepartmentMemberDto member : members) {
-            List<DepartmentTimelineItemDto> items = new ArrayList<>();
-
-            for (ProjectTask task : tasksByMemberId.getOrDefault(member.id(), Collections.emptyList())) {
-                LocalDate start = firstNonNullDate(task.getActualStart(), task.getPlannedStart(), task.getBaselineStart());
-                LocalDate end = firstNonNullDate(task.getActualEnd(), task.getPlannedEnd(), task.getBaselineEnd());
-
-                if (start == null || end == null) {
-                    continue;
-                }
-
-                Project project = projectRepository.findById(task.getProjectId()).orElse(null);
-
-                items.add(new DepartmentTimelineItemDto(
+                itemsByMemberId.get(memberId).add(new DepartmentTimelineItemDto(
                         task.getProjectId(),
                         project != null ? project.getCode() : null,
                         project != null ? project.getName() : null,
@@ -235,35 +266,80 @@ public class DepartmentDashboardService {
                         member.internal()
                 ));
             }
+        } else {
+            String resourceType = task.getResourceType();
 
-            List<DepartmentHolidayDto> memberHolidays = holidaysByMember.getOrDefault(member.id(), Collections.emptyList());
-            for (DepartmentHolidayDto holiday : memberHolidays) {
-                items.add(new DepartmentTimelineItemDto(
-                        null,
-                        null,
-                        null,
-                        null,
-                        "Holiday",
-                        "holiday",
-                        holiday.fromDate(),
-                        holiday.toDate(),
-                        0,
-                        member.departmentCode(),
-                        member.resourceType(),
-                        false,
-                        true,
-                        holiday.note(),
-                        member.internal()
-                ));
+            if ((resourceType == null || resourceType.isBlank()) && !assignments.isEmpty()) {
+                resourceType = assignments.stream()
+                        .map(TaskResourceAssignment::getResourceType)
+                        .filter(Objects::nonNull)
+                        .filter(s -> !s.isBlank())
+                        .findFirst()
+                        .orElse(null);
             }
 
-            items.sort(Comparator.comparing(DepartmentTimelineItemDto::startDate, Comparator.nullsLast(LocalDate::compareTo)));
-            rows.add(new DepartmentResourceRowDto(member, items));
-        }
+            if (resourceType != null) {
+                DepartmentMemberDto genericMember =
+                        genericMembersByResourceType.get(resourceType.toUpperCase(Locale.ROOT));
 
-        return rows;
+                if (genericMember != null) {
+                    itemsByMemberId.get(genericMember.id()).add(new DepartmentTimelineItemDto(
+                            task.getProjectId(),
+                            project != null ? project.getCode() : null,
+                            project != null ? project.getName() : null,
+                            task.getId(),
+                            task.getName(),
+                            task.getTaskType(),
+                            start,
+                            end,
+                            safeProgress(task.getPercentComplete()),
+                            task.getDepartmentCode(),
+                            resourceType,
+                            false,
+                            false,
+                            null,
+                            genericMember.internal()
+                    ));
+                }
+            }
+        }
     }
 
+    for (DepartmentHolidayDto holiday : holidays) {
+        DepartmentMemberDto member = membersById.get(holiday.memberId());
+        if (member == null) {
+            continue;
+        }
+
+        itemsByMemberId.get(holiday.memberId()).add(new DepartmentTimelineItemDto(
+                null,
+                null,
+                null,
+                null,
+                "Holiday",
+                "holiday",
+                holiday.fromDate(),
+                holiday.toDate(),
+                0,
+                member.departmentCode(),
+                member.resourceType(),
+                false,
+                true,
+                holiday.note(),
+                member.internal()
+        ));
+    }
+
+    List<DepartmentResourceRowDto> rows = new ArrayList<>();
+
+    for (DepartmentMemberDto member : members) {
+        List<DepartmentTimelineItemDto> items = itemsByMemberId.getOrDefault(member.id(), new ArrayList<>());
+        items.sort(Comparator.comparing(DepartmentTimelineItemDto::startDate, Comparator.nullsLast(LocalDate::compareTo)));
+        rows.add(new DepartmentResourceRowDto(member, items));
+    }
+
+    return rows;
+}
     private List<DepartmentProjectBlockDto> buildProjectBlocks(Long organisationId,
                                                                List<ProjectTask> tasks) {
         Map<Long, List<ProjectTask>> tasksByProject = tasks.stream()
@@ -316,8 +392,8 @@ public class DepartmentDashboardService {
     }
 
     private List<DepartmentWeeklyStatDto> buildWeeklyStats(List<ProjectTask> tasks,
-                                                           List<DepartmentTimelineColumnDto> timelineColumns,
-                                                           String timelineView) {
+                                                        List<DepartmentTimelineColumnDto> timelineColumns,
+                                                        String timelineView) {
         if (!"week".equals(timelineView) || timelineColumns.isEmpty()) {
             return Collections.emptyList();
         }
@@ -336,6 +412,11 @@ public class DepartmentDashboardService {
             String resourceType = task.getResourceType() != null ? task.getResourceType() : "UNKNOWN";
             Integer taskHours = task.getPlannedHours() != null ? task.getPlannedHours().intValue() : 0;
 
+            List<TaskResourceAssignment> assignments = Collections.emptyList();
+            if (task.getProjectId() != null && task.getId() != null) {
+                assignments = taskResourceAssignmentRepository.findByProjectIdAndTaskIdOrderByIdAsc(task.getProjectId(), task.getId());
+            }
+
             for (DepartmentTimelineColumnDto col : timelineColumns) {
                 if (end.isBefore(col.startDate()) || start.isAfter(col.endDate())) {
                     continue;
@@ -347,6 +428,14 @@ public class DepartmentDashboardService {
                     resourceCountByTypeAndWeek
                             .computeIfAbsent(key, k -> new HashSet<>())
                             .add(task.getAssignedUser().getId());
+                }
+
+                for (TaskResourceAssignment assignment : assignments) {
+                    if (assignment.getAssignedUser() != null) {
+                        resourceCountByTypeAndWeek
+                                .computeIfAbsent(key, k -> new HashSet<>())
+                                .add(assignment.getAssignedUser().getId());
+                    }
                 }
 
                 plannedHoursByTypeAndWeek.merge(key, taskHours, Integer::sum);
@@ -376,7 +465,6 @@ public class DepartmentDashboardService {
 
         return stats;
     }
-
     private DepartmentManagerDto toManagerDto(AppUser user) {
         return new DepartmentManagerDto(
                 safeLong(readProperty(user, "id")),
@@ -542,37 +630,57 @@ public class DepartmentDashboardService {
         return value != null && Boolean.parseBoolean(value.toString());
     }
 
-    private List<ProjectTask> loadDepartmentTasks(Long organisationId,
-                                                  String departmentCode,
-                                                  List<Long> memberIds) {
-        Set<Long> memberIdSet = new HashSet<>(memberIds);
+   private List<ProjectTask> loadDepartmentTasks(Long organisationId,
+                                              String departmentCode,
+                                              List<Long> memberIds) {
+    Set<Long> memberIdSet = new HashSet<>(memberIds);
 
-        return projectTaskRepository.findAll()
-                .stream()
-                .filter(ProjectTask::getActive)
-                .filter(task -> {
-                    if (task.getAssignedUser() != null
-                            && task.getAssignedUser().getOrganisation() != null
-                            && !Objects.equals(task.getAssignedUser().getOrganisation().getId(), organisationId)) {
-                        return false;
-                    }
-                    return true;
-                })
-                .filter(task -> {
-                    if (task.getAssignedUser() != null && memberIdSet.contains(task.getAssignedUser().getId())) {
-                        return true;
-                    }
-                    if (departmentCode != null && departmentCode.equals(task.getDepartmentCode())) {
-                        return true;
-                    }
+    List<ProjectTask> allTasks = projectTaskRepository.findAll()
+            .stream()
+            .filter(ProjectTask::getActive)
+            .filter(task -> {
+                if (task.getAssignedUser() != null
+                        && task.getAssignedUser().getOrganisation() != null
+                        && !Objects.equals(task.getAssignedUser().getOrganisation().getId(), organisationId)) {
                     return false;
-                })
-                .sorted(Comparator
-                        .comparing(ProjectTask::getProjectId, Comparator.nullsLast(Long::compareTo))
-                        .thenComparing(ProjectTask::getDisplayOrder, Comparator.nullsLast(Integer::compareTo))
-                        .thenComparing(ProjectTask::getId, Comparator.nullsLast(Long::compareTo)))
-                .toList();
+                }
+                return true;
+            })
+            .toList();
+
+    List<ProjectTask> result = new ArrayList<>();
+
+    for (ProjectTask task : allTasks) {
+        boolean include = false;
+
+        if (task.getAssignedUser() != null && memberIdSet.contains(task.getAssignedUser().getId())) {
+            include = true;
+        }
+
+        if (!include && departmentCode != null && departmentCode.equals(task.getDepartmentCode())) {
+            include = true;
+        }
+
+        if (!include && task.getProjectId() != null && task.getId() != null) {
+            List<TaskResourceAssignment> assignments =
+                    taskResourceAssignmentRepository.findByProjectIdAndTaskIdOrderByIdAsc(task.getProjectId(), task.getId());
+
+            include = assignments.stream()
+                    .anyMatch(a -> a.getAssignedUser() != null && memberIdSet.contains(a.getAssignedUser().getId()));
+        }
+
+        if (include) {
+            result.add(task);
+        }
     }
+
+    return result.stream()
+            .sorted(Comparator
+                    .comparing(ProjectTask::getProjectId, Comparator.nullsLast(Long::compareTo))
+                    .thenComparing(ProjectTask::getDisplayOrder, Comparator.nullsLast(Integer::compareTo))
+                    .thenComparing(ProjectTask::getId, Comparator.nullsLast(Long::compareTo)))
+            .toList();
+}
 
     private Map<Long, List<TaskResourceAssignment>> loadAssignmentsByTaskId(List<ProjectTask> tasks) {
         Map<Long, List<TaskResourceAssignment>> map = new HashMap<>();
@@ -614,5 +722,26 @@ public class DepartmentDashboardService {
         }
         String type = task.getTaskType().toUpperCase(Locale.ROOT);
         return type.contains("SUMMARY") || type.equals("SUM");
+    }
+
+    private List<String> getDepartmentResourceTypes(String departmentCode) {
+        if (departmentCode == null || departmentCode.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        return switch (departmentCode.toUpperCase(Locale.ROOT)) {
+            case "SW" -> List.of("PC", "PLC");
+            case "MFC" -> List.of("MFC.M", "MFC.E");
+            case "INST" -> List.of("MEC", "ELECT", "INST");
+            case "PM" -> List.of("PM");
+            case "ME" -> List.of("ME");
+            case "CE" -> List.of("CE");
+            case "PRC" -> List.of("PRC");
+            case "QA" -> List.of("QA");
+            case "HSE" -> List.of("HSE");
+            case "FIN" -> List.of("FIN");
+            case "CS" -> List.of("CS");
+            default -> List.of(departmentCode.toUpperCase(Locale.ROOT));
+        };
     }
 }
