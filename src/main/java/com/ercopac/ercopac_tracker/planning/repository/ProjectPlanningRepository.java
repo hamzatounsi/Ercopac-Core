@@ -8,4 +8,5 @@ import java.util.Optional;
 public interface ProjectPlanningRepository extends JpaRepository<ProjectPlanning, Long> {
 
     Optional<ProjectPlanning> findByProjectId(Long projectId);
+    boolean existsByProjectId(Long projectId);
 }

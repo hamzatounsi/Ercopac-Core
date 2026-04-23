@@ -1,6 +1,8 @@
 package com.ercopac.ercopac_tracker.auth;
 
 import com.ercopac.ercopac_tracker.security.JwtService;
+import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -14,10 +16,12 @@ public class AuthController {
 
     private final AuthenticationManager authManager;
     private final JwtService jwtService;
+    private final UserRepository userRepository;
 
-    public AuthController(AuthenticationManager authManager, JwtService jwtService) {
+    public AuthController(AuthenticationManager authManager, JwtService jwtService, UserRepository userRepository) {
         this.authManager = authManager;
         this.jwtService = jwtService;
+        this.userRepository = userRepository;
     }
 
     @PostMapping("/login")
@@ -27,9 +31,28 @@ public class AuthController {
                 new UsernamePasswordAuthenticationToken(req.username(), req.password())
         );
 
-        String role = auth.getAuthorities().iterator().next().getAuthority();
+        AppUser user = userRepository.findByEmail(req.username())
+                .orElseThrow(() -> new IllegalArgumentException("Authenticated user not found"));
 
-        String token = jwtService.generateToken(req.username(), role);
-        return new LoginResponse(token);
+        Long organisationId = user.getOrganisation() != null ? user.getOrganisation().getId() : null;
+        String organisationCode = user.getOrganisation() != null ? user.getOrganisation().getCode() : null;
+        String organisationName = user.getOrganisation() != null ? user.getOrganisation().getName() : null;
+
+        String token = jwtService.generateToken(
+                user.getId(),
+                user.getEmail(),
+                "ROLE_" + user.getRole().name(),
+                organisationId
+        );
+
+        return new LoginResponse(
+                token,
+                user.getId(),
+                user.getEmail(),
+                user.getRole().name(),
+                organisationId,
+                organisationCode,
+                organisationName
+        );
     }
 }

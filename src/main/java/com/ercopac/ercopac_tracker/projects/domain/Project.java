@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.projects.domain;
 
+import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -18,6 +19,10 @@ public class Project {
     @Column(nullable = false)
     private String name;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organisation_id", nullable = false)
+    private Organisation organisation;
+
     private String shortName;
     private String portfolio;
     private String orgAssignment;
@@ -30,6 +35,78 @@ public class Project {
     private BigDecimal projectBudget;
     private BigDecimal totalProjectBudget;
     private Long projectManagerId;
+    private String customer;
+    private String category;
+    private String riskLevel;
+    private BigDecimal estimatedCost;
+    private String projectManagerName;
+    private String programManagerName;
+    private String salesManagerName;
+    private Boolean archived = false;
+
+    public String getCustomer() {
+        return customer;
+    }
+
+    public void setCustomer(String customer) {
+        this.customer = customer;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getRiskLevel() {
+        return riskLevel;
+    }
+
+    public void setRiskLevel(String riskLevel) {
+        this.riskLevel = riskLevel;
+    }
+
+    public BigDecimal getEstimatedCost() {
+        return estimatedCost;
+    }
+
+    public void setEstimatedCost(BigDecimal estimatedCost) {
+        this.estimatedCost = estimatedCost;
+    }
+
+    public String getProjectManagerName() {
+        return projectManagerName;
+    }
+
+    public void setProjectManagerName(String projectManagerName) {
+        this.projectManagerName = projectManagerName;
+    }
+
+    public String getProgramManagerName() {
+        return programManagerName;
+    }
+
+    public void setProgramManagerName(String programManagerName) {
+        this.programManagerName = programManagerName;
+    }
+
+    public String getSalesManagerName() {
+        return salesManagerName;
+    }
+
+    public void setSalesManagerName(String salesManagerName) {
+        this.salesManagerName = salesManagerName;
+    }
+
+    public Boolean getArchived() {
+        return archived;
+    }
+
+    public void setArchived(Boolean archived) {
+        this.archived = archived;
+    }
 
     @Column(length = 1000)
     private String comment;
@@ -59,6 +136,14 @@ public class Project {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public Organisation getOrganisation() {
+        return organisation;
+    }
+
+    public void setOrganisation(Organisation organisation) {
+        this.organisation = organisation;
     }
 
     public String getShortName() {

@@ -12,6 +12,9 @@ import java.util.List;
 @RequestMapping("/api/projects")
 public class ProjectScheduleController {
 
+    private static final String PROJECTUM_ACCESS =
+            "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PMO','PLATFORM_OWNER','PLATFORM_ADMIN')";
+
     private final ProjectScheduleService projectScheduleService;
 
     public ProjectScheduleController(ProjectScheduleService projectScheduleService) {
@@ -19,7 +22,7 @@ public class ProjectScheduleController {
     }
 
     @GetMapping("/{projectId}/schedule")
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize(PROJECTUM_ACCESS)
     public ResponseEntity<List<ProjectScheduleTaskResponse>> getProjectSchedule(@PathVariable Long projectId) {
         return ResponseEntity.ok(projectScheduleService.getProjectSchedule(projectId));
     }
