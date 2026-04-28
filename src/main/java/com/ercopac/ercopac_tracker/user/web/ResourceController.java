@@ -91,4 +91,11 @@ public class ResourceController {
     public ResponseEntity<List<String>> getSeniorities() {
         return ResponseEntity.ok(resourceService.getSeniorities());
     }
+
+    @GetMapping("/projects/{projectId}/options")
+    public ResponseEntity<List<ResourceOptionDto>> getResourceOptionsForProject(
+            @PathVariable Long projectId
+    ) {
+        return ResponseEntity.ok(resourceService.getResourceOptionsForProject(projectId));
+    }
 }

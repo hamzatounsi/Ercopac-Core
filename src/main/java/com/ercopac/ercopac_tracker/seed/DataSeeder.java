@@ -27,6 +27,7 @@ import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -49,6 +50,7 @@ public class DataSeeder implements CommandLineRunner {
     private final RiskItemRepository riskRepo;
     private final ActionItemRepository actionRepo;
     private final PasswordEncoder encoder;
+    private final TaskResourceAssignmentRepository taskResourceAssignmentRepo;
 
     public DataSeeder(UserRepository userRepo,
                       ProjectRepository projectRepo,
@@ -61,7 +63,8 @@ public class DataSeeder implements CommandLineRunner {
                       ForecastEntryRepository forecastRepo,
                       RiskItemRepository riskRepo,
                       ActionItemRepository actionRepo,
-                      PasswordEncoder encoder) {
+                      PasswordEncoder encoder,
+                      TaskResourceAssignmentRepository taskResourceAssignmentRepo, TaskResourceAssignmentRepository taskResourceAssignmentRepo2) {
         this.userRepo = userRepo;
         this.projectRepo = projectRepo;
         this.planningRepo = planningRepo;
@@ -74,11 +77,19 @@ public class DataSeeder implements CommandLineRunner {
         this.riskRepo = riskRepo;
         this.actionRepo = actionRepo;
         this.encoder = encoder;
+        this.taskResourceAssignmentRepo = taskResourceAssignmentRepo2;
     }
 
     @Override
     public void run(String... args) {
         LocalDate today = LocalDate.now();
+
+        taskResourceAssignmentRepo.deleteAll();
+
+        taskRepo.findAll().forEach(task -> {
+        task.setAssignedUser(null);
+        taskRepo.save(task);
+        });
 
         // ---------------------------------------------------------------------
         // ORGANISATIONS

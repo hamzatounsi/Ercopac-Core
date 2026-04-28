@@ -377,4 +377,9 @@ public class ResourceService {
         return userRepository.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
     }
+
+    @Transactional(readOnly = true)
+    public List<ResourceOptionDto> getResourceOptionsForProject(Long projectId) {
+        return getResourceOptions(null, null);
+    }
 }
