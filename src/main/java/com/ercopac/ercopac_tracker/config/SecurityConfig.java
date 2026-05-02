@@ -37,22 +37,25 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**", "/api/health").permitAll()
 
                 .requestMatchers("/api/platform/**")
-                    .hasAnyRole("PLATFORM_OWNER", "PLATFORM_ADMIN")
+                .hasAnyRole("PLATFORM_OWNER", "PLATFORM_ADMIN")
 
                 .requestMatchers("/api/org-admin/**")
-                    .hasAnyRole("ORG_ADMIN", "PLATFORM_OWNER", "PLATFORM_ADMIN")
+                .hasAnyRole("ORG_ADMIN", "PLATFORM_OWNER", "PLATFORM_ADMIN")
+
+                .requestMatchers("/api/admin/**")
+                .hasAnyRole("ORG_ADMIN", "PLATFORM_OWNER", "PLATFORM_ADMIN")
 
                 .requestMatchers("/api/gm/**")
-                    .hasAnyRole("GENERAL_MANAGER", "ORG_ADMIN", "PMO", "PLATFORM_OWNER", "PLATFORM_ADMIN")
+                .hasAnyRole("GENERAL_MANAGER", "ORG_ADMIN", "PMO", "PLATFORM_OWNER", "PLATFORM_ADMIN")
 
-                .requestMatchers("/api/resources/**")
-                    .hasAnyRole("GENERAL_MANAGER", "ORG_ADMIN", "PMO", "PLATFORM_OWNER", "PLATFORM_ADMIN")
+                .requestMatchers("/api/resources", "/api/resources/**")
+                .hasAnyRole("GENERAL_MANAGER", "ORG_ADMIN", "PMO", "PLATFORM_OWNER", "PLATFORM_ADMIN")
 
                 .requestMatchers("/api/suppliers/**")
                     .hasAnyRole("GENERAL_MANAGER", "ORG_ADMIN", "PMO", "PLATFORM_OWNER", "PLATFORM_ADMIN")
 
                 .requestMatchers("/api/projects/**")
-                    .hasAnyRole("GENERAL_MANAGER", "ORG_ADMIN", "PMO", "PLATFORM_OWNER", "PLATFORM_ADMIN")
+                .hasAnyRole("GENERAL_MANAGER", "ORG_ADMIN", "PMO", "PLATFORM_OWNER", "PLATFORM_ADMIN")
 
                 .requestMatchers(
                     "/api/projects/*/baselines",
@@ -63,6 +66,14 @@ public class SecurityConfig {
                     "/api/projects/*/templates/**"
                 )
                     .hasAnyRole("GENERAL_MANAGER", "ORG_ADMIN", "PMO", "PLATFORM_OWNER", "PLATFORM_ADMIN")
+
+                .requestMatchers("/api/admin/**")
+                .hasAnyAuthority(
+                    "ROLE_PLATFORM_OWNER",
+                    "ROLE_PLATFORM_ADMIN",
+                    "ROLE_ORG_ADMIN",
+                    "ORG_ADMIN"
+                )
 
                 .requestMatchers("/api/department/**")
                     .hasAnyRole("DEPARTMENT_MANAGER", "GENERAL_MANAGER", "ORG_ADMIN", "PLATFORM_OWNER", "PLATFORM_ADMIN")

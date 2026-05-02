@@ -27,6 +27,7 @@ public class ResourceService {
     private final OrganisationRepository organisationRepository;
     private final PasswordEncoder passwordEncoder;
     private final SecurityUtils securityUtils;
+    
 
     public ResourceService(UserRepository userRepository,
                            OrganisationRepository organisationRepository,
