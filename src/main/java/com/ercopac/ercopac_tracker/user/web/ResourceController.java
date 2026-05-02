@@ -9,6 +9,7 @@ import com.ercopac.ercopac_tracker.user.service.ResourceService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,8 +17,8 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/resources")
-@org.springframework.security.access.prepost.PreAuthorize(
-    "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','OWNER','PLATFORM_OWNER','PLATFORM_ADMIN')"
+@PreAuthorize(
+    "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PMO','PLATFORM_OWNER','PLATFORM_ADMIN')"
 )
 public class ResourceController {
 

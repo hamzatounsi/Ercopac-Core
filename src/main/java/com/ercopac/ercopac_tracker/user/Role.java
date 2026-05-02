@@ -5,7 +5,7 @@ public enum Role {
     PLATFORM_ADMIN,
     ORG_ADMIN,
     GENERAL_MANAGER,
-    PMO,
     DEPARTMENT_MANAGER,
-    EMPLOYEE
+    EMPLOYEE,
+    PMO
 }
