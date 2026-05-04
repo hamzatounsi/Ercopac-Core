@@ -65,7 +65,6 @@ public class AdminService {
         return switch (licenceType) {
             case "ADMIN" -> Role.ORG_ADMIN;
             case "PM" -> Role.GENERAL_MANAGER;
-            case "MANAGER" -> Role.PMO;
             case "DEPT_MANAGER" -> Role.DEPARTMENT_MANAGER;
             case "READ_ONLY" -> Role.EMPLOYEE;
             default -> throw new IllegalArgumentException("Unknown licence type: " + licenceType);
