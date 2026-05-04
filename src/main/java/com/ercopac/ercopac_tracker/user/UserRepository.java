@@ -31,6 +31,8 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
 
     List<AppUser> findByOrganisation_IdOrderByFullNameAsc(Long organisationId);
 
+    Optional<AppUser> findFirstByOrganisationIdAndRole(Long organisationId, Role role);
+
     @Query("""
         select u
         from AppUser u

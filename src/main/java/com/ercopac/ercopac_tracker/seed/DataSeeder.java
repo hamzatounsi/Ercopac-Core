@@ -1,6 +1,7 @@
 package com.ercopac.ercopac_tracker.seed;
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.organisation.domain.OrganisationStatus;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
@@ -38,14 +39,6 @@ public class DataSeeder implements CommandLineRunner {
                 "#111827"
         );
 
-        createOrUpdatePlatformUser(
-                "Platform Admin",
-                "platformadmin@ercopac.com",
-                "Platform123!",
-                Role.PLATFORM_ADMIN,
-                "#334155"
-        );
-
         createOrUpdateOrgUser(
                 "Organisation Admin",
                 "orgadmin@ercopac.com",
@@ -72,18 +65,6 @@ public class DataSeeder implements CommandLineRunner {
                 "#2563eb"
         );
 
-        createOrUpdateOrgUser(
-                "PMO User",
-                "pmo@ercopac.com",
-                "Pmo123!",
-                Role.PMO,
-                ercopac,
-                "PMO",
-                "PMO Officer",
-                "PMO",
-                "SENIOR",
-                "#0f766e"
-        );
 
         createOrUpdateOrgUser(
                 "Department Manager",
@@ -116,7 +97,7 @@ public class DataSeeder implements CommandLineRunner {
         Organisation organisation = organisationRepo.findByCode(code).orElseGet(Organisation::new);
         organisation.setName(name);
         organisation.setCode(code);
-        organisation.setActive(true);
+        organisation.setStatus(OrganisationStatus.TRIAL);
         return organisationRepo.save(organisation);
     }
 

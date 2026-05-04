@@ -1,12 +1,16 @@
 package com.ercopac.ercopac_tracker.platform_dashboard.dto;
 
-public class CreateOrganisationWithAdminRequest {
-    public String organisationName;
-    public String organisationCode;
+import com.ercopac.ercopac_tracker.organisation.domain.OrganisationStatus;
+import java.time.LocalDateTime;
+
+public class PlatformOrganisationDto {
+    public Long id;
+    public String name;
+    public String code;
     public String country;
     public String domain;
+    public OrganisationStatus status;
     public String plan;
-
     public int warehouseLimit;
     public int userLimit;
     public int adminLicenceLimit;
@@ -14,9 +18,9 @@ public class CreateOrganisationWithAdminRequest {
     public int supervisorLicenceLimit;
     public int operatorLicenceLimit;
     public int readonlyLicenceLimit;
-
     public double monthlyRevenue;
     public int healthScore;
+    public LocalDateTime createdAt;
 
     public String billingEmail;
     public String vatNumber;
@@ -38,8 +42,5 @@ public class CreateOrganisationWithAdminRequest {
     public boolean flagVipPriority;
     public boolean flagPilotFeatures;
     public boolean flagUnderReview;
-
     public String adminFullName;
-    public String adminEmail;
-    public String adminPassword;
 }

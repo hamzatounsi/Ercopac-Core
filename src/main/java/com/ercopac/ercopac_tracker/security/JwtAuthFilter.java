@@ -59,18 +59,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
             String role = jwtService.extractRole(token);
 
-            String authority = role != null && role.startsWith("ROLE_")
-                    ? role
-                    : "ROLE_" + role;
+            String cleanRole = role != null && role.startsWith("ROLE_")
+                    ? role.substring(5)
+                    : role;
 
             UsernamePasswordAuthenticationToken authToken =
                     new UsernamePasswordAuthenticationToken(
                             user,
                             null,
                             java.util.List.of(
-                                    new org.springframework.security.core.authority.SimpleGrantedAuthority(authority)
+                                    new org.springframework.security.core.authority.SimpleGrantedAuthority(cleanRole),
+                                    new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + cleanRole)
                             )
                     );
+
+            System.out.println("JWT ROLE = " + role);
+System.out.println("AUTHORITIES = " + authToken.getAuthorities());            
 
             Map<String, Object> details = new HashMap<>();
             details.put("userId", jwtService.extractUserId(token));
