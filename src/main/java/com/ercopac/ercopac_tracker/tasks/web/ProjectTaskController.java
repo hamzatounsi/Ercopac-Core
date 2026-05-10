@@ -17,11 +17,14 @@ public class ProjectTaskController {
         this.projectTaskService = projectTaskService;
     }
 
-    @PutMapping("/api/tasks/{taskId}")
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
-    public ResponseEntity<ProjectScheduleTaskResponse> updateTask(
+    @PutMapping("/api/projects/{projectId}/tasks/{taskId}")
+    public ResponseEntity<ProjectScheduleTaskResponse> updateProjectTask(
+            @PathVariable Long projectId,
             @PathVariable Long taskId,
             @RequestBody UpdateProjectTaskRequest request) {
+
+        System.out.println("✅ PROJECT TASK UPDATE REACHED: " + taskId);
+
         return ResponseEntity.ok(projectTaskService.updateTask(taskId, request));
     }
 

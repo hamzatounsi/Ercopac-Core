@@ -28,18 +28,22 @@ public class ProjectTaskService {
     private final TaskDependencyRepository taskDependencyRepository;
     private final TaskResourceAssignmentRepository taskResourceAssignmentRepository;
     private final TaskSchedulingService taskSchedulingService;
+    private final ProjectTaskHistoryService historyService;
+    
 
     public ProjectTaskService(
             ProjectTaskRepository projectTaskRepository,
             UserRepository userRepository,
             TaskDependencyRepository taskDependencyRepository,
             TaskResourceAssignmentRepository taskResourceAssignmentRepository,
-            TaskSchedulingService taskSchedulingService) {
+            TaskSchedulingService taskSchedulingService,
+            ProjectTaskHistoryService historyService) {
         this.projectTaskRepository = projectTaskRepository;
         this.userRepository = userRepository;
         this.taskDependencyRepository = taskDependencyRepository;
         this.taskResourceAssignmentRepository = taskResourceAssignmentRepository;
         this.taskSchedulingService = taskSchedulingService;
+        this.historyService = historyService;
     }
 
     public ProjectScheduleTaskResponse updateTask(Long taskId, UpdateProjectTaskRequest request) {
@@ -49,6 +53,18 @@ public class ProjectTaskService {
         validateDates(request);
         validatePercent(request.getPercentComplete(), "Percent complete");
         validatePercent(request.getAllocationPercent(), "Allocation percent");
+
+        ProjectTask oldTask = new ProjectTask();
+        oldTask.setName(task.getName());
+        oldTask.setPlannedStart(task.getPlannedStart());
+        oldTask.setPlannedEnd(task.getPlannedEnd());
+        oldTask.setBaselineStart(task.getBaselineStart());
+        oldTask.setBaselineEnd(task.getBaselineEnd());
+        oldTask.setDurationDays(task.getDurationDays());
+        oldTask.setPercentComplete(task.getPercentComplete());
+        oldTask.setDepartmentCode(task.getDepartmentCode());
+        oldTask.setResourceType(task.getResourceType());
+        oldTask.setCustomerMilestone(task.getCustomerMilestone());
 
         task.setName(request.getName());
         task.setDescription(request.getDescription());
@@ -97,6 +113,14 @@ public class ProjectTaskService {
         normalizeMilestone(task);
 
         ProjectTask saved = projectTaskRepository.save(task);
+
+        historyService.logTaskUpdate(
+                oldTask,
+                saved,
+                saved.getOrganisationId(),
+                null,
+                "System"
+        );
 
         rebuildStructure(saved.getProjectId());
 
