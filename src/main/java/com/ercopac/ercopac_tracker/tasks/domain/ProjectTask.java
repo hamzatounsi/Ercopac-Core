@@ -318,4 +318,9 @@ public class ProjectTask {
     public void setResourceType(String resourceType) {
         this.resourceType = resourceType;
     }
+
+    public Long getOrganisationId() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'getOrganisationId'");
+    }
 }
