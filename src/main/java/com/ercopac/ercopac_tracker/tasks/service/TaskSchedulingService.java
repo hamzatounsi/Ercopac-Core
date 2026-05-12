@@ -4,223 +4,175 @@ import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskDependency;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskDependencyRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Queue;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
+/**
+ * FIX: TaskSchedulingService now calls rollupSummaries() after cascading
+ * so parent SUMMARY tasks update their dates and progress automatically
+ * whenever a child task moves due to a dependency.
+ */
 @Service
-@Transactional
 public class TaskSchedulingService {
 
-    private final ProjectTaskRepository projectTaskRepository;
-    private final TaskDependencyRepository taskDependencyRepository;
+    private final ProjectTaskRepository taskRepository;
+    private final TaskDependencyRepository dependencyRepository;
 
-    public TaskSchedulingService(ProjectTaskRepository projectTaskRepository,
-                                 TaskDependencyRepository taskDependencyRepository) {
-        this.projectTaskRepository = projectTaskRepository;
-        this.taskDependencyRepository = taskDependencyRepository;
+    // @Lazy breaks the circular dependency with ProjectTaskService
+    private final ProjectTaskService projectTaskService;
+
+    public TaskSchedulingService(
+            ProjectTaskRepository taskRepository,
+            TaskDependencyRepository dependencyRepository,
+            @Lazy ProjectTaskService projectTaskService
+    ) {
+        this.taskRepository = taskRepository;
+        this.dependencyRepository = dependencyRepository;
+        this.projectTaskService = projectTaskService;
     }
 
-    public void rescheduleFromTask(Long projectId, Long changedTaskId) {
-        Queue<Long> queue = new LinkedList<>();
-        Set<Long> visited = new HashSet<>();
+    /**
+     * Starting from the given task, cascade date changes to all successors
+     * using a topological BFS. Respects FS, SS, FF, SF dependency types
+     * with lag. After cascading, runs rollupSummaries so SUMMARY parents update.
+     */
+    public void rescheduleFromTask(Long projectId, Long startTaskId) {
+        List<ProjectTask> allTasks = taskRepository
+                .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
 
-        queue.add(changedTaskId);
+        if (allTasks.isEmpty()) return;
+
+        List<TaskDependency> allDeps = dependencyRepository.findByProjectId(projectId);
+
+        // Build successor map: predecessorId → list of dependencies where it is predecessor
+        Map<Long, List<TaskDependency>> successorMap = allDeps.stream()
+                .collect(Collectors.groupingBy(TaskDependency::getPredecessorTaskId));
+
+        // BFS from the changed task
+        Set<Long> visited = new HashSet<>();
+        Queue<Long> queue = new LinkedList<>();
+        queue.add(startTaskId);
 
         while (!queue.isEmpty()) {
-            Long predecessorId = queue.poll();
+            Long currentId = queue.poll();
+            if (visited.contains(currentId)) continue;
+            visited.add(currentId);
 
-            List<TaskDependency> outgoingDependencies =
-                    taskDependencyRepository.findByProjectIdAndPredecessorTaskId(projectId, predecessorId);
+            List<TaskDependency> outgoing = successorMap.getOrDefault(currentId, List.of());
 
-            for (TaskDependency dependency : outgoingDependencies) {
-                Long successorId = dependency.getSuccessorTaskId();
+            for (TaskDependency dep : outgoing) {
+                Long successorId = dep.getSuccessorTaskId();
+                ProjectTask successor = allTasks.stream()
+                        .filter(t -> t.getId().equals(successorId))
+                        .findFirst()
+                        .orElse(null);
 
-                if (successorId == null || visited.contains(successorId)) {
-                    continue;
-                }
+                if (successor == null) continue;
 
-                boolean changed = recalculateSuccessor(projectId, successorId);
+                // Skip manually-scheduled tasks
+                if ("MANUAL".equalsIgnoreCase(successor.getScheduleMode())) continue;
+
+                ProjectTask predecessor = allTasks.stream()
+                        .filter(t -> t.getId().equals(currentId))
+                        .findFirst()
+                        .orElse(null);
+
+                if (predecessor == null) continue;
+
+                boolean changed = applyDependency(predecessor, successor, dep);
+
                 if (changed) {
+                    taskRepository.save(successor);
                     queue.add(successorId);
                 }
-
-                visited.add(successorId);
             }
         }
+
+        // FIX: after cascading, rollup summaries so parent dates update
+        projectTaskService.rollupSummariesPublic(projectId);
     }
 
-    public boolean recalculateSuccessor(Long projectId, Long successorTaskId) {
-        ProjectTask successor = projectTaskRepository.findById(successorTaskId)
-                .orElseThrow(() -> new IllegalArgumentException("Successor task not found: " + successorTaskId));
+    /**
+     * Apply a single dependency constraint and return true if successor dates changed.
+     */
+    private boolean applyDependency(ProjectTask pred, ProjectTask succ, TaskDependency dep) {
+        if (pred.getPlannedEnd() == null && pred.getPlannedStart() == null) return false;
 
-        if (!Objects.equals(successor.getProjectId(), projectId)) {
-            throw new IllegalArgumentException("Successor task does not belong to project " + projectId);
-        }
+        String type = dep.getDependencyType() == null ? "FS" : dep.getDependencyType().toUpperCase();
+        int lag = dep.getLagDays() == null ? 0 : dep.getLagDays();
 
-        List<TaskDependency> incomingDependencies =
-                taskDependencyRepository.findByProjectIdAndSuccessorTaskId(projectId, successorTaskId);
+        LocalDate predStart = pred.getPlannedStart();
+        LocalDate predEnd   = pred.getPlannedEnd() != null ? pred.getPlannedEnd()
+                                                           : pred.getPlannedStart();
 
-        if (incomingDependencies.isEmpty()) {
-            return false;
-        }
+        LocalDate newSuccStart = succ.getPlannedStart();
+        LocalDate newSuccEnd   = succ.getPlannedEnd();
 
-        if ("MANUAL".equalsIgnoreCase(successor.getScheduleMode())) {
-            return false;
-        }
-
-        LocalDate originalStart = successor.getPlannedStart();
-        LocalDate originalEnd = successor.getPlannedEnd();
-
-        long duration = calculateDuration(successor);
+        int duration = succ.getDurationDays() != null ? Math.max(1, succ.getDurationDays()) : 1;
+        boolean isMilestone = "MILESTONE".equalsIgnoreCase(succ.getTaskType());
+        if (isMilestone) duration = 0;
 
         LocalDate requiredStart = null;
-        LocalDate requiredEnd = null;
+        LocalDate requiredEnd   = null;
 
-        for (TaskDependency dep : incomingDependencies) {
-            Long predecessorTaskId = dep.getPredecessorTaskId();
-            if (predecessorTaskId == null) {
-                continue;
-            }
+        switch (type) {
+            case "FS": // Finish-to-Start: successor starts after predecessor ends
+                requiredStart = predEnd.plusDays(1+lag);
+                break;
+            case "SS": // Start-to-Start: successor starts after predecessor starts
+                requiredStart = predStart.plusDays(lag);
+                break;
+            case "FF": // Finish-to-Finish: successor ends after predecessor ends
+                requiredEnd = predEnd.plusDays(lag);
+                break;
+            case "SF": // Start-to-Finish: successor ends after predecessor starts
+                requiredEnd = predStart.plusDays(lag);
+                break;
+            default:
+                requiredStart = predEnd.plusDays(1+lag);
+        }
 
-            ProjectTask predecessor = projectTaskRepository.findById(predecessorTaskId)
-                    .orElse(null);
+        // Compute new dates for successor
+        LocalDate computedStart = newSuccStart;
+        LocalDate computedEnd   = newSuccEnd;
 
-            if (predecessor == null) {
-                continue;
-            }
-
-            if (!Objects.equals(predecessor.getProjectId(), projectId)) {
-                continue;
-            }
-
-            LocalDate predStart = predecessor.getPlannedStart();
-            LocalDate predEnd = predecessor.getPlannedEnd() != null
-                    ? predecessor.getPlannedEnd()
-                    : predecessor.getPlannedStart();
-
-            if (predStart == null && predEnd == null) {
-                continue;
-            }
-
-            int lag = dep.getLagDays() != null ? dep.getLagDays() : 0;
-            String type = dep.getDependencyType() != null ? dep.getDependencyType().trim().toUpperCase() : "FS";
-
-            switch (type) {
-                case "SS" -> {
-                    if (predStart != null) {
-                        LocalDate candidate = predStart.plusDays(lag);
-                        requiredStart = max(requiredStart, candidate);
-                    }
+        if (requiredStart != null) {
+            if (newSuccStart == null || requiredStart.isAfter(newSuccStart)) {
+                computedStart = requiredStart;
+                if (isMilestone) {
+                    computedEnd = computedStart;
+                } else {
+                    computedEnd = computedStart.plusDays(duration - 1);
                 }
-                case "FF" -> {
-                    if (predEnd != null) {
-                        LocalDate candidate = predEnd.plusDays(lag);
-                        requiredEnd = max(requiredEnd, candidate);
-                    }
-                }
-                case "SF" -> {
-                    if (predStart != null) {
-                        LocalDate candidate = predStart.plusDays(lag);
-                        requiredEnd = max(requiredEnd, candidate);
-                    }
-                }
-                case "FS" -> {
-                    if (predEnd != null) {
-                        LocalDate candidate = predEnd.plusDays(lag);
-                        requiredStart = max(requiredStart, candidate);
-                    }
-                }
-                default -> {
-                    if (predEnd != null) {
-                        LocalDate candidate = predEnd.plusDays(lag);
-                        requiredStart = max(requiredStart, candidate);
-                    }
+            }
+        } else if (requiredEnd != null) {
+            if (newSuccEnd == null || requiredEnd.isAfter(newSuccEnd)) {
+                computedEnd = requiredEnd;
+                if (isMilestone) {
+                    computedStart = computedEnd;
+                } else {
+                    computedStart = computedEnd.minusDays(duration - 1);
                 }
             }
         }
 
-        LocalDate newStart = originalStart;
-        LocalDate newEnd = originalEnd;
+        // Check if anything changed
+        boolean changed = !Objects.equals(computedStart, newSuccStart)
+                || !Objects.equals(computedEnd, newSuccEnd);
 
-        boolean milestone = "MILESTONE".equalsIgnoreCase(successor.getTaskType());
-
-        if (milestone) {
-            LocalDate milestoneDate = firstNonNull(requiredStart, requiredEnd, originalStart, originalEnd);
-            if (milestoneDate == null) {
-                return false;
-            }
-
-            newStart = milestoneDate;
-            newEnd = milestoneDate;
-            successor.setDurationDays(0);
-        } else {
-            if (requiredStart != null && requiredEnd != null) {
-                newStart = requiredStart;
-                newEnd = newStart.plusDays(Math.max(0, duration - 1));
-
-                if (newEnd.isBefore(requiredEnd)) {
-                    newEnd = requiredEnd;
-                    newStart = newEnd.minusDays(Math.max(0, duration - 1));
-                }
-            } else if (requiredStart != null) {
-                newStart = requiredStart;
-                newEnd = newStart.plusDays(Math.max(0, duration - 1));
-            } else if (requiredEnd != null) {
-                newEnd = requiredEnd;
-                newStart = newEnd.minusDays(Math.max(0, duration - 1));
+        if (changed) {
+            succ.setPlannedStart(computedStart);
+            succ.setPlannedEnd(computedEnd);
+            if (!isMilestone && computedStart != null && computedEnd != null) {
+                long days = computedStart.until(computedEnd, java.time.temporal.ChronoUnit.DAYS) + 1;
+                succ.setDurationDays((int) Math.max(1, days));
             }
         }
 
-        boolean changed = !Objects.equals(originalStart, newStart) || !Objects.equals(originalEnd, newEnd);
-        if (!changed) {
-            return false;
-        }
-
-        successor.setPlannedStart(newStart);
-        successor.setPlannedEnd(newEnd);
-
-        if (!milestone && newStart != null && newEnd != null) {
-            successor.setDurationDays((int) ChronoUnit.DAYS.between(newStart, newEnd) + 1);
-        }
-
-        projectTaskRepository.save(successor);
-        return true;
-    }
-
-    private long calculateDuration(ProjectTask task) {
-        if ("MILESTONE".equalsIgnoreCase(task.getTaskType())) {
-            return 0;
-        }
-
-        if (task.getPlannedStart() != null && task.getPlannedEnd() != null) {
-            return Math.max(1, ChronoUnit.DAYS.between(task.getPlannedStart(), task.getPlannedEnd()) + 1);
-        }
-
-        return Math.max(1, task.getDurationDays() != null ? task.getDurationDays() : 1);
-    }
-
-    private LocalDate max(LocalDate a, LocalDate b) {
-        if (a == null) return b;
-        if (b == null) return a;
-        return a.isAfter(b) ? a : b;
-    }
-
-    @SafeVarargs
-    private final LocalDate firstNonNull(LocalDate... values) {
-        for (LocalDate value : values) {
-            if (value != null) {
-                return value;
-            }
-        }
-        return null;
+        return changed;
     }
 }

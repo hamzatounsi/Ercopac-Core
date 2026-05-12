@@ -1,6 +1,8 @@
 package com.ercopac.ercopac_tracker.tasks.service;
 
+import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskResourceAssignment;
+import com.ercopac.ercopac_tracker.tasks.dto.ResourceUserDto;
 import com.ercopac.ercopac_tracker.tasks.dto.TaskResourceAssignmentDto;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository;
 import com.ercopac.ercopac_tracker.user.AppUser;
@@ -13,14 +15,17 @@ import java.util.List;
 public class TaskResourceAssignmentService {
 
     private final TaskResourceAssignmentRepository repository;
-    private final UserRepository userRepository;
+    private final UserRepository                   userRepository;
+    private final ProjectRepository                projectRepository;
 
     public TaskResourceAssignmentService(
             TaskResourceAssignmentRepository repository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            ProjectRepository projectRepository
     ) {
-        this.repository = repository;
-        this.userRepository = userRepository;
+        this.repository        = repository;
+        this.userRepository    = userRepository;
+        this.projectRepository = projectRepository;
     }
 
     public List<TaskResourceAssignmentDto> getTaskResources(Long projectId, Long taskId) {
@@ -30,7 +35,8 @@ public class TaskResourceAssignmentService {
                 .toList();
     }
 
-    public TaskResourceAssignmentDto createTaskResource(Long projectId, Long taskId, TaskResourceAssignmentDto dto) {
+    public TaskResourceAssignmentDto createTaskResource(Long projectId, Long taskId,
+                                                        TaskResourceAssignmentDto dto) {
         TaskResourceAssignment entity = new TaskResourceAssignment();
         entity.setProjectId(projectId);
         entity.setTaskId(taskId);
@@ -38,13 +44,16 @@ public class TaskResourceAssignmentService {
         return toDto(repository.save(entity));
     }
 
-    public TaskResourceAssignmentDto updateTaskResource(Long projectId, Long taskId, Long assignmentId, TaskResourceAssignmentDto dto) {
+    public TaskResourceAssignmentDto updateTaskResource(Long projectId, Long taskId,
+                                                        Long assignmentId,
+                                                        TaskResourceAssignmentDto dto) {
         TaskResourceAssignment entity = repository.findById(assignmentId)
-                .orElseThrow(() -> new IllegalArgumentException("Resource assignment not found with id: " + assignmentId));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Resource assignment not found: " + assignmentId));
 
-        if (!entity.getProjectId().equals(projectId) || !entity.getTaskId().equals(taskId)) {
-            throw new IllegalArgumentException("Resource assignment does not belong to the given project/task.");
-        }
+        if (!entity.getProjectId().equals(projectId) || !entity.getTaskId().equals(taskId))
+            throw new IllegalArgumentException(
+                    "Resource assignment does not belong to the given project/task.");
 
         apply(entity, dto);
         return toDto(repository.save(entity));
@@ -52,13 +61,35 @@ public class TaskResourceAssignmentService {
 
     public void deleteTaskResource(Long projectId, Long taskId, Long assignmentId) {
         TaskResourceAssignment entity = repository.findById(assignmentId)
-                .orElseThrow(() -> new IllegalArgumentException("Resource assignment not found with id: " + assignmentId));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Resource assignment not found: " + assignmentId));
 
-        if (!entity.getProjectId().equals(projectId) || !entity.getTaskId().equals(taskId)) {
-            throw new IllegalArgumentException("Resource assignment does not belong to the given project/task.");
-        }
+        if (!entity.getProjectId().equals(projectId) || !entity.getTaskId().equals(taskId))
+            throw new IllegalArgumentException(
+                    "Resource assignment does not belong to the given project/task.");
 
         repository.delete(entity);
+    }
+
+    public List<ResourceUserDto> getUsersByResourceType(Long projectId, String resourceType) {
+        Long orgId = projectRepository.findById(projectId)
+                .map(p -> p.getOrganisation() != null ? p.getOrganisation().getId() : null)
+                .orElse(null);
+
+        if (orgId == null) return List.of();
+
+        List<AppUser> users = (resourceType != null && !resourceType.isBlank())
+                ? userRepository.findByOrganisationIdAndResourceTypeCodeAndActiveTrue(orgId, resourceType)
+                : userRepository.findByOrganisation_IdAndActiveTrueOrderByFullNameAsc(orgId);
+
+        return users.stream()
+                .map(u -> new ResourceUserDto(
+                        u.getId(),
+                        u.getFullName(),
+                        u.getResourceType() != null ? u.getResourceType().getCode() : "",
+                        u.getDepartmentCode() != null ? u.getDepartmentCode() : "",
+                        u.getColor() != null ? u.getColor() : "#3b82f6"))
+                .toList();
     }
 
     private void apply(TaskResourceAssignment entity, TaskResourceAssignmentDto dto) {
@@ -70,7 +101,8 @@ public class TaskResourceAssignmentService {
 
         if (dto.getAssignedUserId() != null) {
             AppUser user = userRepository.findById(dto.getAssignedUserId())
-                    .orElseThrow(() -> new IllegalArgumentException("Assigned user not found with id: " + dto.getAssignedUserId()));
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Assigned user not found: " + dto.getAssignedUserId()));
             entity.setAssignedUser(user);
         } else {
             entity.setAssignedUser(null);
@@ -82,8 +114,10 @@ public class TaskResourceAssignmentService {
                 .setId(entity.getId())
                 .setProjectId(entity.getProjectId())
                 .setTaskId(entity.getTaskId())
-                .setAssignedUserId(entity.getAssignedUser() != null ? entity.getAssignedUser().getId() : null)
-                .setAssignedUserName(entity.getAssignedUser() != null ? entity.getAssignedUser().getFullName() : null)
+                .setAssignedUserId(entity.getAssignedUser() != null
+                        ? entity.getAssignedUser().getId() : null)
+                .setAssignedUserName(entity.getAssignedUser() != null
+                        ? entity.getAssignedUser().getFullName() : null)
                 .setResourceType(entity.getResourceType())
                 .setAssignmentName(entity.getAssignmentName())
                 .setQuantity(entity.getQuantity())

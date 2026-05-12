@@ -3,33 +3,37 @@ package com.ercopac.ercopac_tracker.tasks.service;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
+import com.ercopac.ercopac_tracker.tasks.domain.TaskDependency;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
+import com.ercopac.ercopac_tracker.tasks.repository.TaskDependencyRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 
 @Component
 public class ProjectTaskSeeder implements CommandLineRunner {
 
     private final ProjectRepository projectRepository;
     private final ProjectTaskRepository projectTaskRepository;
+    private final TaskDependencyRepository taskDependencyRepository;
 
-    public ProjectTaskSeeder(ProjectRepository projectRepository,
-                             ProjectTaskRepository projectTaskRepository) {
+    public ProjectTaskSeeder(
+            ProjectRepository projectRepository,
+            ProjectTaskRepository projectTaskRepository,
+            TaskDependencyRepository taskDependencyRepository
+    ) {
         this.projectRepository = projectRepository;
         this.projectTaskRepository = projectTaskRepository;
+        this.taskDependencyRepository = taskDependencyRepository;
     }
 
     @Override
     public void run(String... args) {
         List<Project> projects = projectRepository.findAll();
-
-        if (projects.isEmpty()) {
-            return;
-        }
+        if (projects.isEmpty()) return;
 
         for (Project project : projects) {
             if (projectTaskRepository.countByProjectId(project.getId()) == 0) {
@@ -39,422 +43,383 @@ public class ProjectTaskSeeder implements CommandLineRunner {
     }
 
     private void seedDemoTasksForProject(Project project) {
-        LocalDate projectStart = project.getPlannedStart() != null
+        Long pid = project.getId();
+        LocalDate d0 = project.getPlannedStart() != null
                 ? project.getPlannedStart()
                 : LocalDate.of(2026, 2, 1);
 
-        List<ProjectTask> tasks = new ArrayList<>();
+        // ── Map wbsCode → saved task (for building dependencies) ──
+        Map<String, ProjectTask> saved = new LinkedHashMap<>();
 
-        tasks.add(createTask(
-                project.getId(),
-                "1",
-                "Project Management",
-                "SUMMARY",
-                "PM",
-                projectStart,
-                projectStart.plusDays(110),
-                projectStart,
-                projectStart.plusDays(115),
-                55,
-                100,
-                1,
-                false
-        ));
+        // ══════════════════════════════════════════════════════════
+        // 1  PROJECT MANAGEMENT
+        // ══════════════════════════════════════════════════════════
+        saved.put("1", save(pid, "1", "Project Management", "SUMMARY", "PM", 1,
+                d0, d0.plusDays(130),
+                d0, d0.plusDays(135), 60, false, 100));
 
-        tasks.add(createTask(
-                project.getId(),
-                "1.1",
-                "Kickoff Meeting",
-                "MILESTONE",
-                "PM",
-                projectStart.plusDays(2),
-                projectStart.plusDays(2),
-                projectStart.plusDays(2),
-                projectStart.plusDays(2),
-                100,
-                200,
-                2,
-                false
-        ));
+        saved.put("1.1", save(pid, "1.1", "Kickoff Meeting", "MILESTONE", "PM", 2,
+                d0.plusDays(2), d0.plusDays(2),
+                d0.plusDays(2), d0.plusDays(2), 100, false, 200));
 
-        tasks.add(createTask(
-                project.getId(),
-                "1.2",
-                "Planning Validation",
-                "ACTIVITY",
-                "PM",
-                projectStart.plusDays(3),
-                projectStart.plusDays(8),
-                projectStart.plusDays(4),
-                projectStart.plusDays(10),
-                100,
-                220,
-                3,
-                false
-        ));
+        saved.put("1.2", save(pid, "1.2", "Planning & Scope Validation", "ACTIVITY", "PM", 3,
+                d0.plusDays(3), d0.plusDays(9),
+                d0.plusDays(3), d0.plusDays(10), 100, false, 210));
 
-        tasks.add(createTask(
-                project.getId(),
-                "2",
-                "Design",
-                "SUMMARY",
-                "ME",
-                projectStart.plusDays(9),
-                projectStart.plusDays(35),
-                projectStart.plusDays(11),
-                projectStart.plusDays(38),
-                72,
-                300,
-                4,
-                false
-        ));
+        saved.put("1.3", save(pid, "1.3", "Risk Register Setup", "ACTIVITY", "PM", 4,
+                d0.plusDays(5), d0.plusDays(10),
+                d0.plusDays(5), d0.plusDays(12), 80, false, 220));
 
-        tasks.add(createTask(
-                project.getId(),
-                "2.1",
-                "Mechanical Design",
-                "ACTIVITY",
-                "ME",
-                projectStart.plusDays(9),
-                projectStart.plusDays(20),
-                projectStart.plusDays(11),
-                projectStart.plusDays(22),
-                85,
-                320,
-                5,
-                false
-        ));
+        saved.put("1.4", save(pid, "1.4", "Project Baseline Approved", "MILESTONE", "PM", 5,
+                d0.plusDays(11), d0.plusDays(11),
+                d0.plusDays(12), d0.plusDays(12), 0, true, 230));
 
-        tasks.add(createTask(
-                project.getId(),
-                "2.2",
-                "Electrical Design",
-                "ACTIVITY",
-                "CE",
-                projectStart.plusDays(12),
-                projectStart.plusDays(24),
-                projectStart.plusDays(14),
-                projectStart.plusDays(28),
-                60,
-                330,
-                6,
-                false
-        ));
+        // ══════════════════════════════════════════════════════════
+        // 2  ENGINEERING
+        // ══════════════════════════════════════════════════════════
+        saved.put("2", save(pid, "2", "Engineering", "SUMMARY", "ME", 6,
+                d0.plusDays(10), d0.plusDays(50),
+                d0.plusDays(12), d0.plusDays(55), 50, false, 300));
 
-        tasks.add(createTask(
-                project.getId(),
-                "2.3",
-                "Software Design",
-                "ACTIVITY",
-                "SW",
-                projectStart.plusDays(15),
-                projectStart.plusDays(35),
-                projectStart.plusDays(18),
-                projectStart.plusDays(38),
-                45,
-                340,
-                7,
-                false
-        ));
+        saved.put("2.1", save(pid, "2.1", "Mechanical Engineering", "SUMMARY", "ME", 7,
+                d0.plusDays(10), d0.plusDays(35),
+                d0.plusDays(12), d0.plusDays(38), 70, false, 310));
 
-        tasks.add(createTask(
-                project.getId(),
-                "2.4",
-                "Customer Design Approval",
-                "MILESTONE",
-                "PM",
-                projectStart.plusDays(36),
-                projectStart.plusDays(36),
-                projectStart.plusDays(40),
-                projectStart.plusDays(40),
-                0,
-                350,
-                8,
-                true
-        ));
+        saved.put("2.1.1", save(pid, "2.1.1", "Structural Analysis", "ACTIVITY", "ME", 8,
+                d0.plusDays(10), d0.plusDays(18),
+                d0.plusDays(12), d0.plusDays(20), 100, false, 311));
 
-        tasks.add(createTask(
-                project.getId(),
-                "3",
-                "Procurement",
-                "SUMMARY",
-                "PRC",
-                projectStart.plusDays(37),
-                projectStart.plusDays(60),
-                projectStart.plusDays(41),
-                projectStart.plusDays(66),
-                25,
-                400,
-                9,
-                false
-        ));
+        saved.put("2.1.2", save(pid, "2.1.2", "3D Modelling", "ACTIVITY", "ME", 9,
+                d0.plusDays(19), d0.plusDays(28),
+                d0.plusDays(21), d0.plusDays(30), 80, false, 312));
 
-        tasks.add(createTask(
-                project.getId(),
-                "3.1",
-                "Long Lead Items",
-                "ACTIVITY",
-                "PRC",
-                projectStart.plusDays(37),
-                projectStart.plusDays(50),
-                projectStart.plusDays(41),
-                projectStart.plusDays(56),
-                30,
-                420,
-                10,
-                false
-        ));
+        saved.put("2.1.3", save(pid, "2.1.3", "Drawing Package", "ACTIVITY", "ME", 10,
+                d0.plusDays(29), d0.plusDays(35),
+                d0.plusDays(31), d0.plusDays(38), 40, false, 313));
 
-        tasks.add(createTask(
-                project.getId(),
-                "3.2",
-                "Standard Components",
-                "ACTIVITY",
-                "PRC",
-                projectStart.plusDays(39),
-                projectStart.plusDays(60),
-                projectStart.plusDays(43),
-                projectStart.plusDays(66),
-                20,
-                430,
-                11,
-                false
-        ));
+        saved.put("2.2", save(pid, "2.2", "Electrical Engineering", "SUMMARY", "CE", 11,
+                d0.plusDays(14), d0.plusDays(40),
+                d0.plusDays(16), d0.plusDays(44), 45, false, 320));
 
-        tasks.add(createTask(
-                project.getId(),
-                "4",
-                "Manufacturing",
-                "SUMMARY",
-                "MFC",
-                projectStart.plusDays(61),
-                projectStart.plusDays(88),
-                projectStart.plusDays(67),
-                projectStart.plusDays(94),
-                10,
-                500,
-                12,
-                false
-        ));
+        saved.put("2.2.1", save(pid, "2.2.1", "Power Architecture", "ACTIVITY", "CE", 12,
+                d0.plusDays(14), d0.plusDays(22),
+                d0.plusDays(16), d0.plusDays(24), 90, false, 321));
 
-        tasks.add(createTask(
-                project.getId(),
-                "4.1",
-                "Mechanical Assembly",
-                "ACTIVITY",
-                "MFC",
-                projectStart.plusDays(61),
-                projectStart.plusDays(74),
-                projectStart.plusDays(67),
-                projectStart.plusDays(80),
-                15,
-                520,
-                13,
-                false
-        ));
+        saved.put("2.2.2", save(pid, "2.2.2", "Control Schematics", "ACTIVITY", "CE", 13,
+                d0.plusDays(23), d0.plusDays(32),
+                d0.plusDays(25), d0.plusDays(35), 50, false, 322));
 
-        tasks.add(createTask(
-                project.getId(),
-                "4.2",
-                "Electrical Assembly",
-                "ACTIVITY",
-                "MFC",
-                projectStart.plusDays(68),
-                projectStart.plusDays(82),
-                projectStart.plusDays(74),
-                projectStart.plusDays(88),
-                8,
-                530,
-                14,
-                false
-        ));
+        saved.put("2.2.3", save(pid, "2.2.3", "Cable Routing & BOM", "ACTIVITY", "CE", 14,
+                d0.plusDays(33), d0.plusDays(40),
+                d0.plusDays(36), d0.plusDays(44), 10, false, 323));
 
-        tasks.add(createTask(
-                project.getId(),
-                "4.3",
-                "Internal Testing",
-                "ACTIVITY",
-                "SW",
-                projectStart.plusDays(83),
-                projectStart.plusDays(88),
-                projectStart.plusDays(89),
-                projectStart.plusDays(94),
-                0,
-                540,
-                15,
-                false
-        ));
+        saved.put("2.3", save(pid, "2.3", "Software Engineering", "SUMMARY", "SW", 15,
+                d0.plusDays(18), d0.plusDays(50),
+                d0.plusDays(20), d0.plusDays(55), 35, false, 330));
 
-        tasks.add(createTask(
-                project.getId(),
-                "5",
-                "FAT & Delivery",
-                "SUMMARY",
-                "PM",
-                projectStart.plusDays(89),
-                projectStart.plusDays(101),
-                projectStart.plusDays(95),
-                projectStart.plusDays(108),
-                0,
-                600,
-                16,
-                false
-        ));
+        saved.put("2.3.1", save(pid, "2.3.1", "SW Architecture Design", "ACTIVITY", "SW", 16,
+                d0.plusDays(18), d0.plusDays(26),
+                d0.plusDays(20), d0.plusDays(28), 100, false, 331));
 
-        tasks.add(createTask(
-                project.getId(),
-                "5.1",
-                "Factory Acceptance Test",
-                "MILESTONE",
-                "PM",
-                projectStart.plusDays(92),
-                projectStart.plusDays(92),
-                projectStart.plusDays(99),
-                projectStart.plusDays(99),
-                0,
-                620,
-                17,
-                true
-        ));
+        saved.put("2.3.2", save(pid, "2.3.2", "PLC Programming", "ACTIVITY", "PLC", 17,
+                d0.plusDays(27), d0.plusDays(38),
+                d0.plusDays(29), d0.plusDays(42), 60, false, 332));
 
-        tasks.add(createTask(
-                project.getId(),
-                "5.2",
-                "Packaging & Shipment",
-                "ACTIVITY",
-                "MFC",
-                projectStart.plusDays(93),
-                projectStart.plusDays(101),
-                projectStart.plusDays(100),
-                projectStart.plusDays(108),
-                0,
-                630,
-                18,
-                false
-        ));
+        saved.put("2.3.3", save(pid, "2.3.3", "HMI Development", "ACTIVITY", "SW", 18,
+                d0.plusDays(35), d0.plusDays(48),
+                d0.plusDays(38), d0.plusDays(53), 20, false, 333));
 
-        tasks.add(createTask(
-                project.getId(),
-                "6",
-                "Site Installation",
-                "SUMMARY",
-                "MFC",
-                projectStart.plusDays(102),
-                projectStart.plusDays(120),
-                projectStart.plusDays(109),
-                projectStart.plusDays(128),
-                0,
-                700,
-                19,
-                false
-        ));
+        saved.put("2.3.4", save(pid, "2.3.4", "SCADA Integration", "ACTIVITY", "SW", 19,
+                d0.plusDays(44), d0.plusDays(50),
+                d0.plusDays(47), d0.plusDays(55), 0, false, 334));
 
-        tasks.add(createTask(
-                project.getId(),
-                "6.1",
-                "Mechanical Installation",
-                "ACTIVITY",
-                "MFC",
-                projectStart.plusDays(102),
-                projectStart.plusDays(110),
-                projectStart.plusDays(109),
-                projectStart.plusDays(117),
-                0,
-                720,
-                20,
-                false
-        ));
+        saved.put("2.4", save(pid, "2.4", "Customer Design Approval", "MILESTONE", "PM", 20,
+                d0.plusDays(51), d0.plusDays(51),
+                d0.plusDays(56), d0.plusDays(56), 0, true, 350));
 
-        tasks.add(createTask(
-                project.getId(),
-                "6.2",
-                "Electrical Installation",
-                "ACTIVITY",
-                "CE",
-                projectStart.plusDays(106),
-                projectStart.plusDays(114),
-                projectStart.plusDays(113),
-                projectStart.plusDays(121),
-                0,
-                730,
-                21,
-                false
-        ));
+        // ══════════════════════════════════════════════════════════
+        // 3  PROCUREMENT
+        // ══════════════════════════════════════════════════════════
+        saved.put("3", save(pid, "3", "Procurement", "SUMMARY", "PRC", 21,
+                d0.plusDays(36), d0.plusDays(75),
+                d0.plusDays(39), d0.plusDays(80), 20, false, 400));
 
-        tasks.add(createTask(
-                project.getId(),
-                "6.3",
-                "Commissioning",
-                "ACTIVITY",
-                "SW",
-                projectStart.plusDays(115),
-                projectStart.plusDays(120),
-                projectStart.plusDays(122),
-                projectStart.plusDays(128),
-                0,
-                740,
-                22,
-                false
-        ));
+        saved.put("3.1", save(pid, "3.1", "Long Lead Items", "ACTIVITY", "PRC", 22,
+                d0.plusDays(36), d0.plusDays(60),
+                d0.plusDays(39), d0.plusDays(65), 35, false, 410));
 
-        tasks.add(createTask(
-                project.getId(),
-                "7",
-                "Go Live",
-                "MILESTONE",
-                "PM",
-                projectStart.plusDays(121),
-                projectStart.plusDays(121),
-                projectStart.plusDays(129),
-                projectStart.plusDays(129),
-                0,
-                800,
-                23,
-                true
-        ));
+        saved.put("3.2", save(pid, "3.2", "Standard Components", "ACTIVITY", "PRC", 23,
+                d0.plusDays(40), d0.plusDays(60),
+                d0.plusDays(43), d0.plusDays(65), 25, false, 420));
 
-        projectTaskRepository.saveAll(tasks);
+        saved.put("3.3", save(pid, "3.3", "Electrical Components", "ACTIVITY", "PRC", 24,
+                d0.plusDays(42), d0.plusDays(65),
+                d0.plusDays(45), d0.plusDays(70), 15, false, 430));
+
+        saved.put("3.4", save(pid, "3.4", "Software Licenses", "ACTIVITY", "PRC", 25,
+                d0.plusDays(38), d0.plusDays(50),
+                d0.plusDays(40), d0.plusDays(55), 50, false, 440));
+
+        saved.put("3.5", save(pid, "3.5", "PO Confirmed", "MILESTONE", "PRC", 26,
+                d0.plusDays(44), d0.plusDays(44),
+                d0.plusDays(48), d0.plusDays(48), 0, true, 450));
+
+        saved.put("3.6", save(pid, "3.6", "All Deliveries Received", "MILESTONE", "PRC", 27,
+                d0.plusDays(75), d0.plusDays(75),
+                d0.plusDays(80), d0.plusDays(80), 0, false, 460));
+
+        // ══════════════════════════════════════════════════════════
+        // 4  MANUFACTURING
+        // ══════════════════════════════════════════════════════════
+        saved.put("4", save(pid, "4", "Manufacturing", "SUMMARY", "MFC", 28,
+                d0.plusDays(76), d0.plusDays(108),
+                d0.plusDays(81), d0.plusDays(114), 0, false, 500));
+
+        saved.put("4.1", save(pid, "4.1", "Panel Fabrication", "ACTIVITY", "MFC", 29,
+                d0.plusDays(76), d0.plusDays(86),
+                d0.plusDays(81), d0.plusDays(91), 0, false, 510));
+
+        saved.put("4.2", save(pid, "4.2", "Mechanical Assembly", "ACTIVITY", "MFC", 30,
+                d0.plusDays(80), d0.plusDays(92),
+                d0.plusDays(85), d0.plusDays(97), 0, false, 520));
+
+        saved.put("4.3", save(pid, "4.3", "Electrical Wiring", "ACTIVITY", "MFC", 31,
+                d0.plusDays(87), d0.plusDays(98),
+                d0.plusDays(92), d0.plusDays(104), 0, false, 530));
+
+        saved.put("4.4", save(pid, "4.4", "SW Loading & Config", "ACTIVITY", "SW", 32,
+                d0.plusDays(93), d0.plusDays(100),
+                d0.plusDays(98), d0.plusDays(106), 0, false, 540));
+
+        saved.put("4.5", save(pid, "4.5", "Internal QC Test", "ACTIVITY", "QA", 33,
+                d0.plusDays(99), d0.plusDays(108),
+                d0.plusDays(105), d0.plusDays(114), 0, false, 550));
+
+        // ══════════════════════════════════════════════════════════
+        // 5  FAT & DELIVERY
+        // ══════════════════════════════════════════════════════════
+        saved.put("5", save(pid, "5", "FAT & Delivery", "SUMMARY", "PM", 34,
+                d0.plusDays(109), d0.plusDays(125),
+                d0.plusDays(115), d0.plusDays(132), 0, false, 600));
+
+        saved.put("5.1", save(pid, "5.1", "Factory Acceptance Test", "MILESTONE", "PM", 35,
+                d0.plusDays(112), d0.plusDays(112),
+                d0.plusDays(118), d0.plusDays(118), 0, true, 610));
+
+        saved.put("5.2", save(pid, "5.2", "Snag List Resolution", "ACTIVITY", "MFC", 36,
+                d0.plusDays(113), d0.plusDays(118),
+                d0.plusDays(119), d0.plusDays(124), 0, false, 620));
+
+        saved.put("5.3", save(pid, "5.3", "Packaging & Shipment", "ACTIVITY", "MFC", 37,
+                d0.plusDays(119), d0.plusDays(125),
+                d0.plusDays(125), d0.plusDays(132), 0, false, 630));
+
+        // ══════════════════════════════════════════════════════════
+        // 6  SITE INSTALLATION
+        // ══════════════════════════════════════════════════════════
+        saved.put("6", save(pid, "6", "Site Installation", "SUMMARY", "MFC", 38,
+                d0.plusDays(126), d0.plusDays(148),
+                d0.plusDays(133), d0.plusDays(156), 0, false, 700));
+
+        saved.put("6.1", save(pid, "6.1", "Site Preparation", "ACTIVITY", "MFC", 39,
+                d0.plusDays(126), d0.plusDays(130),
+                d0.plusDays(133), d0.plusDays(137), 0, false, 710));
+
+        saved.put("6.2", save(pid, "6.2", "Mechanical Installation", "ACTIVITY", "MFC", 40,
+                d0.plusDays(128), d0.plusDays(136),
+                d0.plusDays(135), d0.plusDays(143), 0, false, 720));
+
+        saved.put("6.3", save(pid, "6.3", "Electrical Installation", "ACTIVITY", "CE", 41,
+                d0.plusDays(132), d0.plusDays(140),
+                d0.plusDays(139), d0.plusDays(147), 0, false, 730));
+
+        saved.put("6.4", save(pid, "6.4", "Commissioning", "ACTIVITY", "SW", 42,
+                d0.plusDays(140), d0.plusDays(148),
+                d0.plusDays(147), d0.plusDays(156), 0, false, 740));
+
+        // ══════════════════════════════════════════════════════════
+        // 7  FINAL ACCEPTANCE
+        // ══════════════════════════════════════════════════════════
+        saved.put("7", save(pid, "7", "Final Acceptance", "SUMMARY", "PM", 43,
+                d0.plusDays(149), d0.plusDays(158),
+                d0.plusDays(157), d0.plusDays(166), 0, false, 800));
+
+        saved.put("7.1", save(pid, "7.1", "SAT — Site Acceptance Test", "MILESTONE", "PM", 44,
+                d0.plusDays(150), d0.plusDays(150),
+                d0.plusDays(158), d0.plusDays(158), 0, true, 810));
+
+        saved.put("7.2", save(pid, "7.2", "Operator Training", "ACTIVITY", "PM", 45,
+                d0.plusDays(151), d0.plusDays(154),
+                d0.plusDays(159), d0.plusDays(162), 0, false, 820));
+
+        saved.put("7.3", save(pid, "7.3", "Documentation Handover", "ACTIVITY", "PM", 46,
+                d0.plusDays(152), d0.plusDays(156),
+                d0.plusDays(160), d0.plusDays(164), 0, false, 830));
+
+        saved.put("7.4", save(pid, "7.4", "Final Acceptance Certificate", "MILESTONE", "PM", 47,
+                d0.plusDays(157), d0.plusDays(157),
+                d0.plusDays(165), d0.plusDays(165), 0, true, 840));
+
+        saved.put("7.5", save(pid, "7.5", "Project Closure", "MILESTONE", "PM", 48,
+                d0.plusDays(158), d0.plusDays(158),
+                d0.plusDays(166), d0.plusDays(166), 0, false, 850));
+
+        // ══════════════════════════════════════════════════════════
+        // SEED DEPENDENCIES
+        // ══════════════════════════════════════════════════════════
+        List<TaskDependency> deps = new ArrayList<>();
+
+        // 1.x chain
+        dep(deps, saved, pid, "1.1", "1.2", "FS", 0); // After kickoff → planning
+        dep(deps, saved, pid, "1.2", "1.3", "SS", 0); // Risk setup starts with planning
+        dep(deps, saved, pid, "1.2", "1.4", "FS", 0); // Baseline after planning done
+
+        // Engineering starts after baseline approved
+        dep(deps, saved, pid, "1.4", "2.1.1", "FS", 0);
+        dep(deps, saved, pid, "1.4", "2.2.1", "FS", 2);
+        dep(deps, saved, pid, "1.4", "2.3.1", "FS", 3);
+
+        // Mechanical chain
+        dep(deps, saved, pid, "2.1.1", "2.1.2", "FS", 0);
+        dep(deps, saved, pid, "2.1.2", "2.1.3", "FS", 0);
+
+        // Electrical chain
+        dep(deps, saved, pid, "2.2.1", "2.2.2", "FS", 0);
+        dep(deps, saved, pid, "2.2.2", "2.2.3", "FS", 0);
+
+        // Software chain
+        dep(deps, saved, pid, "2.3.1", "2.3.2", "FS", 0);
+        dep(deps, saved, pid, "2.3.1", "2.3.3", "SS", 5);
+        dep(deps, saved, pid, "2.3.2", "2.3.4", "FS", 0);
+        dep(deps, saved, pid, "2.3.3", "2.3.4", "FS", 0);
+
+        // Design approval needs all engineering done
+        dep(deps, saved, pid, "2.1.3", "2.4", "FS", 0);
+        dep(deps, saved, pid, "2.2.3", "2.4", "FS", 0);
+        dep(deps, saved, pid, "2.3.4", "2.4", "FS", 0);
+
+        // Procurement starts after design approval
+        dep(deps, saved, pid, "2.4", "3.1", "FS", 0);
+        dep(deps, saved, pid, "2.4", "3.2", "FS", 0);
+        dep(deps, saved, pid, "2.2.3", "3.3", "FS", 0);  // Elec BOM drives elec procurement
+        dep(deps, saved, pid, "2.3.1", "3.4", "FS", 0);  // SW arch drives license procurement
+
+        // PO milestone: after long leads + standard ordered
+        dep(deps, saved, pid, "3.1", "3.5", "SS", 5);
+        dep(deps, saved, pid, "3.2", "3.5", "SS", 5);
+
+        // All deliveries after all procurement
+        dep(deps, saved, pid, "3.1", "3.6", "FS", 0);
+        dep(deps, saved, pid, "3.2", "3.6", "FS", 0);
+        dep(deps, saved, pid, "3.3", "3.6", "FS", 0);
+        dep(deps, saved, pid, "3.4", "3.6", "FS", 0);
+
+        // Manufacturing after all deliveries
+        dep(deps, saved, pid, "3.6", "4.1", "FS", 0);
+        dep(deps, saved, pid, "3.6", "4.2", "FS", 2);
+        dep(deps, saved, pid, "4.1", "4.3", "FS", 0);   // Panel done → wire
+        dep(deps, saved, pid, "4.2", "4.3", "SS", 3);   // Mech + panel before wiring
+        dep(deps, saved, pid, "4.3", "4.4", "FS", 0);   // Wired before SW load
+        dep(deps, saved, pid, "4.4", "4.5", "FS", 0);   // SW loaded before QC test
+
+        // FAT after internal test
+        dep(deps, saved, pid, "4.5", "5.1", "FS", 0);
+        dep(deps, saved, pid, "5.1", "5.2", "FS", 0);   // Snag list after FAT
+        dep(deps, saved, pid, "5.2", "5.3", "FS", 0);   // Ship after snags resolved
+
+        // Site installation after shipment
+        dep(deps, saved, pid, "5.3", "6.1", "FS", 5);   // 5-day transit lag
+        dep(deps, saved, pid, "6.1", "6.2", "FS", 0);
+        dep(deps, saved, pid, "6.2", "6.3", "SS", 2);   // Electrical starts 2 days after mech
+        dep(deps, saved, pid, "6.3", "6.4", "FS", 0);   // Commission after elect
+        dep(deps, saved, pid, "6.2", "6.4", "FF", 0);   // Commission finishes with mech
+
+        // Final acceptance
+        dep(deps, saved, pid, "6.4", "7.1", "FS", 0);   // SAT after commissioning
+        dep(deps, saved, pid, "7.1", "7.2", "FS", 0);
+        dep(deps, saved, pid, "7.1", "7.3", "FS", 0);
+        dep(deps, saved, pid, "7.2", "7.4", "FS", 0);
+        dep(deps, saved, pid, "7.3", "7.4", "FS", 0);
+        dep(deps, saved, pid, "7.4", "7.5", "FS", 0);
+
+        taskDependencyRepository.saveAll(deps);
     }
 
-    private ProjectTask createTask(Long projectId,
-                                   String wbsCode,
-                                   String name,
-                                   String taskType,
-                                   String departmentCode,
-                                   LocalDate baselineStart,
-                                   LocalDate baselineEnd,
-                                   LocalDate plannedStart,
-                                   LocalDate plannedEnd,
-                                   Integer percentComplete,
-                                   Integer priority,
-                                   Integer displayOrder,
-                                   Boolean customerMilestone) {
+    // ── Helper: save a task and return it ────────────────────────
+    private ProjectTask save(Long projectId,
+                             String wbsCode,
+                             String name,
+                             String taskType,
+                             String departmentCode,
+                             int displayOrder,
+                             LocalDate baselineStart,
+                             LocalDate baselineEnd,
+                             LocalDate plannedStart,
+                             LocalDate plannedEnd,
+                             int percentComplete,
+                             boolean customerMilestone,
+                             int priority) {
 
-        ProjectTask task = new ProjectTask();
-        task.setProjectId(projectId);
-        task.setWbsCode(wbsCode);
-        task.setName(name);
-        task.setTaskType(taskType);
-        task.setDepartmentCode(departmentCode);
-        task.setBaselineStart(baselineStart);
-        task.setBaselineEnd(baselineEnd);
-        task.setPlannedStart(plannedStart);
-        task.setPlannedEnd(plannedEnd);
-        task.setPercentComplete(percentComplete);
-        task.setPriority(priority);
-        task.setDisplayOrder(displayOrder);
-        task.setCustomerMilestone(customerMilestone);
-        task.setActive(true);
-        task.setScheduleMode("AUTO");
+        ProjectTask t = new ProjectTask();
+        t.setProjectId(projectId);
+        t.setWbsCode(wbsCode);
+        t.setName(name);
+        t.setTaskType(taskType);
+        t.setDepartmentCode(departmentCode);
+        t.setDisplayOrder(displayOrder);
+        t.setBaselineStart(baselineStart);
+        t.setBaselineEnd(baselineEnd);
+        t.setPlannedStart(plannedStart);
+        t.setPlannedEnd(plannedEnd);
+        t.setPercentComplete(percentComplete);
+        t.setCustomerMilestone(customerMilestone);
+        t.setPriority(priority);
+        t.setActive(true);
+        t.setScheduleMode("AUTO");
+        t.setDescription(name + " — seeded demo task.");
 
+        // Compute outlineLevel from wbsCode dots
+        int level = (int) wbsCode.chars().filter(c -> c == '.').count() + 1;
+        t.setOutlineLevel(level);
+
+        // Duration
         if ("MILESTONE".equalsIgnoreCase(taskType)) {
-            task.setDurationDays(0);
+            t.setDurationDays(0);
         } else {
-            int duration = (int) java.time.temporal.ChronoUnit.DAYS.between(plannedStart, plannedEnd) + 1;
-            task.setDurationDays(Math.max(duration, 1));
+            int dur = (int) ChronoUnit.DAYS.between(plannedStart, plannedEnd) + 1;
+            t.setDurationDays(Math.max(1, dur));
         }
 
-        task.setDescription(name + " - demo seeded task for schedule visualization.");
-        return task;
+        return projectTaskRepository.save(t);
+    }
+
+    // ── Helper: create a FS/SS/FF/SF dependency ──────────────────
+    private void dep(List<TaskDependency> list,
+                     Map<String, ProjectTask> saved,
+                     Long projectId,
+                     String predWbs,
+                     String succWbs,
+                     String type,
+                     int lagDays) {
+
+        ProjectTask pred = saved.get(predWbs);
+        ProjectTask succ = saved.get(succWbs);
+        if (pred == null || succ == null) return;
+
+        // Avoid duplicate
+        boolean exists = list.stream().anyMatch(d ->
+                d.getPredecessorTaskId().equals(pred.getId()) &&
+                d.getSuccessorTaskId().equals(succ.getId()) &&
+                d.getDependencyType().equalsIgnoreCase(type)
+        );
+        if (exists) return;
+
+        TaskDependency dep = new TaskDependency();
+        dep.setProjectId(projectId);
+        dep.setPredecessorTaskId(pred.getId());
+        dep.setSuccessorTaskId(succ.getId());
+        dep.setDependencyType(type);
+        dep.setLagDays(lagDays);
+        list.add(dep);
     }
 }

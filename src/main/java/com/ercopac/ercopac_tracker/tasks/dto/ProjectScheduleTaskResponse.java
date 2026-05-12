@@ -11,7 +11,7 @@ public class ProjectScheduleTaskResponse {
     private String name;
     private String description;
     private Integer durationDays;
-
+    private Long parentId;
     private LocalDate baselineStart;
     private LocalDate baselineEnd;
     private LocalDate plannedStart;
@@ -46,7 +46,11 @@ public class ProjectScheduleTaskResponse {
 
     public ProjectScheduleTaskResponse() {
     }
-
+    public Long getParentId() { return parentId; }
+    public ProjectScheduleTaskResponse setParentId(Long parentId) {
+        this.parentId = parentId;
+        return this;
+    }
     public Long getId() {
         return id;
     }

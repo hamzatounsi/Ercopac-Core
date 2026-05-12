@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.tasks.web;
 
+import com.ercopac.ercopac_tracker.tasks.dto.ResourceUserDto;
 import com.ercopac.ercopac_tracker.tasks.dto.TaskResourceAssignmentDto;
 import com.ercopac.ercopac_tracker.tasks.service.TaskResourceAssignmentService;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,7 +36,14 @@ public class TaskResourceAssignmentController {
     ) {
         return service.createTaskResource(projectId, taskId, dto);
     }
-
+    @GetMapping("/users")
+    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    public List<ResourceUserDto> getUsersByResourceType(
+            @PathVariable Long projectId,
+            @RequestParam(required = false) String resourceType
+    ) {
+        return service.getUsersByResourceType(projectId, resourceType);
+    }
     @PutMapping("/{assignmentId}")
     @PreAuthorize("hasRole('GENERAL_MANAGER')")
     public TaskResourceAssignmentDto updateTaskResource(

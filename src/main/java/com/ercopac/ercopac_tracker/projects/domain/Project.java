@@ -43,9 +43,15 @@ public class Project {
     private String programManagerName;
     private String salesManagerName;
     private Boolean archived = false;
-
+    private Integer progress = 0;
     public String getCustomer() {
         return customer;
+    }
+    public Integer getProgress() {
+        return progress;
+    }
+    public void setProgress(Integer progress) {
+        this.progress = progress;
     }
 
     public void setCustomer(String customer) {
