@@ -7,6 +7,7 @@ import com.ercopac.ercopac_tracker.platform_dashboard.dto.CreateOrganisationWith
 import com.ercopac.ercopac_tracker.platform_dashboard.dto.CreateOrganisationWithAdminResponse;
 import com.ercopac.ercopac_tracker.platform_dashboard.dto.PlatformOrganisationDto;
 import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import jakarta.transaction.Transactional;
@@ -18,6 +19,7 @@ import java.util.List;
 @Service
 public class PlatformOrganisationService {
 
+    private final ResourceTypeRepository resourceTypeRepository;
     private final OrganisationRepository organisationRepo;
     private final UserRepository userRepo;
     private final PasswordEncoder encoder;
@@ -25,11 +27,13 @@ public class PlatformOrganisationService {
     public PlatformOrganisationService(
             OrganisationRepository organisationRepo,
             UserRepository userRepo,
-            PasswordEncoder encoder
+            PasswordEncoder encoder,
+            ResourceTypeRepository resourceTypeRepository
     ) {
         this.organisationRepo = organisationRepo;
         this.userRepo = userRepo;
         this.encoder = encoder;
+        this.resourceTypeRepository = resourceTypeRepository;
     }
 
     @Transactional
@@ -95,6 +99,18 @@ public class PlatformOrganisationService {
 
         organisation = organisationRepo.save(organisation);
 
+        final Organisation savedOrganisation = organisation;
+
+        var adminResourceType = resourceTypeRepository
+                .findByCodeAndOrganisationId("ADMINISTRATION", savedOrganisation.getId())
+                .orElseGet(() -> resourceTypeRepository.save(
+                        new com.ercopac.ercopac_tracker.user.ResourceType(
+                                "ADMINISTRATION",
+                                "Administration",
+                                savedOrganisation
+                        )
+                ));
+
         AppUser admin = new AppUser();
         admin.setFullName(request.adminFullName != null ? request.adminFullName.trim() : "Organisation Admin");
         admin.setEmail(adminEmail);
@@ -103,7 +119,7 @@ public class PlatformOrganisationService {
         admin.setOrganisation(organisation);
         admin.setDepartmentCode("EXEC");
         admin.setJobTitle("Organisation Administrator");
-        admin.setResourceType("ADMINISTRATION");
+        admin.setResourceType(adminResourceType);
         admin.setSeniority("SENIOR");
         admin.setHoursPerDay(8);
         admin.setDaysPerWeek(5);

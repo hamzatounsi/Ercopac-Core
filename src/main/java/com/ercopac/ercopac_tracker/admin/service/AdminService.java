@@ -290,7 +290,7 @@ public class AdminService {
                 user.getFullName(),
                 user.getEmail(),
                 user.getDepartmentCode(),
-                user.getResourceType(),
+                user.getResourceType() != null ? user.getResourceType().getCode() : null,
                 assignment.getLicenceType().name()
         );
     }
