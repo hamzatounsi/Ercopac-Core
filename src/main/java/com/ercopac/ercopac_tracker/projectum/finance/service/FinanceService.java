@@ -437,31 +437,34 @@ public void recalculateLabourRowsFromTasks(Long projectId) {
     }
 
     private BigDecimal resolveTaskRate(
-        ProjectTask task,
-        FinanceEntry financeRow,
-        Map<String, BigDecimal> rateByResourceType,
-        BigDecimal defaultRate
-) {
-    if (financeRow.getHourRate() != null && financeRow.getHourRate().compareTo(BigDecimal.ZERO) > 0) {
-        return financeRow.getHourRate();
-    }
+            ProjectTask task,
+            FinanceEntry financeRow,
+            Map<String, BigDecimal> rateByResourceType,
+            BigDecimal defaultRate
+    ) {
+        if (financeRow.getHourRate() != null && financeRow.getHourRate().compareTo(BigDecimal.ZERO) > 0) {
+            return financeRow.getHourRate();
+        }
 
-    if (task.getAssignedUser() != null
-            && task.getAssignedUser().getDefaultRate() != null
-            && task.getAssignedUser().getDefaultRate().compareTo(BigDecimal.ZERO) > 0) {
-        return task.getAssignedUser().getDefaultRate();
-    }
+        if (task.getAssignedUser() != null
+                && task.getAssignedUser().getDefaultRate() != null
+                && task.getAssignedUser().getDefaultRate().compareTo(BigDecimal.ZERO) > 0) {
+            return task.getAssignedUser().getDefaultRate();
+        }
 
-    String resourceType = task.getResourceType();
-    if ((resourceType == null || resourceType.isBlank()) && task.getAssignedUser() != null) {
-        resourceType = task.getAssignedUser().getResourceType();
-    }
+        String resourceType = task.getResourceType();
 
-    if (resourceType != null && rateByResourceType.containsKey(resourceType)) {
-        return rateByResourceType.get(resourceType);
-    }
+        if ((resourceType == null || resourceType.isBlank()) && task.getAssignedUser() != null) {
+            resourceType = task.getAssignedUser().getResourceType() != null
+                    ? task.getAssignedUser().getResourceType().getCode()
+                    : null;
+        }
 
-    return defaultRate;
+        if (resourceType != null && rateByResourceType.containsKey(resourceType)) {
+            return rateByResourceType.get(resourceType);
+        }
+
+        return defaultRate;
     }
 
     private void recomputeSummaryRows(Long projectId, Long organisationId) {

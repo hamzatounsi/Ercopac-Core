@@ -7,6 +7,7 @@ import com.ercopac.ercopac_tracker.platform_dashboard.dto.CreateOrganisationWith
 import com.ercopac.ercopac_tracker.platform_dashboard.dto.CreateOrganisationWithAdminResponse;
 import com.ercopac.ercopac_tracker.platform_dashboard.dto.PlatformOrganisationDto;
 import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import jakarta.transaction.Transactional;
@@ -18,6 +19,7 @@ import java.util.List;
 @Service
 public class PlatformOrganisationService {
 
+    private final ResourceTypeRepository resourceTypeRepository;
     private final OrganisationRepository organisationRepo;
     private final UserRepository userRepo;
     private final PasswordEncoder encoder;
@@ -25,11 +27,13 @@ public class PlatformOrganisationService {
     public PlatformOrganisationService(
             OrganisationRepository organisationRepo,
             UserRepository userRepo,
-            PasswordEncoder encoder
+            PasswordEncoder encoder,
+            ResourceTypeRepository resourceTypeRepository
     ) {
         this.organisationRepo = organisationRepo;
         this.userRepo = userRepo;
         this.encoder = encoder;
+        this.resourceTypeRepository = resourceTypeRepository;
     }
 
     @Transactional
@@ -64,13 +68,11 @@ public class PlatformOrganisationService {
         organisation.setPaymentMethod(
                 request.paymentMethod != null ? request.paymentMethod : "SEPA_DIRECT_DEBIT"
         );
-        organisation.setWarehouseLimit(request.warehouseLimit);
         organisation.setUserLimit(request.userLimit);
-        organisation.setAdminLicenceLimit(request.adminLicenceLimit);
-        organisation.setSpecialistLicenceLimit(request.specialistLicenceLimit);
-        organisation.setSupervisorLicenceLimit(request.supervisorLicenceLimit);
-        organisation.setOperatorLicenceLimit(request.operatorLicenceLimit);
-        organisation.setReadonlyLicenceLimit(request.readonlyLicenceLimit);
+        organisation.setOrgAdminLicenceLimit(request.orgAdminLicenceLimit);
+        organisation.setGeneralManagerLicenceLimit(request.generalManagerLicenceLimit);
+        organisation.setDepartmentManagerLicenceLimit(request.departmentManagerLicenceLimit);
+        organisation.setEmployeeLicenceLimit(request.employeeLicenceLimit);
 
         organisation.setHealthScore(request.healthScore);
 
@@ -97,6 +99,18 @@ public class PlatformOrganisationService {
 
         organisation = organisationRepo.save(organisation);
 
+        final Organisation savedOrganisation = organisation;
+
+        var adminResourceType = resourceTypeRepository
+                .findByCodeAndOrganisationId("ADMINISTRATION", savedOrganisation.getId())
+                .orElseGet(() -> resourceTypeRepository.save(
+                        new com.ercopac.ercopac_tracker.user.ResourceType(
+                                "ADMINISTRATION",
+                                "Administration",
+                                savedOrganisation
+                        )
+                ));
+
         AppUser admin = new AppUser();
         admin.setFullName(request.adminFullName != null ? request.adminFullName.trim() : "Organisation Admin");
         admin.setEmail(adminEmail);
@@ -105,7 +119,7 @@ public class PlatformOrganisationService {
         admin.setOrganisation(organisation);
         admin.setDepartmentCode("EXEC");
         admin.setJobTitle("Organisation Administrator");
-        admin.setResourceType("ADMINISTRATION");
+        admin.setResourceType(adminResourceType);
         admin.setSeniority("SENIOR");
         admin.setHoursPerDay(8);
         admin.setDaysPerWeek(5);
@@ -192,14 +206,11 @@ public class PlatformOrganisationService {
         }
 
         organisation.setMonthlyRevenue(request.monthlyRevenue);
-        organisation.setWarehouseLimit(request.warehouseLimit);
         organisation.setUserLimit(request.userLimit);
-
-        organisation.setAdminLicenceLimit(request.adminLicenceLimit);
-        organisation.setSpecialistLicenceLimit(request.specialistLicenceLimit);
-        organisation.setSupervisorLicenceLimit(request.supervisorLicenceLimit);
-        organisation.setOperatorLicenceLimit(request.operatorLicenceLimit);
-        organisation.setReadonlyLicenceLimit(request.readonlyLicenceLimit);
+        organisation.setOrgAdminLicenceLimit(request.orgAdminLicenceLimit);
+        organisation.setGeneralManagerLicenceLimit(request.generalManagerLicenceLimit);
+        organisation.setDepartmentManagerLicenceLimit(request.departmentManagerLicenceLimit);
+        organisation.setEmployeeLicenceLimit(request.employeeLicenceLimit);
 
         organisation.setHealthScore(request.healthScore);
 
@@ -269,14 +280,12 @@ public class PlatformOrganisationService {
         dto.domain = organisation.getDomain();
         dto.status = organisation.getStatus();
         dto.plan = organisation.getPlan();
-        dto.warehouseLimit = organisation.getWarehouseLimit();
         dto.userLimit = organisation.getUserLimit();
 
-        dto.adminLicenceLimit = organisation.getAdminLicenceLimit();
-        dto.specialistLicenceLimit = organisation.getSpecialistLicenceLimit();
-        dto.supervisorLicenceLimit = organisation.getSupervisorLicenceLimit();
-        dto.operatorLicenceLimit = organisation.getOperatorLicenceLimit();
-        dto.readonlyLicenceLimit = organisation.getReadonlyLicenceLimit();
+        dto.orgAdminLicenceLimit = organisation.getOrgAdminLicenceLimit();
+        dto.generalManagerLicenceLimit = organisation.getGeneralManagerLicenceLimit();
+        dto.departmentManagerLicenceLimit = organisation.getDepartmentManagerLicenceLimit();
+        dto.employeeLicenceLimit = organisation.getEmployeeLicenceLimit();
 
         dto.monthlyRevenue = organisation.getMonthlyRevenue();
         dto.healthScore = organisation.getHealthScore();

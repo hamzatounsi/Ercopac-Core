@@ -11,13 +11,11 @@ public class PlatformOrganisationDto {
     public String domain;
     public OrganisationStatus status;
     public String plan;
-    public int warehouseLimit;
     public int userLimit;
-    public int adminLicenceLimit;
-    public int specialistLicenceLimit;
-    public int supervisorLicenceLimit;
-    public int operatorLicenceLimit;
-    public int readonlyLicenceLimit;
+    public int orgAdminLicenceLimit;
+    public int generalManagerLicenceLimit;
+    public int departmentManagerLicenceLimit;
+    public int employeeLicenceLimit;
     public double monthlyRevenue;
     public int healthScore;
     public LocalDateTime createdAt;

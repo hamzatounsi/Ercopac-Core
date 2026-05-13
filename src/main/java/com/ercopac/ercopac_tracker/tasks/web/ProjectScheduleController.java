@@ -13,7 +13,7 @@ import java.util.List;
 public class ProjectScheduleController {
 
     private static final String PROJECTUM_ACCESS =
-            "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PMO','PLATFORM_OWNER','PLATFORM_ADMIN')";
+            "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')";
 
     private final ProjectScheduleService projectScheduleService;
 

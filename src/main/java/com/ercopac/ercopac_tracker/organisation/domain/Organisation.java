@@ -31,25 +31,19 @@ public class Organisation {
     private String plan = "STARTER";
 
     @Column(nullable = false)
-    private int warehouseLimit = 1;
-
-    @Column(nullable = false)
     private int userLimit = 10;
 
     @Column(nullable = false)
-    private int adminLicenceLimit = 1;
+    private int orgAdminLicenceLimit = 1;
 
     @Column(nullable = false)
-    private int specialistLicenceLimit = 5;
+    private int generalManagerLicenceLimit = 1;
 
     @Column(nullable = false)
-    private int supervisorLicenceLimit = 2;
+    private int departmentManagerLicenceLimit = 2;
 
     @Column(nullable = false)
-    private int operatorLicenceLimit = 10;
-
-    @Column(nullable = false)
-    private int readonlyLicenceLimit = 5;
+    private int employeeLicenceLimit = 10;
 
     @Column(nullable = false)
     private double monthlyRevenue = 0;
@@ -173,14 +167,6 @@ public class Organisation {
         this.plan = plan;
     }
 
-    public int getWarehouseLimit() {
-        return warehouseLimit;
-    }
-
-    public void setWarehouseLimit(int warehouseLimit) {
-        this.warehouseLimit = warehouseLimit;
-    }
-
     public int getUserLimit() {
         return userLimit;
     }
@@ -189,44 +175,37 @@ public class Organisation {
         this.userLimit = userLimit;
     }
 
-    public int getAdminLicenceLimit() {
-        return adminLicenceLimit;
+
+    public int getOrgAdminLicenceLimit() {
+        return orgAdminLicenceLimit;
     }
 
-    public void setAdminLicenceLimit(int adminLicenceLimit) {
-        this.adminLicenceLimit = adminLicenceLimit;
+    public void setOrgAdminLicenceLimit(int orgAdminLicenceLimit) {
+        this.orgAdminLicenceLimit = orgAdminLicenceLimit;
     }
 
-    public int getSpecialistLicenceLimit() {
-        return specialistLicenceLimit;
+    public int getGeneralManagerLicenceLimit() {
+        return generalManagerLicenceLimit;
     }
 
-    public void setSpecialistLicenceLimit(int specialistLicenceLimit) {
-        this.specialistLicenceLimit = specialistLicenceLimit;
+    public void setGeneralManagerLicenceLimit(int generalManagerLicenceLimit) {
+        this.generalManagerLicenceLimit = generalManagerLicenceLimit;
     }
 
-    public int getSupervisorLicenceLimit() {
-        return supervisorLicenceLimit;
+    public int getDepartmentManagerLicenceLimit() {
+        return departmentManagerLicenceLimit;
     }
 
-    public void setSupervisorLicenceLimit(int supervisorLicenceLimit) {
-        this.supervisorLicenceLimit = supervisorLicenceLimit;
+    public void setDepartmentManagerLicenceLimit(int departmentManagerLicenceLimit) {
+        this.departmentManagerLicenceLimit = departmentManagerLicenceLimit;
     }
 
-    public int getOperatorLicenceLimit() {
-        return operatorLicenceLimit;
+    public int getEmployeeLicenceLimit() {
+        return employeeLicenceLimit;
     }
 
-    public void setOperatorLicenceLimit(int operatorLicenceLimit) {
-        this.operatorLicenceLimit = operatorLicenceLimit;
-    }
-
-    public int getReadonlyLicenceLimit() {
-        return readonlyLicenceLimit;
-    }
-
-    public void setReadonlyLicenceLimit(int readonlyLicenceLimit) {
-        this.readonlyLicenceLimit = readonlyLicenceLimit;
+    public void setEmployeeLicenceLimit(int employeeLicenceLimit) {
+        this.employeeLicenceLimit = employeeLicenceLimit;
     }
 
     public double getMonthlyRevenue() {
