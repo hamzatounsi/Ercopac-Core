@@ -31,7 +31,16 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
 
     List<AppUser> findByOrganisation_IdOrderByFullNameAsc(Long organisationId);
 
-    Optional<AppUser> findFirstByOrganisationIdAndRole(Long organisationId, Role role);
+    // FIXED: was using String resourceType, now uses resourceType.code
+    @Query("SELECT u FROM AppUser u WHERE u.organisation.id = :organisationId AND LOWER(u.resourceType.code) = LOWER(:resourceTypeCode) AND u.active = true ORDER BY u.fullName ASC")
+    List<AppUser> findByOrganisationIdAndResourceTypeCodeAndActiveTrue(
+            @Param("organisationId") Long organisationId,
+            @Param("resourceTypeCode") String resourceTypeCode);
+
+    // All active users in org (no filter):
+    List<AppUser> findByOrganisation_IdAndActiveTrueOrderByFullNameAsc(Long organisationId);
+
+    int countByOrganisation_IdAndRoleAndActiveTrue(Long organisationId, Role role);
 
     @Query("""
         select u
@@ -44,7 +53,7 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
                 lower(coalesce(u.employeeCode, '')) like :searchPattern or
                 lower(coalesce(u.departmentCode, '')) like :searchPattern or
                 lower(coalesce(u.jobTitle, '')) like :searchPattern or
-                lower(coalesce(u.resourceType, '')) like :searchPattern
+                lower(coalesce(u.resourceType.code, '')) like :searchPattern
               )
           and (:departmentCode is null or u.departmentCode = :departmentCode)
           and (:role is null or u.role = :role)
@@ -85,13 +94,13 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     """)
     List<String> findDistinctDepartmentCodesByOrganisationId(@Param("organisationId") Long organisationId);
 
+    // FIXED: now queries resourceType.code instead of resourceType string
     @Query("""
-        select distinct u.resourceType
+        select distinct u.resourceType.code
         from AppUser u
         where u.organisation.id = :organisationId
           and u.resourceType is not null
-          and trim(u.resourceType) <> ''
-        order by u.resourceType asc
+        order by u.resourceType.code asc
     """)
     List<String> findDistinctResourceTypesByOrganisationId(@Param("organisationId") Long organisationId);
 
@@ -104,4 +113,9 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
         order by u.seniority asc
     """)
     List<String> findDistinctSenioritiesByOrganisationId(@Param("organisationId") Long organisationId);
+
+    @Query("SELECT u FROM AppUser u LEFT JOIN FETCH u.organisation WHERE u.email = :email")
+    Optional<AppUser> findByEmail1(@Param("email") String email);
+
+    Optional<AppUser> findFirstByOrganisationIdAndRole(Long organisationId, Role role);
 }

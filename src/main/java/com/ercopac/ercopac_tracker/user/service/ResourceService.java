@@ -4,6 +4,8 @@ import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.user.ResourceType;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import com.ercopac.ercopac_tracker.user.dto.CreateResourceRequest;
@@ -23,20 +25,22 @@ import java.util.List;
 @Transactional
 public class ResourceService {
 
-    private final UserRepository userRepository;
+    private final UserRepository         userRepository;
     private final OrganisationRepository organisationRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final SecurityUtils securityUtils;
-    
+    private final ResourceTypeRepository resourceTypeRepository;
+    private final PasswordEncoder        passwordEncoder;
+    private final SecurityUtils          securityUtils;
 
     public ResourceService(UserRepository userRepository,
                            OrganisationRepository organisationRepository,
+                           ResourceTypeRepository resourceTypeRepository,
                            PasswordEncoder passwordEncoder,
                            SecurityUtils securityUtils) {
-        this.userRepository = userRepository;
+        this.userRepository         = userRepository;
         this.organisationRepository = organisationRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.securityUtils = securityUtils;
+        this.resourceTypeRepository = resourceTypeRepository;
+        this.passwordEncoder        = passwordEncoder;
+        this.securityUtils          = securityUtils;
     }
 
     @Transactional(readOnly = true)
@@ -84,7 +88,8 @@ public class ResourceService {
 
         user.setEmployeeCode(normalize(request.employeeCode()));
         user.setDepartmentCode(normalize(request.departmentCode()));
-        user.setResourceType(normalize(request.resourceType()));
+        // FIXED: look up ResourceType entity by code
+        user.setResourceType(resolveResourceType(normalize(request.resourceType()), organisationId));
         user.setJobTitle(normalize(request.jobTitle()));
         user.setSeniority(normalize(request.seniority()));
         user.setInternalUser(request.internalUser() != null ? request.internalUser() : true);
@@ -117,7 +122,7 @@ public class ResourceService {
             userRepository.findByOrganisation_IdAndEmployeeCode(organisationId, employeeCode)
                     .filter(existing -> !existing.getId().equals(user.getId()))
                     .ifPresent(existing -> {
-                        throw new IllegalArgumentException("Employee code already exists in this organisation");
+                        throw new IllegalArgumentException("Employee code already exists");
                     });
             user.setEmployeeCode(employeeCode);
         } else {
@@ -125,7 +130,8 @@ public class ResourceService {
         }
 
         user.setDepartmentCode(normalize(request.departmentCode()));
-        user.setResourceType(normalize(request.resourceType()));
+        // FIXED: look up ResourceType entity by code
+        user.setResourceType(resolveResourceType(normalize(request.resourceType()), organisationId));
         user.setJobTitle(normalize(request.jobTitle()));
         user.setSeniority(normalize(request.seniority()));
         user.setInternalUser(request.internalUser() != null ? request.internalUser() : user.isInternalUser());
@@ -145,10 +151,8 @@ public class ResourceService {
 
     public void updateResourceStatus(Long id, boolean active) {
         Long organisationId = requireOrganisationIdForWrite();
-
         AppUser user = userRepository.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
-
         user.setActive(active);
         userRepository.save(user);
     }
@@ -162,8 +166,10 @@ public class ResourceService {
             return userRepository.findAll().stream()
                     .filter(AppUser::isActive)
                     .filter(u -> u.getOrganisation() != null)
-                    .filter(u -> normalizedDepartmentCode == null || normalizedDepartmentCode.equals(u.getDepartmentCode()))
-                    .filter(u -> role == null || role.isBlank() || (u.getRole() != null && u.getRole().name().equalsIgnoreCase(role)))
+                    .filter(u -> normalizedDepartmentCode == null
+                            || normalizedDepartmentCode.equals(u.getDepartmentCode()))
+                    .filter(u -> role == null || role.isBlank()
+                            || (u.getRole() != null && u.getRole().name().equalsIgnoreCase(role)))
                     .map(this::toOptionDto)
                     .toList();
         }
@@ -173,7 +179,8 @@ public class ResourceService {
             return userRepository.findByOrganisation_IdAndRoleOrderByFullNameAsc(organisationId, parsedRole)
                     .stream()
                     .filter(AppUser::isActive)
-                    .filter(u -> normalizedDepartmentCode == null || normalizedDepartmentCode.equals(u.getDepartmentCode()))
+                    .filter(u -> normalizedDepartmentCode == null
+                            || normalizedDepartmentCode.equals(u.getDepartmentCode()))
                     .map(this::toOptionDto)
                     .toList();
         }
@@ -191,9 +198,7 @@ public class ResourceService {
             return userRepository.findAll().stream()
                     .map(AppUser::getDepartmentCode)
                     .filter(v -> v != null && !v.isBlank())
-                    .distinct()
-                    .sorted()
-                    .toList();
+                    .distinct().sorted().toList();
         }
         return userRepository.findDistinctDepartmentCodesByOrganisationId(organisationId);
     }
@@ -203,11 +208,9 @@ public class ResourceService {
         Long organisationId = getOrganisationIdOrNullForPlatform();
         if (organisationId == null) {
             return userRepository.findAll().stream()
-                    .map(AppUser::getResourceType)
+                    .map(u -> u.getResourceType() != null ? u.getResourceType().getCode() : null)
                     .filter(v -> v != null && !v.isBlank())
-                    .distinct()
-                    .sorted()
-                    .toList();
+                    .distinct().sorted().toList();
         }
         return userRepository.findDistinctResourceTypesByOrganisationId(organisationId);
     }
@@ -219,74 +222,21 @@ public class ResourceService {
             return userRepository.findAll().stream()
                     .map(AppUser::getSeniority)
                     .filter(v -> v != null && !v.isBlank())
-                    .distinct()
-                    .sorted()
-                    .toList();
+                    .distinct().sorted().toList();
         }
         return userRepository.findDistinctSenioritiesByOrganisationId(organisationId);
     }
 
-    private void validateCreateRequest(CreateResourceRequest request, Long organisationId) {
-        if (request.fullName() == null || request.fullName().isBlank()) {
-            throw new IllegalArgumentException("Full name is required");
-        }
-        if (request.email() == null || request.email().isBlank()) {
-            throw new IllegalArgumentException("Email is required");
-        }
-        if (request.password() == null || request.password().isBlank()) {
-            throw new IllegalArgumentException("Password is required");
-        }
-        if (request.role() == null || request.role().isBlank()) {
-            throw new IllegalArgumentException("Role is required");
-        }
+    // ══════════════════════════════════════════════════════════════
+    // HELPERS
+    // ══════════════════════════════════════════════════════════════
 
-        String normalizedEmail = request.email().trim().toLowerCase();
-        if (userRepository.existsByEmail(normalizedEmail)) {
-            throw new IllegalArgumentException("Email already exists");
-        }
-
-        String employeeCode = normalize(request.employeeCode());
-        if (employeeCode != null) {
-            userRepository.findByOrganisation_IdAndEmployeeCode(organisationId, employeeCode)
-                    .ifPresent(existing -> {
-                        throw new IllegalArgumentException("Employee code already exists in this organisation");
-                    });
-        }
-    }
-
-    private Role parseRole(String role) {
-        if (role == null || role.isBlank()) {
-            return null;
-        }
-        try {
-            return Role.valueOf(role.trim().toUpperCase());
-        } catch (Exception ex) {
-            throw new IllegalArgumentException("Invalid role: " + role);
-        }
-    }
-
-    private Role parseRequiredRole(String role) {
-        if (role == null || role.isBlank()) {
-            throw new IllegalArgumentException("Role is required");
-        }
-        try {
-            return Role.valueOf(role.trim().toUpperCase());
-        } catch (Exception ex) {
-            throw new IllegalArgumentException("Invalid role: " + role);
-        }
-    }
-
-    private String normalize(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private String normalizeOrDefault(String value, String defaultValue) {
-        String normalized = normalize(value);
-        return normalized != null ? normalized : defaultValue;
+    // Resolves a resource type code string → ResourceType entity (or null)
+    private ResourceType resolveResourceType(String code, Long organisationId) {
+        if (code == null) return null;
+        return resourceTypeRepository
+                .findByCodeAndOrganisationId(code, organisationId)
+                .orElse(null);
     }
 
     private ResourceListItemDto toListItemDto(AppUser user) {
@@ -295,7 +245,8 @@ public class ResourceService {
                 user.getFullName(),
                 user.getEmployeeCode(),
                 user.getDepartmentCode(),
-                user.getResourceType(),
+                // FIXED: extract code from entity
+                user.getResourceType() != null ? user.getResourceType().getCode() : null,
                 user.getJobTitle(),
                 user.getEmail(),
                 user.getSeniority(),
@@ -317,7 +268,8 @@ public class ResourceService {
                 user.getFullName(),
                 user.getEmployeeCode(),
                 user.getDepartmentCode(),
-                user.getResourceType(),
+                // FIXED: extract code from entity
+                user.getResourceType() != null ? user.getResourceType().getCode() : null,
                 user.getJobTitle(),
                 user.getEmail(),
                 user.getRole() != null ? user.getRole().name() : null,
@@ -336,47 +288,81 @@ public class ResourceService {
     }
 
     private ResourceOptionDto toOptionDto(AppUser user) {
-        return new ResourceOptionDto(
-                user.getId(),
-                user.getFullName(),
-                user.getDepartmentCode()
-        );
+        return new ResourceOptionDto(user.getId(), user.getFullName(), user.getDepartmentCode());
     }
 
     private Long requireOrganisationIdForWrite() {
         Long organisationId = securityUtils.getCurrentOrganisationId();
-        if (organisationId == null) {
+        if (organisationId == null)
             throw new IllegalArgumentException("No organisation context found for current user.");
-        }
         return organisationId;
-    }
-
-    private String toSearchPattern(String value) {
-        String normalized = normalize(value);
-        return normalized == null ? null : "%" + normalized.toLowerCase() + "%";
     }
 
     private Long getOrganisationIdOrNullForPlatform() {
         try {
             return securityUtils.getCurrentOrganisationId();
         } catch (IllegalStateException ex) {
-            if (securityUtils.hasAnyRole("PLATFORM_OWNER", "PLATFORM_ADMIN", "OWNER")) {
+            if (securityUtils.hasAnyRole("PLATFORM_OWNER", "PLATFORM_ADMIN", "OWNER"))
                 return null;
-            }
             throw ex;
         }
     }
 
     private AppUser findAccessibleResource(Long id) {
         Long organisationId = getOrganisationIdOrNullForPlatform();
-
-        if (organisationId == null) {
+        if (organisationId == null)
             return userRepository.findById(id)
                     .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
-        }
-
         return userRepository.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
+    }
+
+    private void validateCreateRequest(CreateResourceRequest request, Long organisationId) {
+        if (request.fullName() == null || request.fullName().isBlank())
+            throw new IllegalArgumentException("Full name is required");
+        if (request.email() == null || request.email().isBlank())
+            throw new IllegalArgumentException("Email is required");
+        if (request.password() == null || request.password().isBlank())
+            throw new IllegalArgumentException("Password is required");
+        if (request.role() == null || request.role().isBlank())
+            throw new IllegalArgumentException("Role is required");
+
+        if (userRepository.existsByEmail(request.email().trim().toLowerCase()))
+            throw new IllegalArgumentException("Email already exists");
+
+        String employeeCode = normalize(request.employeeCode());
+        if (employeeCode != null) {
+            userRepository.findByOrganisation_IdAndEmployeeCode(organisationId, employeeCode)
+                    .ifPresent(e -> { throw new IllegalArgumentException("Employee code already exists"); });
+        }
+    }
+
+    private Role parseRole(String role) {
+        if (role == null || role.isBlank()) return null;
+        try { return Role.valueOf(role.trim().toUpperCase()); }
+        catch (Exception ex) { throw new IllegalArgumentException("Invalid role: " + role); }
+    }
+
+    private Role parseRequiredRole(String role) {
+        if (role == null || role.isBlank()) throw new IllegalArgumentException("Role is required");
+        try { return Role.valueOf(role.trim().toUpperCase()); }
+        catch (Exception ex) { throw new IllegalArgumentException("Invalid role: " + role); }
+    }
+
+    private String normalize(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeOrDefault(String value, String defaultValue) {
+        String normalized = normalize(value);
+        return normalized != null ? normalized : defaultValue;
+    }
+
+    private String toSearchPattern(String value) {
+        String normalized = normalize(value);
+        return normalized == null ? null : "%" + normalized.toLowerCase() + "%";
     }
 
     @Transactional(readOnly = true)

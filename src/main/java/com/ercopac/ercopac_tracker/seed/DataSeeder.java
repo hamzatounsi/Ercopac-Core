@@ -4,6 +4,8 @@ import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.organisation.domain.OrganisationStatus;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
 import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.user.ResourceType;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.springframework.boot.CommandLineRunner;
@@ -13,24 +15,28 @@ import org.springframework.stereotype.Component;
 @Component
 public class DataSeeder implements CommandLineRunner {
 
-    private final UserRepository userRepo;
+    private final UserRepository         userRepo;
     private final OrganisationRepository organisationRepo;
-    private final PasswordEncoder encoder;
+    private final ResourceTypeRepository resourceTypeRepo;
+    private final PasswordEncoder        encoder;
 
     public DataSeeder(
             UserRepository userRepo,
             OrganisationRepository organisationRepo,
+            ResourceTypeRepository resourceTypeRepo,
             PasswordEncoder encoder
     ) {
-        this.userRepo = userRepo;
-        this.organisationRepo = organisationRepo;
-        this.encoder = encoder;
+        this.userRepo          = userRepo;
+        this.organisationRepo  = organisationRepo;
+        this.resourceTypeRepo  = resourceTypeRepo;
+        this.encoder           = encoder;
     }
 
     @Override
     public void run(String... args) {
         Organisation ercopac = createOrUpdateOrganisation("ERCOPAC", "ERCOPAC");
 
+        // Platform user has no organisation → resourceType = null (PLATFORM type not org-scoped)
         createOrUpdatePlatformUser(
                 "Platform Owner",
                 "owner@ercopac.com",
@@ -39,58 +45,21 @@ public class DataSeeder implements CommandLineRunner {
                 "#111827"
         );
 
-        createOrUpdateOrgUser(
-                "Organisation Admin",
-                "orgadmin@ercopac.com",
-                "Org123!",
-                Role.ORG_ADMIN,
-                ercopac,
-                "EXEC",
-                "Organisation Administrator",
-                "ADMINISTRATION",
-                "SENIOR",
-                "#875a7b"
-        );
+        createOrUpdateOrgUser("Organisation Admin", "orgadmin@ercopac.com", "Org123!",
+                Role.ORG_ADMIN, ercopac, "EXEC", "Organisation Administrator",
+                "ADMINISTRATION", "SENIOR", "#875a7b");
 
-        createOrUpdateOrgUser(
-                "General Manager",
-                "gm@ercopac.com",
-                "Gm123!",
-                Role.GENERAL_MANAGER,
-                ercopac,
-                "EXEC",
-                "General Manager",
-                "MANAGEMENT",
-                "EXECUTIVE",
-                "#2563eb"
-        );
+        createOrUpdateOrgUser("General Manager", "gm@ercopac.com", "Gm123!",
+                Role.GENERAL_MANAGER, ercopac, "EXEC", "General Manager",
+                "MANAGEMENT", "EXECUTIVE", "#2563eb");
 
+        createOrUpdateOrgUser("Department Manager", "dm@ercopac.com", "Dm123!",
+                Role.DEPARTMENT_MANAGER, ercopac, "ME", "Mechanical Department Manager",
+                "MANAGEMENT", "SENIOR", "#0891b2");
 
-        createOrUpdateOrgUser(
-                "Department Manager",
-                "dm@ercopac.com",
-                "Dm123!",
-                Role.DEPARTMENT_MANAGER,
-                ercopac,
-                "ME",
-                "Mechanical Department Manager",
-                "MANAGEMENT",
-                "SENIOR",
-                "#0891b2"
-        );
-
-        createOrUpdateOrgUser(
-                "Employee User",
-                "employee@ercopac.com",
-                "Employee123!",
-                Role.EMPLOYEE,
-                ercopac,
-                "ME",
-                "Mechanical Engineer",
-                "ME",
-                "MID",
-                "#22d3ee"
-        );
+        createOrUpdateOrgUser("Employee User", "employee@ercopac.com", "Employee123!",
+                Role.EMPLOYEE, ercopac, "ME", "Mechanical Engineer",
+                "ME", "MID", "#22d3ee");
     }
 
         private Organisation createOrUpdateOrganisation(String name, String code) {
@@ -110,14 +79,9 @@ public class DataSeeder implements CommandLineRunner {
         }
 
     private AppUser createOrUpdatePlatformUser(
-            String fullName,
-            String email,
-            String rawPassword,
-            Role role,
-            String color
-    ) {
-        AppUser user = userRepo.findByEmail(email).orElseGet(AppUser::new);
+            String fullName, String email, String rawPassword, Role role, String color) {
 
+        AppUser user = userRepo.findByEmail(email).orElseGet(AppUser::new);
         user.setFullName(fullName);
         user.setEmail(email);
         user.setPasswordHash(encoder.encode(rawPassword));
@@ -125,7 +89,7 @@ public class DataSeeder implements CommandLineRunner {
         user.setOrganisation(null);
         user.setDepartmentCode(null);
         user.setJobTitle(role.name());
-        user.setResourceType("PLATFORM");
+        user.setResourceType(null); // platform user has no org → can't resolve resource type
         user.setSeniority("EXECUTIVE");
         user.setHoursPerDay(8);
         user.setDaysPerWeek(5);
@@ -138,19 +102,11 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private AppUser createOrUpdateOrgUser(
-            String fullName,
-            String email,
-            String rawPassword,
-            Role role,
-            Organisation organisation,
-            String departmentCode,
-            String jobTitle,
-            String resourceType,
-            String seniority,
-            String color
-    ) {
-        AppUser user = userRepo.findByEmail(email).orElseGet(AppUser::new);
+            String fullName, String email, String rawPassword, Role role,
+            Organisation organisation, String departmentCode, String jobTitle,
+            String resourceTypeCode, String seniority, String color) {
 
+        AppUser user = userRepo.findByEmail(email).orElseGet(AppUser::new);
         user.setFullName(fullName);
         user.setEmail(email);
         user.setPasswordHash(encoder.encode(rawPassword));
@@ -158,7 +114,8 @@ public class DataSeeder implements CommandLineRunner {
         user.setOrganisation(organisation);
         user.setDepartmentCode(departmentCode);
         user.setJobTitle(jobTitle);
-        user.setResourceType(resourceType);
+        // FIXED: look up ResourceType entity by code + organisationId
+        user.setResourceType(resolveResourceType(resourceTypeCode, organisation.getId()));
         user.setSeniority(seniority);
         user.setHoursPerDay(8);
         user.setDaysPerWeek(5);
@@ -168,5 +125,11 @@ public class DataSeeder implements CommandLineRunner {
         user.setActive(true);
 
         return userRepo.save(user);
+    }
+
+    // Looks up ResourceType by code — returns null if not found yet (first run before seed)
+    private ResourceType resolveResourceType(String code, Long organisationId) {
+        if (code == null || organisationId == null) return null;
+        return resourceTypeRepo.findByCodeAndOrganisationId(code, organisationId).orElse(null);
     }
 }
