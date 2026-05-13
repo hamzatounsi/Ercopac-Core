@@ -18,7 +18,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/resources")
 @PreAuthorize(
-    "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PMO','PLATFORM_OWNER','PLATFORM_ADMIN')"
+    "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')"
 )
 public class ResourceController {
 

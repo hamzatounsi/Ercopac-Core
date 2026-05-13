@@ -64,13 +64,11 @@ public class PlatformOrganisationService {
         organisation.setPaymentMethod(
                 request.paymentMethod != null ? request.paymentMethod : "SEPA_DIRECT_DEBIT"
         );
-        organisation.setWarehouseLimit(request.warehouseLimit);
         organisation.setUserLimit(request.userLimit);
-        organisation.setAdminLicenceLimit(request.adminLicenceLimit);
-        organisation.setSpecialistLicenceLimit(request.specialistLicenceLimit);
-        organisation.setSupervisorLicenceLimit(request.supervisorLicenceLimit);
-        organisation.setOperatorLicenceLimit(request.operatorLicenceLimit);
-        organisation.setReadonlyLicenceLimit(request.readonlyLicenceLimit);
+        organisation.setOrgAdminLicenceLimit(request.orgAdminLicenceLimit);
+        organisation.setGeneralManagerLicenceLimit(request.generalManagerLicenceLimit);
+        organisation.setDepartmentManagerLicenceLimit(request.departmentManagerLicenceLimit);
+        organisation.setEmployeeLicenceLimit(request.employeeLicenceLimit);
 
         organisation.setHealthScore(request.healthScore);
 
@@ -192,14 +190,11 @@ public class PlatformOrganisationService {
         }
 
         organisation.setMonthlyRevenue(request.monthlyRevenue);
-        organisation.setWarehouseLimit(request.warehouseLimit);
         organisation.setUserLimit(request.userLimit);
-
-        organisation.setAdminLicenceLimit(request.adminLicenceLimit);
-        organisation.setSpecialistLicenceLimit(request.specialistLicenceLimit);
-        organisation.setSupervisorLicenceLimit(request.supervisorLicenceLimit);
-        organisation.setOperatorLicenceLimit(request.operatorLicenceLimit);
-        organisation.setReadonlyLicenceLimit(request.readonlyLicenceLimit);
+        organisation.setOrgAdminLicenceLimit(request.orgAdminLicenceLimit);
+        organisation.setGeneralManagerLicenceLimit(request.generalManagerLicenceLimit);
+        organisation.setDepartmentManagerLicenceLimit(request.departmentManagerLicenceLimit);
+        organisation.setEmployeeLicenceLimit(request.employeeLicenceLimit);
 
         organisation.setHealthScore(request.healthScore);
 
@@ -269,14 +264,12 @@ public class PlatformOrganisationService {
         dto.domain = organisation.getDomain();
         dto.status = organisation.getStatus();
         dto.plan = organisation.getPlan();
-        dto.warehouseLimit = organisation.getWarehouseLimit();
         dto.userLimit = organisation.getUserLimit();
 
-        dto.adminLicenceLimit = organisation.getAdminLicenceLimit();
-        dto.specialistLicenceLimit = organisation.getSpecialistLicenceLimit();
-        dto.supervisorLicenceLimit = organisation.getSupervisorLicenceLimit();
-        dto.operatorLicenceLimit = organisation.getOperatorLicenceLimit();
-        dto.readonlyLicenceLimit = organisation.getReadonlyLicenceLimit();
+        dto.orgAdminLicenceLimit = organisation.getOrgAdminLicenceLimit();
+        dto.generalManagerLicenceLimit = organisation.getGeneralManagerLicenceLimit();
+        dto.departmentManagerLicenceLimit = organisation.getDepartmentManagerLicenceLimit();
+        dto.employeeLicenceLimit = organisation.getEmployeeLicenceLimit();
 
         dto.monthlyRevenue = organisation.getMonthlyRevenue();
         dto.healthScore = organisation.getHealthScore();

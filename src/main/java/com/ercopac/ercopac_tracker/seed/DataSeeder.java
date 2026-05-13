@@ -93,13 +93,21 @@ public class DataSeeder implements CommandLineRunner {
         );
     }
 
-    private Organisation createOrUpdateOrganisation(String name, String code) {
+        private Organisation createOrUpdateOrganisation(String name, String code) {
         Organisation organisation = organisationRepo.findByCode(code).orElseGet(Organisation::new);
         organisation.setName(name);
         organisation.setCode(code);
         organisation.setStatus(OrganisationStatus.TRIAL);
+
+        organisation.setPlan("STARTER");
+        organisation.setUserLimit(14);
+        organisation.setOrgAdminLicenceLimit(1);
+        organisation.setGeneralManagerLicenceLimit(1);
+        organisation.setDepartmentManagerLicenceLimit(2);
+        organisation.setEmployeeLicenceLimit(10);
+
         return organisationRepo.save(organisation);
-    }
+        }
 
     private AppUser createOrUpdatePlatformUser(
             String fullName,

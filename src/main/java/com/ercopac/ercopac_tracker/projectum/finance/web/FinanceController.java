@@ -28,7 +28,7 @@ import jakarta.validation.Valid;
 public class FinanceController {
 
     private static final String PROJECTUM_ACCESS =
-            "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PMO','PLATFORM_OWNER','PLATFORM_ADMIN')";
+            "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')";
 
     private final FinanceService financeService;
 
