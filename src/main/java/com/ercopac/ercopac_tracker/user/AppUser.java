@@ -39,8 +39,10 @@ public class AppUser {
     @Column(name = "job_title", length = 80)
     private String jobTitle;
 
-    @Column(name = "resource_type", length = 40)
-    private String resourceType;
+ // Add this:
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "resource_type_id")
+    private ResourceType resourceType;
 
     @Column(name = "seniority", length = 30)
     private String seniority;
@@ -158,14 +160,8 @@ public class AppUser {
         this.jobTitle = jobTitle;
     }
 
-    public String getResourceType() {
-        return resourceType;
-    }
-
-    public void setResourceType(String resourceType) {
-        this.resourceType = resourceType;
-    }
-
+    public ResourceType getResourceType() { return resourceType; }
+    public void setResourceType(ResourceType resourceType) { this.resourceType = resourceType; }
     public String getSeniority() {
         return seniority;
     }
