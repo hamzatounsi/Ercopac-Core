@@ -36,7 +36,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
 
         return "OPTIONS".equalsIgnoreCase(request.getMethod())
-                || path.startsWith("/api/auth")
+                || path.startsWith("/api/auth/")
+                || path.equals("/api/auth/login")
                 || path.equals("/api/health")
                 || path.equals("/error");
     }
@@ -70,15 +71,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 UserDetails user = userDetailsService.loadUserByUsername(username);
 
                 String role = jwtService.extractRole(token);
-
                 if (role == null || role.isBlank()) {
                     sendUnauthorized(response, "JWT role is missing");
                     return;
                 }
 
-                String cleanRole = role.startsWith("ROLE_")
-                        ? role.substring(5)
-                        : role;
+                String cleanRole = role.startsWith("ROLE_") ? role.substring(5) : role;
 
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(
