@@ -66,7 +66,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/platform/**")
                         .hasAnyAuthority(PLATFORM_ROLES)
 
-                        .requestMatchers("/api/org-admin/**", "/api/admin/**")
+                        .requestMatchers(
+                                "/api/org-admin/**",
+                                "/api/admin/**"
+                        )
                         .hasAnyAuthority(ORG_ADMIN_ROLES)
 
                         .requestMatchers(
@@ -76,7 +79,8 @@ public class SecurityConfig {
                                 "/api/resources/**",
                                 "/api/resources",
                                 "/api/suppliers/**",
-                                "/api/department/**"
+                                "/api/department/**",
+                                "/api/resource-config/**"
                         )
                         .hasAnyAuthority(MANAGER_ROLES)
 
