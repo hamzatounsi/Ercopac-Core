@@ -22,9 +22,7 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
 
-    private static final String[] PLATFORM_ROLES = {
-            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER"
-    };
+    private static final String[] PLATFORM_ROLES = {"PLATFORM_OWNER", "ROLE_PLATFORM_OWNER"};
 
     private static final String[] ORG_ADMIN_ROLES = {
             "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
@@ -38,9 +36,7 @@ public class SecurityConfig {
             "DEPARTMENT_MANAGER", "ROLE_DEPARTMENT_MANAGER"
     };
 
-    private static final String[] EMPLOYEE_ROLES = {
-            "EMPLOYEE", "ROLE_EMPLOYEE"
-    };
+    private static final String[] EMPLOYEE_ROLES = {"EMPLOYEE", "ROLE_EMPLOYEE"};
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
@@ -66,10 +62,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/platform/**")
                         .hasAnyAuthority(PLATFORM_ROLES)
 
-                        .requestMatchers(
-                                "/api/org-admin/**",
-                                "/api/admin/**"
-                        )
+                        .requestMatchers("/api/org-admin/**", "/api/admin/**")
                         .hasAnyAuthority(ORG_ADMIN_ROLES)
 
                         .requestMatchers(
@@ -77,7 +70,6 @@ public class SecurityConfig {
                                 "/api/projects/**",
                                 "/api/tasks/**",
                                 "/api/resources/**",
-                                "/api/resources",
                                 "/api/suppliers/**",
                                 "/api/department/**",
                                 "/api/resource-config/**"
