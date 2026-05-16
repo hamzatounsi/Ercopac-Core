@@ -59,7 +59,8 @@ public class SecurityConfig {
 
                         .requestMatchers(
                                 "/api/auth/**",
-                                "/api/health"
+                                "/api/health",
+                                "/error"
                         ).permitAll()
 
                         .requestMatchers("/api/platform/**")
@@ -67,22 +68,6 @@ public class SecurityConfig {
 
                         .requestMatchers("/api/org-admin/**", "/api/admin/**")
                         .hasAnyAuthority(ORG_ADMIN_ROLES)
-
-                        // Schedule history must be explicit before /api/gm/**
-                        .requestMatchers(HttpMethod.GET, "/api/gm/projects/**")
-                        .hasAnyAuthority(MANAGER_ROLES)
-
-                        .requestMatchers(HttpMethod.GET,
-                                "/api/gm/projects/*/schedule/history",
-                                "/api/gm/projects/*/schedule/history/tasks/*"
-                        )
-                        .hasAnyAuthority(MANAGER_ROLES)
-
-                        .requestMatchers(
-                                "/api/gm/projects/*/tasks/*/console",
-                                "/api/gm/projects/*/tasks/*/console/logs"
-                        )
-                        .hasAnyAuthority(MANAGER_ROLES)
 
                         .requestMatchers(
                                 "/api/gm/**",
