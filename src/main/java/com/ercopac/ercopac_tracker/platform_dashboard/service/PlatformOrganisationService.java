@@ -102,7 +102,7 @@ public class PlatformOrganisationService {
         final Organisation savedOrganisation = organisation;
 
         var adminResourceType = resourceTypeRepository
-                .findByCodeAndOrganisationId("ADMINISTRATION", savedOrganisation.getId())
+                .findByCodeAndOrganisation_Id("ADMINISTRATION", savedOrganisation.getId())
                 .orElseGet(() -> resourceTypeRepository.save(
                         new com.ercopac.ercopac_tracker.user.ResourceType(
                                 "ADMINISTRATION",

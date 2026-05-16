@@ -19,8 +19,11 @@ public class TaskResourceAssignment {
     @Column(name = "task_id", nullable = false)
     private Long taskId;
 
+    @Column(name = "assigned_user_id")
+    private Long assignedUserId;
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_user_id")
+    @JoinColumn(name = "assigned_user_id", insertable = false, updatable = false)
     private AppUser assignedUser;
 
     @Column(name = "resource_type", length = 30)
@@ -66,4 +69,12 @@ public class TaskResourceAssignment {
 
     public BigDecimal getCost() { return cost; }
     public void setCost(BigDecimal cost) { this.cost = cost; }
+
+        public Long getAssignedUserId() {
+        return assignedUserId;
+    }
+
+    public void setAssignedUserId(Long assignedUserId) {
+        this.assignedUserId = assignedUserId;
+    }
 }

@@ -13,6 +13,10 @@ import com.ercopac.ercopac_tracker.tasks.repository.TaskDependencyRepository;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import jakarta.transaction.Transactional;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -30,6 +34,7 @@ public class ProjectTaskService {
     private final TaskDependencyRepository         taskDependencyRepository;
     private final TaskResourceAssignmentRepository taskResourceAssignmentRepository;
     private final TaskSchedulingService            taskSchedulingService;
+    private final ProjectTaskHistoryService        historyService;
 
     public ProjectTaskService(
             ProjectTaskRepository projectTaskRepository,
@@ -37,22 +42,25 @@ public class ProjectTaskService {
             UserRepository userRepository,
             TaskDependencyRepository taskDependencyRepository,
             TaskResourceAssignmentRepository taskResourceAssignmentRepository,
-            TaskSchedulingService taskSchedulingService) {
+            TaskSchedulingService taskSchedulingService,
+            ProjectTaskHistoryService historyService) {
         this.projectTaskRepository            = projectTaskRepository;
         this.projectRepository                = projectRepository;
         this.userRepository                   = userRepository;
         this.taskDependencyRepository         = taskDependencyRepository;
         this.taskResourceAssignmentRepository = taskResourceAssignmentRepository;
         this.taskSchedulingService            = taskSchedulingService;
+        this.historyService                   = historyService;
     }
 
     // ══════════════════════════════════════════════════════════════
     // UPDATE
-    // ══════════════════════════════════════════════════════════════
-
+    // ══════════════════════════════════════════
     public ProjectScheduleTaskResponse updateTask(Long taskId, UpdateProjectTaskRequest request) {
         ProjectTask task = projectTaskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+
+        ProjectTask oldTask = copyForHistory(task);        
 
         validateDates(request);
         validatePercent(request.getPercentComplete(), "percentComplete");
@@ -95,6 +103,15 @@ public class ProjectTaskService {
         normalizeMilestone(task);
 
         Long projectId = task.getProjectId();
+
+        historyService.logTaskUpdate(
+                oldTask,
+                task,
+                getOrganisationIdFromSecurityContext(),
+                getUserIdFromSecurityContext(),
+                getUsernameFromSecurityContext()
+        );
+
         ProjectTask saved = projectTaskRepository.save(task);
 
         rebuildParentIds(projectId);
@@ -665,5 +682,51 @@ public class ProjectTaskService {
     private void validatePercent(Integer value, String label) {
         if (value != null && (value < 0 || value > 100))
             throw new IllegalArgumentException(label + " must be between 0 and 100.");
+    }
+
+    private ProjectTask copyForHistory(ProjectTask source) {
+    ProjectTask copy = new ProjectTask();
+
+    copy.setName(source.getName());
+    copy.setPlannedStart(source.getPlannedStart());
+    copy.setPlannedEnd(source.getPlannedEnd());
+    copy.setBaselineStart(source.getBaselineStart());
+    copy.setBaselineEnd(source.getBaselineEnd());
+    copy.setActualStart(source.getActualStart());
+    copy.setActualEnd(source.getActualEnd());
+    copy.setDurationDays(source.getDurationDays());
+    copy.setPercentComplete(source.getPercentComplete());
+    copy.setDepartmentCode(source.getDepartmentCode());
+    copy.setResourceType(source.getResourceType());
+    copy.setCustomerMilestone(source.getCustomerMilestone());
+
+    return copy;
+    }
+
+    private Long getOrganisationIdFromSecurityContext() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication != null && authentication.getDetails() instanceof Map<?, ?> details) {
+            Object value = details.get("organisationId");
+            return value == null ? null : Long.valueOf(value.toString());
+        }
+
+        return null;
+    }
+
+    private Long getUserIdFromSecurityContext() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication != null && authentication.getDetails() instanceof Map<?, ?> details) {
+            Object value = details.get("userId");
+            return value == null ? null : Long.valueOf(value.toString());
+        }
+
+        return null;
+    }
+
+    private String getUsernameFromSecurityContext() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null ? authentication.getName() : "System";
     }
 }

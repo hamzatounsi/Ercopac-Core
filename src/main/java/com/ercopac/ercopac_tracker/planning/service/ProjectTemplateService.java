@@ -108,8 +108,7 @@ public class ProjectTemplateService {
 
         Map<String, Long> createdTaskIds = new LinkedHashMap<>();
 
-        ProjectTask kickoff = new ProjectTask();
-        kickoff.setProjectId(projectId);
+        ProjectTask kickoff = buildTask(project);
         kickoff.setName("Kickoff");
         kickoff.setDescription("Project kickoff milestone");
         kickoff.setTaskType("MILESTONE");
@@ -130,8 +129,7 @@ public class ProjectTemplateService {
         kickoff = projectTaskRepository.save(kickoff);
         createdTaskIds.put("KICKOFF", kickoff.getId());
 
-        ProjectTask engineering = new ProjectTask();
-        engineering.setProjectId(projectId);
+        ProjectTask engineering = buildTask(project);
         engineering.setName("Engineering Study");
         engineering.setDescription("Initial engineering analysis");
         engineering.setTaskType("ACTIVITY");
@@ -152,8 +150,7 @@ public class ProjectTemplateService {
         engineering = projectTaskRepository.save(engineering);
         createdTaskIds.put("ENGINEERING", engineering.getId());
 
-        ProjectTask procurement = new ProjectTask();
-        procurement.setProjectId(projectId);
+        ProjectTask procurement = buildTask(project);
         procurement.setName("Procurement Preparation");
         procurement.setDescription("Preparation of procurement package");
         procurement.setTaskType("ACTIVITY");
@@ -174,8 +171,7 @@ public class ProjectTemplateService {
         procurement = projectTaskRepository.save(procurement);
         createdTaskIds.put("PROCUREMENT", procurement.getId());
 
-        ProjectTask delivery = new ProjectTask();
-        delivery.setProjectId(projectId);
+        ProjectTask delivery = buildTask(project);
         delivery.setName("Delivery Review");
         delivery.setDescription("Final review milestone");
         delivery.setTaskType("MILESTONE");
@@ -245,5 +241,20 @@ public class ProjectTemplateService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private ProjectTask buildTask(Project project) {
+
+        if (project.getOrganisation() == null) {
+            throw new IllegalArgumentException("Project has no organisation.");
+        }
+
+        ProjectTask task = new ProjectTask();
+
+        task.setProjectId(project.getId());
+        task.setOrganisationId(project.getOrganisation().getId());
+        task.setActive(true);
+
+        return task;
     }
 }

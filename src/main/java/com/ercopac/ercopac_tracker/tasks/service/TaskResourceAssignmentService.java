@@ -100,12 +100,13 @@ public class TaskResourceAssignmentService {
         entity.setCost(dto.getCost());
 
         if (dto.getAssignedUserId() != null) {
-            AppUser user = userRepository.findById(dto.getAssignedUserId())
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "Assigned user not found: " + dto.getAssignedUserId()));
-            entity.setAssignedUser(user);
+        userRepository.findById(dto.getAssignedUserId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Assigned user not found: " + dto.getAssignedUserId()));
+
+        entity.setAssignedUserId(dto.getAssignedUserId());
         } else {
-            entity.setAssignedUser(null);
+        entity.setAssignedUserId(null);
         }
     }
 
@@ -114,8 +115,7 @@ public class TaskResourceAssignmentService {
                 .setId(entity.getId())
                 .setProjectId(entity.getProjectId())
                 .setTaskId(entity.getTaskId())
-                .setAssignedUserId(entity.getAssignedUser() != null
-                        ? entity.getAssignedUser().getId() : null)
+                .setAssignedUserId(entity.getAssignedUserId())
                 .setAssignedUserName(entity.getAssignedUser() != null
                         ? entity.getAssignedUser().getFullName() : null)
                 .setResourceType(entity.getResourceType())

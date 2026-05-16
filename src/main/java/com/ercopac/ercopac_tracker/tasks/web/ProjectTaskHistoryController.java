@@ -43,19 +43,15 @@ public class ProjectTaskHistoryController {
 
         Object details = authentication.getDetails();
 
+        System.out.println("HISTORY AUTH = " + authentication);
+        System.out.println("HISTORY AUTHORITIES = " + authentication.getAuthorities());
+        System.out.println("HISTORY DETAILS = " + details);
+
         if (details instanceof Map<?, ?> detailsMap) {
             Object organisationId = detailsMap.get("organisationId");
 
-            if (organisationId instanceof Long value) {
-                return value;
-            }
-
-            if (organisationId instanceof Integer value) {
-                return value.longValue();
-            }
-
-            if (organisationId instanceof String value) {
-                return Long.valueOf(value);
+            if (organisationId != null) {
+                return Long.valueOf(organisationId.toString());
             }
         }
 

@@ -235,7 +235,7 @@ public class ResourceService {
     private ResourceType resolveResourceType(String code, Long organisationId) {
         if (code == null) return null;
         return resourceTypeRepository
-                .findByCodeAndOrganisationId(code, organisationId)
+                .findByCodeAndOrganisation_Id(code, organisationId)
                 .orElse(null);
     }
 

@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -16,9 +17,30 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+
+    private static final String[] PLATFORM_ROLES = {
+            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER"
+    };
+
+    private static final String[] ORG_ADMIN_ROLES = {
+            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
+            "ORG_ADMIN", "ROLE_ORG_ADMIN"
+    };
+
+    private static final String[] MANAGER_ROLES = {
+            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
+            "ORG_ADMIN", "ROLE_ORG_ADMIN",
+            "GENERAL_MANAGER", "ROLE_GENERAL_MANAGER",
+            "DEPARTMENT_MANAGER", "ROLE_DEPARTMENT_MANAGER"
+    };
+
+    private static final String[] EMPLOYEE_ROLES = {
+            "EMPLOYEE", "ROLE_EMPLOYEE"
+    };
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
@@ -27,89 +49,58 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
-        http.csrf(csrf -> csrf.disable());
-        http.cors(cors -> {});
+        http
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> {})
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
 
-        http.authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                .requestMatchers(
-                        "/api/auth/**",
-                        "/api/health"
-                ).permitAll()
+                        .requestMatchers(
+                                "/api/auth/**",
+                                "/api/health"
+                        ).permitAll()
 
-                // TEMPORARY TEST ACCESS
-                .requestMatchers(HttpMethod.PUT, "/api/tasks/**").permitAll()
-                .requestMatchers(HttpMethod.DELETE, "/api/tasks/**").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/tasks/**").permitAll()
-                .requestMatchers("/api/tasks/**").permitAll()
+                        .requestMatchers("/api/platform/**")
+                        .hasAnyAuthority(PLATFORM_ROLES)
 
-                .requestMatchers("/api/gm/projects/*/schedule/history/**")
-                .hasAnyAuthority(
-                        "GENERAL_MANAGER",
-                        "ROLE_GENERAL_MANAGER",
-                        "ORG_ADMIN",
-                        "ROLE_ORG_ADMIN",
-                        "PLATFORM_OWNER",
-                        "ROLE_PLATFORM_OWNER",
-                        "DEPARTMENT_MANAGER",
-                        "ROLE_DEPARTMENT_MANAGER"
-                )
+                        .requestMatchers("/api/org-admin/**", "/api/admin/**")
+                        .hasAnyAuthority(ORG_ADMIN_ROLES)
 
-                .requestMatchers("/api/platform/**")
-                .hasAnyAuthority(
-                        "PLATFORM_OWNER",
-                        "ROLE_PLATFORM_OWNER"
-                )
+                        // Schedule history must be explicit before /api/gm/**
+                        .requestMatchers(HttpMethod.GET, "/api/gm/projects/**")
+                        .hasAnyAuthority(MANAGER_ROLES)
 
-                .requestMatchers(
-                        "/api/gm/**",
-                        "/api/projects/**",
-                        "/api/resources",
-                        "/api/resources/**",
-                        "/api/suppliers/**"
-                )
-                .hasAnyAuthority(
-                        "GENERAL_MANAGER",
-                        "ROLE_GENERAL_MANAGER",
-                        "ORG_ADMIN",
-                        "ROLE_ORG_ADMIN",
-                        "PLATFORM_OWNER",
-                        "ROLE_PLATFORM_OWNER",
-                        "DEPARTMENT_MANAGER",
-                        "ROLE_DEPARTMENT_MANAGER"
-                )
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/gm/projects/*/schedule/history",
+                                "/api/gm/projects/*/schedule/history/tasks/*"
+                        )
+                        .hasAnyAuthority(MANAGER_ROLES)
 
-                .requestMatchers("/api/org-admin/**", "/api/admin/**")
-                .hasAnyAuthority(
-                        "ORG_ADMIN",
-                        "ROLE_ORG_ADMIN",
-                        "PLATFORM_OWNER",
-                        "ROLE_PLATFORM_OWNER"
-                )
+                        .requestMatchers(
+                                "/api/gm/projects/*/tasks/*/console",
+                                "/api/gm/projects/*/tasks/*/console/logs"
+                        )
+                        .hasAnyAuthority(MANAGER_ROLES)
 
-                .requestMatchers("/api/department/**")
-                .hasAnyAuthority(
-                        "DEPARTMENT_MANAGER",
-                        "ROLE_DEPARTMENT_MANAGER",
-                        "GENERAL_MANAGER",
-                        "ROLE_GENERAL_MANAGER",
-                        "ORG_ADMIN",
-                        "ROLE_ORG_ADMIN",
-                        "PLATFORM_OWNER",
-                        "ROLE_PLATFORM_OWNER"
-                )
+                        .requestMatchers(
+                                "/api/gm/**",
+                                "/api/projects/**",
+                                "/api/tasks/**",
+                                "/api/resources/**",
+                                "/api/resources",
+                                "/api/suppliers/**",
+                                "/api/department/**"
+                        )
+                        .hasAnyAuthority(MANAGER_ROLES)
 
-                .requestMatchers("/api/employee/**")
-                .hasAnyAuthority(
-                        "EMPLOYEE",
-                        "ROLE_EMPLOYEE"
-                )
+                        .requestMatchers("/api/employee/**")
+                        .hasAnyAuthority(EMPLOYEE_ROLES)
 
-                .anyRequest().authenticated()
-        );
+                        .anyRequest().authenticated()
+                );
 
-        http.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
