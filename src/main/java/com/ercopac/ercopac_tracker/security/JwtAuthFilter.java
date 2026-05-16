@@ -1,11 +1,13 @@
 package com.ercopac.ercopac_tracker.security;
 
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.ApplicationContext;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -14,6 +16,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -33,6 +36,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                     FilterChain chain)
             throws ServletException, IOException {
 
+        String path = request.getServletPath();
+
+        if (
+                path.startsWith("/api/auth/")
+                        || path.equals("/api/health")
+                        || path.equals("/error")
+                        || "OPTIONS".equalsIgnoreCase(request.getMethod())
+        ) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         String header = request.getHeader("Authorization");
 
         if (header == null || !header.startsWith("Bearer ")) {
@@ -45,9 +60,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String username = jwtService.extractUsername(token);
 
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetailsService userDetailsService =
-                        applicationContext.getBean(UserDetailsService.class);
-
+                UserDetailsService userDetailsService = applicationContext.getBean(UserDetailsService.class);
                 UserDetails user = userDetailsService.loadUserByUsername(username);
 
                 String role = jwtService.extractRole(token);
@@ -59,16 +72,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         new UsernamePasswordAuthenticationToken(
                                 user,
                                 null,
-                                java.util.List.of(
-                                        new org.springframework.security.core.authority.SimpleGrantedAuthority(cleanRole),
-                                        new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + cleanRole)
+                                List.of(
+                                        new SimpleGrantedAuthority(cleanRole),
+                                        new SimpleGrantedAuthority("ROLE_" + cleanRole)
                                 )
                         );
 
                 Map<String, Object> details = new HashMap<>();
                 details.put("userId", jwtService.extractUserId(token));
                 details.put("organisationId", jwtService.extractOrganisationId(token));
-                details.put("role", role);
+                details.put("role", cleanRole);
 
                 authToken.setDetails(details);
                 SecurityContextHolder.getContext().setAuthentication(authToken);
@@ -76,7 +89,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
             chain.doFilter(request, response);
 
-        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+        } catch (ExpiredJwtException e) {
             SecurityContextHolder.clearContext();
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         } catch (Exception e) {
