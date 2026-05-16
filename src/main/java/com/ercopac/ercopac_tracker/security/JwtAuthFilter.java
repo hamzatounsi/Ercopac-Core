@@ -1,6 +1,7 @@
 package com.ercopac.ercopac_tracker.security;
 
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,22 +32,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getServletPath();
+
+        return "OPTIONS".equalsIgnoreCase(request.getMethod())
+                || path.startsWith("/api/auth/")
+                || path.equals("/api/health")
+                || path.equals("/error");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain)
             throws ServletException, IOException {
-
-        String path = request.getServletPath();
-
-        if (
-                path.startsWith("/api/auth/")
-                        || path.equals("/api/health")
-                        || path.equals("/error")
-                        || "OPTIONS".equalsIgnoreCase(request.getMethod())
-        ) {
-            chain.doFilter(request, response);
-            return;
-        }
 
         String header = request.getHeader("Authorization");
 
@@ -59,12 +58,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String token = header.substring(7);
             String username = jwtService.extractUsername(token);
 
-            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetailsService userDetailsService = applicationContext.getBean(UserDetailsService.class);
+            if (username == null || username.isBlank()) {
+                chain.doFilter(request, response);
+                return;
+            }
+
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetailsService userDetailsService =
+                        applicationContext.getBean(UserDetailsService.class);
+
                 UserDetails user = userDetailsService.loadUserByUsername(username);
 
                 String role = jwtService.extractRole(token);
-                String cleanRole = role != null && role.startsWith("ROLE_")
+
+                if (role == null || role.isBlank()) {
+                    sendUnauthorized(response, "JWT role is missing");
+                    return;
+                }
+
+                String cleanRole = role.startsWith("ROLE_")
                         ? role.substring(5)
                         : role;
 
@@ -90,11 +102,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
 
         } catch (ExpiredJwtException e) {
-            SecurityContextHolder.clearContext();
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            sendUnauthorized(response, "JWT expired");
+        } catch (JwtException e) {
+            sendUnauthorized(response, "Invalid JWT");
         } catch (Exception e) {
-            SecurityContextHolder.clearContext();
+            sendUnauthorized(response, "Authentication failed");
+        }
+    }
+
+    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+        SecurityContextHolder.clearContext();
+
+        if (!response.isCommitted()) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"error\":\"" + message + "\"}");
+            response.getWriter().flush();
         }
     }
 }
