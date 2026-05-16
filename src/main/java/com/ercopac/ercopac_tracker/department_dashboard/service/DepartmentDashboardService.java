@@ -237,10 +237,14 @@ public class DepartmentDashboardService {
             targetMemberIds.add(task.getAssignedUser().getId());
         }
 
-        List<TaskResourceAssignment> assignments = assignmentsByTaskId.getOrDefault(task.getId(), Collections.emptyList());
+        List<TaskResourceAssignment> assignments =
+                assignmentsByTaskId.getOrDefault(task.getId(), Collections.emptyList());
+
         for (TaskResourceAssignment assignment : assignments) {
-            if (assignment.getAssignedUser() != null && membersById.containsKey(assignment.getAssignedUser().getId())) {
-                targetMemberIds.add(assignment.getAssignedUser().getId());
+            Long assignedUserId = assignment.getAssignedUserId();
+
+            if (assignedUserId != null && membersById.containsKey(assignedUserId)) {
+                targetMemberIds.add(assignedUserId);
             }
         }
 
@@ -431,10 +435,18 @@ public class DepartmentDashboardService {
                 }
 
                 for (TaskResourceAssignment assignment : assignments) {
+                    Long assignedUserId = null;
+
                     if (assignment.getAssignedUser() != null) {
+                        assignedUserId = assignment.getAssignedUser().getId();
+                    } else if (assignment.getAssignedUserId() != null) {
+                        assignedUserId = assignment.getAssignedUserId();
+                    }
+
+                    if (assignedUserId != null) {
                         resourceCountByTypeAndWeek
                                 .computeIfAbsent(key, k -> new HashSet<>())
-                                .add(assignment.getAssignedUser().getId());
+                                .add(assignedUserId);
                     }
                 }
 
@@ -666,7 +678,17 @@ public class DepartmentDashboardService {
                     taskResourceAssignmentRepository.findByProjectIdAndTaskIdOrderByIdAsc(task.getProjectId(), task.getId());
 
             include = assignments.stream()
-                    .anyMatch(a -> a.getAssignedUser() != null && memberIdSet.contains(a.getAssignedUser().getId()));
+                .anyMatch(a -> {
+                    Long assignedUserId = null;
+
+                    if (a.getAssignedUser() != null) {
+                        assignedUserId = a.getAssignedUser().getId();
+                    } else if (a.getAssignedUserId() != null) {
+                        assignedUserId = a.getAssignedUserId();
+                    }
+
+                    return assignedUserId != null && memberIdSet.contains(assignedUserId);
+                });
         }
 
         if (include) {

@@ -13,7 +13,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
-@Component
+//@Component
 public class ProjectTaskSeeder implements CommandLineRunner {
 
     private final ProjectRepository projectRepository;
