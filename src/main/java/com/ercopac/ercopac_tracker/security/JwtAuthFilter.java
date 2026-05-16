@@ -40,46 +40,48 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        String token = header.substring(7);
+        try {
+            String token = header.substring(7);
+            String username = jwtService.extractUsername(token);
 
-        String username = jwtService.extractUsername(token);
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetailsService userDetailsService =
+                        applicationContext.getBean(UserDetailsService.class);
 
-        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetails user = userDetailsService.loadUserByUsername(username);
 
-            UserDetailsService userDetailsService =
-                    applicationContext.getBean(UserDetailsService.class);
+                String role = jwtService.extractRole(token);
+                String cleanRole = role != null && role.startsWith("ROLE_")
+                        ? role.substring(5)
+                        : role;
 
-            UserDetails user = userDetailsService.loadUserByUsername(username);
+                UsernamePasswordAuthenticationToken authToken =
+                        new UsernamePasswordAuthenticationToken(
+                                user,
+                                null,
+                                java.util.List.of(
+                                        new org.springframework.security.core.authority.SimpleGrantedAuthority(cleanRole),
+                                        new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + cleanRole)
+                                )
+                        );
 
-            String role = jwtService.extractRole(token);
+                Map<String, Object> details = new HashMap<>();
+                details.put("userId", jwtService.extractUserId(token));
+                details.put("organisationId", jwtService.extractOrganisationId(token));
+                details.put("role", role);
 
-            String cleanRole = role != null && role.startsWith("ROLE_")
-                    ? role.substring(5)
-                    : role;
+                authToken.setDetails(details);
+                SecurityContextHolder.getContext().setAuthentication(authToken);
+            }
 
-            UsernamePasswordAuthenticationToken authToken =
-                    new UsernamePasswordAuthenticationToken(
-                            user,
-                            null,
-                            java.util.List.of(
-                                    new org.springframework.security.core.authority.SimpleGrantedAuthority(cleanRole),
-                                    new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + cleanRole)
-                            )
-                    );
+            chain.doFilter(request, response);
 
-            System.out.println("JWT ROLE = " + role);
-System.out.println("AUTHORITIES = " + authToken.getAuthorities());            
-
-            Map<String, Object> details = new HashMap<>();
-            details.put("userId", jwtService.extractUserId(token));
-            details.put("organisationId", jwtService.extractOrganisationId(token));
-            details.put("role", jwtService.extractRole(token));
-
-            authToken.setDetails(details);
-
-            SecurityContextHolder.getContext().setAuthentication(authToken);
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            SecurityContextHolder.clearContext();
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        } catch (Exception e) {
+            SecurityContextHolder.clearContext();
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         }
-
-        chain.doFilter(request, response);
     }
 }
