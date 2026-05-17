@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/resource-config")
-@PreAuthorize("hasAnyRole('ORG_ADMIN','GENERAL_MANAGER','PLATFORM_OWNER')")
+@RequestMapping("/api")
+@PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
 public class ResourceConfigController {
 
     private final ResourceConfigService service;
@@ -27,7 +27,6 @@ public class ResourceConfigController {
     }
 
     @PostMapping("/departments")
-    @PreAuthorize("hasRole('ORG_ADMIN')")
     public DepartmentDto createDepartment(@RequestBody SaveDepartmentRequest request) {
         return service.createDepartment(request);
     }
@@ -38,13 +37,11 @@ public class ResourceConfigController {
     }
 
     @PostMapping("/resource-types")
-    @PreAuthorize("hasRole('ORG_ADMIN')")
     public ResourceTypeConfigDto createResourceType(@RequestBody SaveResourceTypeRequest request) {
         return service.createResourceType(request);
     }
 
     @PutMapping("/resource-types/{id}")
-    @PreAuthorize("hasRole('ORG_ADMIN')")
     public ResourceTypeConfigDto updateResourceType(
             @PathVariable Long id,
             @RequestBody SaveResourceTypeRequest request
@@ -53,7 +50,6 @@ public class ResourceConfigController {
     }
 
     @DeleteMapping("/resource-types/{id}")
-    @PreAuthorize("hasRole('ORG_ADMIN')")
     public void deleteResourceType(@PathVariable Long id) {
         service.deleteResourceType(id);
     }

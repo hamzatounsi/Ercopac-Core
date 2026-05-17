@@ -12,6 +12,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/projects/{projectId}/templates")
+@PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER')")
 public class ProjectTemplateController {
 
     private final ProjectTemplateService templateService;
@@ -21,13 +22,11 @@ public class ProjectTemplateController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
     public List<ProjectTemplateDto> getTemplates(@PathVariable Long projectId) {
         return templateService.getProjectTemplates(projectId);
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
     public ProjectTemplateDto createTemplate(
             @PathVariable Long projectId,
             @Valid @RequestBody CreateProjectTemplateRequest request
@@ -36,7 +35,6 @@ public class ProjectTemplateController {
     }
 
     @DeleteMapping("/{templateId}")
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
     public void deleteTemplate(
             @PathVariable Long projectId,
             @PathVariable Long templateId
@@ -45,7 +43,6 @@ public class ProjectTemplateController {
     }
 
     @PostMapping("/apply-standard")
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
     public ApplyStandardTemplateResultDto applyStandardTemplate(@PathVariable Long projectId) {
         return templateService.applyStandardTemplate(projectId);
     }
