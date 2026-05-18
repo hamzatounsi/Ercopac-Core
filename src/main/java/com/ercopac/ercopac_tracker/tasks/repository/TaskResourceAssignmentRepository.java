@@ -3,11 +3,16 @@ package com.ercopac.ercopac_tracker.tasks.repository;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskResourceAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface TaskResourceAssignmentRepository extends JpaRepository<TaskResourceAssignment, Long> {
 
     List<TaskResourceAssignment> findByProjectIdAndTaskIdOrderByIdAsc(Long projectId, Long taskId);
+
+    List<TaskResourceAssignment> findByTaskIdInOrderByIdAsc(Collection<Long> taskIds);
+
+    List<TaskResourceAssignment> findByAssignedUserIdInOrderByIdAsc(Collection<Long> assignedUserIds);
 
     void deleteByProjectIdAndTaskId(Long projectId, Long taskId);
 }

@@ -80,7 +80,7 @@ public class DataSeeder implements CommandLineRunner {
         AppUser gm = seedUser(
                 "gm@pharmastore.com",
                 "Michael Weber",
-                "Hamza123!",
+                "Hamza1",
                 Role.GENERAL_MANAGER,
                 org,
                 "Management"
@@ -96,7 +96,7 @@ public class DataSeeder implements CommandLineRunner {
         );
 
         AppUser employee1 = seedUser(
-                "employee1@pharmastore.com",
+                "emp23!loyee1@pharmastore.com",
                 "John Developer",
                 "Hamza123!",
                 Role.EMPLOYEE,

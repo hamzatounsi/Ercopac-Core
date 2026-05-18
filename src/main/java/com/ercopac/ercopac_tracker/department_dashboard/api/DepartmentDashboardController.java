@@ -50,4 +50,24 @@ public class DepartmentDashboardController {
     public void deleteHoliday(@PathVariable Long holidayId) {
         departmentHolidayService.deleteHoliday(holidayId);
     }
+
+    @GetMapping("/overview-by-department")
+    public MyDepartmentResponseDto getOverviewByDepartment(
+            @RequestParam String departmentCode,
+            @RequestParam(defaultValue = "week") String timelineView,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "52") int span
+    ) {
+        return departmentDashboardService.getOverviewByDepartment(
+                departmentCode,
+                timelineView,
+                offset,
+                span
+        );
+    }
+
+    @GetMapping("/departments")
+    public List<String> getDepartments() {
+        return departmentDashboardService.getDepartments();
+    }
 }
