@@ -705,21 +705,18 @@ public class DepartmentDashboardService {
 }
 
     private Map<Long, List<TaskResourceAssignment>> loadAssignmentsByTaskId(List<ProjectTask> tasks) {
-        Map<Long, List<TaskResourceAssignment>> map = new HashMap<>();
+        List<Long> taskIds = tasks.stream()
+                .map(ProjectTask::getId)
+                .filter(Objects::nonNull)
+                .toList();
 
-        for (ProjectTask task : tasks) {
-            if (task.getProjectId() == null || task.getId() == null) {
-                map.put(task.getId(), Collections.emptyList());
-                continue;
-            }
-
-            List<TaskResourceAssignment> assignments =
-                    taskResourceAssignmentRepository.findByProjectIdAndTaskIdOrderByIdAsc(task.getProjectId(), task.getId());
-
-            map.put(task.getId(), assignments);
+        if (taskIds.isEmpty()) {
+            return Collections.emptyMap();
         }
 
-        return map;
+        return taskResourceAssignmentRepository.findByTaskIdInOrderByIdAsc(taskIds)
+                .stream()
+                .collect(Collectors.groupingBy(TaskResourceAssignment::getTaskId));
     }
 
     private LocalDate firstNonNullDate(LocalDate... dates) {
@@ -766,4 +763,97 @@ public class DepartmentDashboardService {
             default -> List.of(departmentCode.toUpperCase(Locale.ROOT));
         };
     }
+
+    public MyDepartmentResponseDto getOverviewByDepartment(
+        String departmentCode,
+            String timelineViewValue,
+            int offset,
+            int span
+    ) {
+        String timelineView = normalizeTimelineView(timelineViewValue);
+        int safeSpan = span <= 0 ? ("day".equals(timelineView) ? 28 : 52) : span;
+
+        Long currentOrgId = getCurrentOrganisationIdOrThrow();
+
+        List<DepartmentMemberDto> realMembers = userRepository
+                .findByOrganisation_IdAndDepartmentCodeOrderByFullNameAsc(currentOrgId, departmentCode)
+                .stream()
+                .filter(AppUser::isActive)
+                .map(this::toMemberDto)
+                .toList();
+
+        List<DepartmentMemberDto> members = new ArrayList<>(realMembers);
+
+        long genericBaseId = -1L;
+        for (String resourceType : getDepartmentResourceTypes(departmentCode)) {
+            members.add(new DepartmentMemberDto(
+                    genericBaseId--,
+                    "G-" + resourceType,
+                    null,
+                    null,
+                    departmentCode,
+                    resourceType,
+                    "GENERIC",
+                    null,
+                    true,
+                    8,
+                    5,
+                    List.of(1, 2, 3, 4, 5),
+                    "#6b7280"
+            ));
+        }
+
+        List<Long> realMemberIds = realMembers.stream()
+                .map(DepartmentMemberDto::id)
+                .filter(Objects::nonNull)
+                .toList();
+
+        List<DepartmentHolidayDto> holidays =
+                departmentHolidayService.findHolidays(currentOrgId, realMemberIds);
+
+        List<DepartmentTimelineColumnDto> timelineColumns =
+                buildTimelineColumns(timelineView, offset, safeSpan);
+
+        List<ProjectTask> departmentTasks =
+                loadDepartmentTasks(currentOrgId, departmentCode, realMemberIds);
+
+        Map<Long, List<TaskResourceAssignment>> assignmentsByTaskId =
+                loadAssignmentsByTaskId(departmentTasks);
+
+        List<DepartmentResourceRowDto> resourceRows =
+                buildResourceRows(members, holidays, departmentTasks, assignmentsByTaskId);
+
+        List<DepartmentProjectBlockDto> projectBlocks =
+                buildProjectBlocks(currentOrgId, departmentTasks);
+
+        List<DepartmentWeeklyStatDto> weeklyStats =
+                buildWeeklyStats(departmentTasks, timelineColumns, timelineView);
+
+        DepartmentOverviewDto overview = new DepartmentOverviewDto(
+                null,
+                departmentCode,
+                members,
+                holidays,
+                timelineColumns,
+                resourceRows,
+                projectBlocks,
+                weeklyStats
+        );
+
+        return new MyDepartmentResponseDto(overview);
+    }
+
+    public List<String> getDepartments() {
+    Long currentOrgId = getCurrentOrganisationIdOrThrow();
+
+    return userRepository.findByOrganisation_IdOrderByFullNameAsc(currentOrgId)
+            .stream()
+            .map(AppUser::getDepartmentCode)
+            .filter(Objects::nonNull)
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .distinct()
+            .sorted()
+            .toList();
+}
 }
