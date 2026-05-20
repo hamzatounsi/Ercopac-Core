@@ -5,6 +5,7 @@ import com.ercopac.ercopac_tracker.planning.dto.ProjectCalendarDto;
 import com.ercopac.ercopac_tracker.planning.dto.UpdateProjectCalendarRequest;
 import com.ercopac.ercopac_tracker.planning.service.ProjectCalendarService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -13,6 +14,12 @@ import java.util.List;
 @RequestMapping("/api/projects/{projectId}/calendars")
 public class ProjectCalendarController {
 
+    private static final String PLANNING_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).PLANNING)";
+
+    private static final String PLANNING_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).PLANNING)";
+
     private final ProjectCalendarService calendarService;
 
     public ProjectCalendarController(ProjectCalendarService calendarService) {
@@ -20,11 +27,13 @@ public class ProjectCalendarController {
     }
 
     @GetMapping
+    @PreAuthorize(PLANNING_READ)
     public List<ProjectCalendarDto> getCalendars(@PathVariable Long projectId) {
         return calendarService.getProjectCalendars(projectId);
     }
 
     @PostMapping
+    @PreAuthorize(PLANNING_WRITE)
     public ProjectCalendarDto createCalendar(
             @PathVariable Long projectId,
             @Valid @RequestBody CreateProjectCalendarRequest request
@@ -33,6 +42,7 @@ public class ProjectCalendarController {
     }
 
     @PutMapping("/{calendarId}")
+    @PreAuthorize(PLANNING_WRITE)
     public ProjectCalendarDto updateCalendar(
             @PathVariable Long projectId,
             @PathVariable Long calendarId,
@@ -42,6 +52,7 @@ public class ProjectCalendarController {
     }
 
     @DeleteMapping("/{calendarId}")
+    @PreAuthorize(PLANNING_WRITE)
     public void deleteCalendar(
             @PathVariable Long projectId,
             @PathVariable Long calendarId
@@ -50,6 +61,7 @@ public class ProjectCalendarController {
     }
 
     @PostMapping("/{calendarId}/make-default")
+    @PreAuthorize(PLANNING_WRITE)
     public void makeDefault(
             @PathVariable Long projectId,
             @PathVariable Long calendarId

@@ -13,6 +13,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/platform/dashboard")
 @CrossOrigin
+@PreAuthorize("hasAuthority('PLATFORM_OWNER') or hasAuthority('ROLE_PLATFORM_OWNER')")
 public class PlatformDashboardController {
 
     private final PlatformDashboardService platformDashboardService;
@@ -22,25 +23,21 @@ public class PlatformDashboardController {
     }
 
     @GetMapping("/kpis")
-    @PreAuthorize("hasAnyRole('PLATFORM_OWNER', 'PLATFORM_ADMIN')")
     public PlatformKpiDto getKpis() {
         return platformDashboardService.getPlatformKpis();
     }
 
     @GetMapping("/organisations")
-    @PreAuthorize("hasAnyRole('PLATFORM_OWNER', 'PLATFORM_ADMIN')")
     public List<OrganisationSummaryDto> getOrganisations() {
         return platformDashboardService.getOrganisationSummaries();
     }
 
     @GetMapping("/projects")
-    @PreAuthorize("hasAnyRole('PLATFORM_OWNER', 'PLATFORM_ADMIN')")
     public List<PlatformProjectRowDto> getProjects() {
         return platformDashboardService.getGlobalProjects();
     }
 
     @GetMapping("/alerts")
-    @PreAuthorize("hasAnyRole('PLATFORM_OWNER', 'PLATFORM_ADMIN')")
     public List<PlatformAlertDto> getAlerts() {
         return platformDashboardService.getPlatformAlerts();
     }

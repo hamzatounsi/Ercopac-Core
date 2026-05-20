@@ -17,10 +17,13 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/resources")
-@PreAuthorize(
-    "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')"
-)
 public class ResourceController {
+
+    private static final String RESOURCES_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).RESOURCES)";
+
+    private static final String RESOURCES_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).RESOURCES)";
 
     private final ResourceService resourceService;
 
@@ -29,6 +32,7 @@ public class ResourceController {
     }
 
     @GetMapping
+    @PreAuthorize(RESOURCES_READ)
     public ResponseEntity<Page<ResourceListItemDto>> getResources(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String departmentCode,
@@ -43,16 +47,19 @@ public class ResourceController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize(RESOURCES_READ)
     public ResponseEntity<ResourceDetailsDto> getResourceById(@PathVariable Long id) {
         return ResponseEntity.ok(resourceService.getResourceById(id));
     }
 
     @PostMapping
+    @PreAuthorize(RESOURCES_WRITE)
     public ResponseEntity<ResourceDetailsDto> createResource(@RequestBody CreateResourceRequest request) {
         return ResponseEntity.ok(resourceService.createResource(request));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize(RESOURCES_WRITE)
     public ResponseEntity<ResourceDetailsDto> updateResource(
             @PathVariable Long id,
             @RequestBody UpdateResourceRequest request
@@ -61,6 +68,7 @@ public class ResourceController {
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize(RESOURCES_WRITE)
     public ResponseEntity<Void> updateResourceStatus(
             @PathVariable Long id,
             @RequestBody Map<String, Boolean> payload
@@ -71,6 +79,7 @@ public class ResourceController {
     }
 
     @GetMapping("/options")
+    @PreAuthorize(RESOURCES_READ)
     public ResponseEntity<List<ResourceOptionDto>> getResourceOptions(
             @RequestParam(required = false) String departmentCode,
             @RequestParam(required = false) String role
@@ -79,21 +88,25 @@ public class ResourceController {
     }
 
     @GetMapping("/meta/departments")
+    @PreAuthorize(RESOURCES_READ)
     public ResponseEntity<List<String>> getDepartmentCodes() {
         return ResponseEntity.ok(resourceService.getDepartmentCodes());
     }
 
     @GetMapping("/meta/resource-types")
+    @PreAuthorize(RESOURCES_READ)
     public ResponseEntity<List<String>> getResourceTypes() {
         return ResponseEntity.ok(resourceService.getResourceTypes());
     }
 
     @GetMapping("/meta/seniority-levels")
+    @PreAuthorize(RESOURCES_READ)
     public ResponseEntity<List<String>> getSeniorities() {
         return ResponseEntity.ok(resourceService.getSeniorities());
     }
 
     @GetMapping("/projects/{projectId}/options")
+    @PreAuthorize(RESOURCES_READ)
     public ResponseEntity<List<ResourceOptionDto>> getResourceOptionsForProject(
             @PathVariable Long projectId
     ) {
