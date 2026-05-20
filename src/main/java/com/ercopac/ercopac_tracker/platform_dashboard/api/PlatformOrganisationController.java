@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/platform/organisations")
+@PreAuthorize("hasAuthority('PLATFORM_OWNER') or hasAuthority('ROLE_PLATFORM_OWNER')")
 public class PlatformOrganisationController {
 
     private final PlatformOrganisationService service;

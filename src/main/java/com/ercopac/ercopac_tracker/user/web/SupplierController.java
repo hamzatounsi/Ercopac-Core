@@ -12,10 +12,13 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/suppliers")
-@org.springframework.security.access.prepost.PreAuthorize(
-    "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','OWNER','PLATFORM_OWNER','PLATFORM_ADMIN')"
-)
 public class SupplierController {
+
+    private static final String SUPPLIERS_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).SUPPLIERS)";
+
+    private static final String SUPPLIERS_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).SUPPLIERS)";
 
     private final SupplierService supplierService;
 
@@ -24,19 +27,19 @@ public class SupplierController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(SUPPLIERS_READ)
     public ResponseEntity<List<SupplierDto>> getSuppliers() {
         return ResponseEntity.ok(supplierService.getSuppliers());
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(SUPPLIERS_WRITE)
     public ResponseEntity<SupplierDto> createSupplier(@RequestBody CreateSupplierRequest request) {
         return ResponseEntity.ok(supplierService.createSupplier(request));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(SUPPLIERS_WRITE)
     public ResponseEntity<SupplierDto> updateSupplier(
             @PathVariable Long id,
             @RequestBody UpdateSupplierRequest request
@@ -45,7 +48,7 @@ public class SupplierController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(SUPPLIERS_WRITE)
     public ResponseEntity<Void> deleteSupplier(@PathVariable Long id) {
         supplierService.deleteSupplier(id);
         return ResponseEntity.noContent().build();

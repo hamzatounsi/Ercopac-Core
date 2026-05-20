@@ -14,6 +14,12 @@ import java.util.List;
 @RequestMapping("/api/gm/dashboard")
 public class GmDashboardController {
 
+    private static final String GM_DASHBOARD_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).GM_DASHBOARD)";
+
+    private static final String PROJECTS_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).PROJECTS)";
+
     private final GmDashboardService gmDashboardService;
     private final GmProjectumKpiService gmProjectumKpiService;
 
@@ -26,19 +32,19 @@ public class GmDashboardController {
     }
 
     @GetMapping("/projects")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(PROJECTS_READ)
     public List<ProjectDashboardRowDto> projects() {
         return gmDashboardService.getProjects();
     }
 
     @GetMapping("/kpis/portfolio")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(GM_DASHBOARD_READ)
     public PortfolioKpiDto portfolioKpis() {
         return gmProjectumKpiService.getPortfolioKpis();
     }
 
     @GetMapping("/projects/{projectId}/kpis")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(GM_DASHBOARD_READ)
     public ProjectKpiDto projectKpis(@PathVariable Long projectId) {
         return gmProjectumKpiService.getProjectKpis(projectId);
     }

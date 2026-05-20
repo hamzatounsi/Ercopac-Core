@@ -12,8 +12,13 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/projects/{projectId}/templates")
-@PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER')")
 public class ProjectTemplateController {
+
+    private static final String PLANNING_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).PLANNING)";
+
+    private static final String PLANNING_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).PLANNING)";
 
     private final ProjectTemplateService templateService;
 
@@ -22,11 +27,13 @@ public class ProjectTemplateController {
     }
 
     @GetMapping
+    @PreAuthorize(PLANNING_READ)
     public List<ProjectTemplateDto> getTemplates(@PathVariable Long projectId) {
         return templateService.getProjectTemplates(projectId);
     }
 
     @PostMapping
+    @PreAuthorize(PLANNING_WRITE)
     public ProjectTemplateDto createTemplate(
             @PathVariable Long projectId,
             @Valid @RequestBody CreateProjectTemplateRequest request
@@ -35,6 +42,7 @@ public class ProjectTemplateController {
     }
 
     @DeleteMapping("/{templateId}")
+    @PreAuthorize(PLANNING_WRITE)
     public void deleteTemplate(
             @PathVariable Long projectId,
             @PathVariable Long templateId
@@ -43,6 +51,7 @@ public class ProjectTemplateController {
     }
 
     @PostMapping("/apply-standard")
+    @PreAuthorize(PLANNING_WRITE)
     public ApplyStandardTemplateResultDto applyStandardTemplate(@PathVariable Long projectId) {
         return templateService.applyStandardTemplate(projectId);
     }

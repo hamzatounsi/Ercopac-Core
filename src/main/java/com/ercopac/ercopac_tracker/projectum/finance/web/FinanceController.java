@@ -27,8 +27,11 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/projects/{projectId}/finance")
 public class FinanceController {
 
-    private static final String PROJECTUM_ACCESS =
-            "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')";
+    private static final String FINANCE_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FINANCE)";
+
+    private static final String FINANCE_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FINANCE)";
 
     private final FinanceService financeService;
 
@@ -37,19 +40,19 @@ public class FinanceController {
     }
 
     @GetMapping
-    @PreAuthorize(PROJECTUM_ACCESS)
+    @PreAuthorize(FINANCE_READ)
     public ResponseEntity<List<FinanceEntryDto>> getFinanceRows(@PathVariable Long projectId) {
         return ResponseEntity.ok(financeService.getProjectFinance(projectId));
     }
 
     @GetMapping("/summary")
-    @PreAuthorize(PROJECTUM_ACCESS)
+    @PreAuthorize(FINANCE_READ)
     public ResponseEntity<FinanceSummaryDto> getFinanceSummary(@PathVariable Long projectId) {
         return ResponseEntity.ok(financeService.getProjectFinanceSummary(projectId));
     }
 
     @PostMapping
-    @PreAuthorize(PROJECTUM_ACCESS)
+    @PreAuthorize(FINANCE_WRITE)
     public ResponseEntity<FinanceEntryDto> createFinanceEntry(
             @PathVariable Long projectId,
             @Valid @RequestBody UpsertFinanceEntryRequest request
@@ -58,7 +61,7 @@ public class FinanceController {
     }
 
     @PutMapping("/{entryId}")
-    @PreAuthorize(PROJECTUM_ACCESS)
+    @PreAuthorize(FINANCE_WRITE)
     public ResponseEntity<FinanceEntryDto> updateFinanceEntry(
             @PathVariable Long projectId,
             @PathVariable Long entryId,
@@ -68,7 +71,7 @@ public class FinanceController {
     }
 
     @DeleteMapping("/{entryId}")
-    @PreAuthorize(PROJECTUM_ACCESS)
+    @PreAuthorize(FINANCE_WRITE)
     public ResponseEntity<Void> deleteFinanceEntry(
             @PathVariable Long projectId,
             @PathVariable Long entryId
@@ -78,7 +81,7 @@ public class FinanceController {
     }
 
     @PostMapping("/import")
-    @PreAuthorize(PROJECTUM_ACCESS)
+    @PreAuthorize(FINANCE_WRITE)
     public ResponseEntity<Void> importFinance(
             @PathVariable Long projectId,
             @RequestBody List<UpsertFinanceEntryRequest> rows
@@ -88,7 +91,7 @@ public class FinanceController {
     }
 
     @GetMapping("/{entryId}/detail")
-    @PreAuthorize(PROJECTUM_ACCESS)
+    @PreAuthorize(FINANCE_READ)
     public ResponseEntity<FinanceEntryDetailDto> getFinanceEntryDetail(
             @PathVariable Long projectId,
             @PathVariable Long entryId
@@ -97,19 +100,19 @@ public class FinanceController {
     }
 
     @GetMapping("/analytics/cost-breakdown")
-    @PreAuthorize(PROJECTUM_ACCESS)
+    @PreAuthorize(FINANCE_READ)
     public ResponseEntity<FinanceCostBreakdownDto> getCostBreakdown(@PathVariable Long projectId) {
         return ResponseEntity.ok(financeService.getCostBreakdown(projectId));
     }
 
     @GetMapping("/analytics/project-overview")
-    @PreAuthorize(PROJECTUM_ACCESS)
+    @PreAuthorize(FINANCE_READ)
     public ResponseEntity<FinanceProjectChartDto> getProjectOverview(@PathVariable Long projectId) {
         return ResponseEntity.ok(financeService.getProjectOverview(projectId));
     }
 
     @PostMapping("/recalculate-labour")
-    @PreAuthorize(PROJECTUM_ACCESS)
+    @PreAuthorize(FINANCE_WRITE)
     public ResponseEntity<Void> recalculateLabour(@PathVariable Long projectId) {
         financeService.recalculateLabourRowsFromTasks(projectId);
         return ResponseEntity.ok().build();

@@ -19,31 +19,37 @@ public class ActionController {
 
     private final ActionService actionService;
 
+    private static final String ACTIONS_READ =
+        "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).ACTIONS)";
+
+    private static final String ACTIONS_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).ACTIONS)";
+
     public ActionController(ActionService actionService) {
         this.actionService = actionService;
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(ACTIONS_READ)
     public ResponseEntity<List<ActionItemDto>> getProjectActions(@PathVariable Long projectId) {
         return ResponseEntity.ok(actionService.getProjectActions(projectId));
     }
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(ACTIONS_READ)
     public ResponseEntity<ActionSummaryDto> getSummary(@PathVariable Long projectId) {
         return ResponseEntity.ok(actionService.getSummary(projectId));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(ACTIONS_WRITE)
     public ResponseEntity<ActionItemDto> create(@PathVariable Long projectId,
                                                 @Valid @RequestBody UpsertActionItemRequest request) {
         return ResponseEntity.ok(actionService.create(projectId, request));
     }
 
     @PutMapping("/{actionId}")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(ACTIONS_WRITE)
     public ResponseEntity<ActionItemDto> update(@PathVariable Long projectId,
                                                 @PathVariable Long actionId,
                                                 @Valid @RequestBody UpsertActionItemRequest request) {
@@ -51,7 +57,7 @@ public class ActionController {
     }
 
     @DeleteMapping("/{actionId}")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(ACTIONS_WRITE)
     public ResponseEntity<Void> delete(@PathVariable Long projectId,
                                        @PathVariable Long actionId) {
         actionService.delete(projectId, actionId);
@@ -59,7 +65,7 @@ public class ActionController {
     }
 
     @PostMapping("/{actionId}/comments")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(ACTIONS_WRITE)
     public ResponseEntity<ActionCommentDto> addComment(@PathVariable Long projectId,
                                                        @PathVariable Long actionId,
                                                        @RequestBody Map<String, String> payload) {
@@ -67,7 +73,7 @@ public class ActionController {
     }
 
     @GetMapping("/assignees")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(ACTIONS_READ)
     public ResponseEntity<List<String>> getAvailableAssignees(@PathVariable Long projectId) {
         return ResponseEntity.ok(actionService.getAvailableAssignees(projectId));
     }

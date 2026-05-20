@@ -12,6 +12,12 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/projects")
 public class ProjectController {
 
+    private static final String PROJECTS_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).PROJECTS)";
+
+    private static final String PROJECTS_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).PROJECTS)";
+
     private final ProjectService projectService;
 
     public ProjectController(ProjectService projectService) {
@@ -19,19 +25,21 @@ public class ProjectController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(PROJECTS_READ)
     public ResponseEntity<ProjectDetailsResponse> getProjectById(@PathVariable Long id) {
         return ResponseEntity.ok(projectService.getProjectDetailsById(id));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
-    public ResponseEntity<ProjectDashboardRowDto> createProject(@RequestBody UpsertProjectRequest request) {
+    @PreAuthorize(PROJECTS_WRITE)
+    public ResponseEntity<ProjectDashboardRowDto> createProject(
+            @RequestBody UpsertProjectRequest request
+    ) {
         return ResponseEntity.ok(projectService.createProject(request));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(PROJECTS_WRITE)
     public ResponseEntity<ProjectDashboardRowDto> updateProject(
             @PathVariable Long id,
             @RequestBody UpsertProjectRequest request
@@ -40,7 +48,7 @@ public class ProjectController {
     }
 
     @PatchMapping("/{id}/archive")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(PROJECTS_WRITE)
     public ResponseEntity<Void> archiveProject(@PathVariable Long id) {
         projectService.archiveProject(id);
         return ResponseEntity.ok().build();

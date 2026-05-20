@@ -11,8 +11,13 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER','DEPARTMENT_MANAGER','ROLE_DEPARTMENT_MANAGER')")
 public class ProjectTaskController {
+
+    private static final String TASKS_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).TASKS)";
+
+    private static final String TASKS_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).TASKS)";
 
     private final ProjectTaskService projectTaskService;
 
@@ -21,6 +26,7 @@ public class ProjectTaskController {
     }
 
     @PutMapping("/api/projects/{projectId}/tasks/{taskId}")
+    @PreAuthorize(TASKS_WRITE)
     public ResponseEntity<ProjectScheduleTaskResponse> updateTask(
             @PathVariable Long projectId,
             @PathVariable Long taskId,
@@ -29,6 +35,7 @@ public class ProjectTaskController {
     }
 
     @PostMapping("/api/projects/{projectId}/tasks/below/{afterTaskId}")
+    @PreAuthorize(TASKS_WRITE)
     public ResponseEntity<ProjectScheduleTaskResponse> createTaskBelow(
             @PathVariable Long projectId,
             @PathVariable Long afterTaskId,
@@ -37,22 +44,23 @@ public class ProjectTaskController {
     }
 
     @PostMapping("/api/projects/{projectId}/tasks/copy/{taskId}")
+    @PreAuthorize(TASKS_WRITE)
     public ResponseEntity<ProjectScheduleTaskResponse> copyTaskBelow(
             @PathVariable Long projectId,
             @PathVariable Long taskId) {
-        System.out.println("%%% COPY ENDPOINT HIT project=" + projectId + " task=" + taskId);
         return ResponseEntity.ok(projectTaskService.copyTaskBelow(projectId, taskId));
     }
 
     @DeleteMapping("/api/tasks/{taskId}")
+    @PreAuthorize(TASKS_WRITE)
     public ResponseEntity<Void> deleteTask(@PathVariable Long taskId) {
         projectTaskService.deleteTask(taskId);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/api/projects/{projectId}/tasks/resource-users")
-    public ResponseEntity<List<ResourceUserDto>> getResourceUsers(
-            @PathVariable Long projectId) {
+    @PreAuthorize(TASKS_READ)
+    public ResponseEntity<List<ResourceUserDto>> getResourceUsers(@PathVariable Long projectId) {
         return ResponseEntity.ok(projectTaskService.getResourceUsersForProject(projectId));
     }
 }

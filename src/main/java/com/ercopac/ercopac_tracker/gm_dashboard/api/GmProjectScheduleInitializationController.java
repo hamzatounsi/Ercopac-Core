@@ -12,6 +12,9 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/gm/projects")
 public class GmProjectScheduleInitializationController {
 
+    private static final String PLANNING_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).PLANNING)";
+
     private final GmProjectScheduleInitializationService initializationService;
 
     public GmProjectScheduleInitializationController(
@@ -21,7 +24,7 @@ public class GmProjectScheduleInitializationController {
     }
 
     @PostMapping("/schedule-init")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(PLANNING_WRITE)
     public ResponseEntity<InitializedProjectResponse> initializeProjectSchedule(
             @Valid @RequestBody InitializeProjectScheduleRequest request
     ) {
