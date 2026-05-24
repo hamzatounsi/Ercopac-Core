@@ -1,5 +1,8 @@
 package com.ercopac.ercopac_tracker.projectum.risks.dto;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class RiskSummaryDto {
     private long total;
     private long critical;
@@ -12,7 +15,16 @@ public class RiskSummaryDto {
     private long riskCount;
     private long netExposureScore;
 
+    // ← ADD:
+    private List<RiskExposureItemDto> riskExposureItems = new ArrayList<>();
+    private List<RiskExposureItemDto> opportunityItems = new ArrayList<>();
     public RiskSummaryDto() {}
+    // getters/setters for new fields:
+    public List<RiskExposureItemDto> getRiskExposureItems() { return riskExposureItems; }
+    public void setRiskExposureItems(List<RiskExposureItemDto> items) { this.riskExposureItems = items; }
+
+    public List<RiskExposureItemDto> getOpportunityItems() { return opportunityItems; }
+    public void setOpportunityItems(List<RiskExposureItemDto> items) { this.opportunityItems = items; }
 
     public long getTotal() { return total; }
     public void setTotal(long total) { this.total = total; }

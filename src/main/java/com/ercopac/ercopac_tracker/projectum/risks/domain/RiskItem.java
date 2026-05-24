@@ -2,6 +2,9 @@ package com.ercopac.ercopac_tracker.projectum.risks.domain;
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
+import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.user.ResourceType;
+
 import jakarta.persistence.*;
 
 import java.time.LocalDate;
@@ -37,20 +40,21 @@ public class RiskItem {
     @Column(length = 1000)
     private String mitigation;
 
-    @Column(length = 50)
-    private String ownerDept;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "resource_type_id")
+    private ResourceType resourceType;
 
-    @Column(length = 120)
-    private String owner;
-
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_user_id")
+    private AppUser ownerUser;    // replaces free text owner
     @Column(length = 120)
     private String wbsCode;
 
     @Column(nullable = false)
-    private Integer impact = 1;
+    private String impact = "1";    // free text
 
     @Column(nullable = false)
-    private Integer probability = 1;
+    private Integer probability = 10;  // 10-100
 
     @Column(length = 30)
     private String varianceStatus; // open | approved
@@ -64,7 +68,11 @@ public class RiskItem {
     private String notes;
 
     public RiskItem() {}
+    public ResourceType getResourceType() { return resourceType; }
+    public void setResourceType(ResourceType resourceType) { this.resourceType = resourceType; }
 
+    public AppUser getOwnerUser() { return ownerUser; }
+    public void setOwnerUser(AppUser ownerUser) { this.ownerUser = ownerUser; }
     public Long getId() { return id; }
 
     public Organisation getOrganisation() { return organisation; }
@@ -91,17 +99,13 @@ public class RiskItem {
     public String getMitigation() { return mitigation; }
     public void setMitigation(String mitigation) { this.mitigation = mitigation; }
 
-    public String getOwnerDept() { return ownerDept; }
-    public void setOwnerDept(String ownerDept) { this.ownerDept = ownerDept; }
 
-    public String getOwner() { return owner; }
-    public void setOwner(String owner) { this.owner = owner; }
 
     public String getWbsCode() { return wbsCode; }
     public void setWbsCode(String wbsCode) { this.wbsCode = wbsCode; }
 
-    public Integer getImpact() { return impact; }
-    public void setImpact(Integer impact) { this.impact = impact; }
+    public String getImpact() { return impact; }
+    public void setImpact(String impact) { this.impact = impact; }
 
     public Integer getProbability() { return probability; }
     public void setProbability(Integer probability) { this.probability = probability; }

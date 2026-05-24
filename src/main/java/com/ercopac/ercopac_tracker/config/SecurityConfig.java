@@ -75,7 +75,8 @@ public class SecurityConfig {
                                 "/api/resources/**",
                                 "/api/suppliers/**",
                                 "/api/department/**",
-                                "/api/resource-config/**"
+                                "/api/resource-config/**",
+                                "/api/risks/**"    
                         )
                         .hasAnyAuthority(MANAGER_ROLES)
 

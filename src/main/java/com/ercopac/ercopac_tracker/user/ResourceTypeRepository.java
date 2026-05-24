@@ -18,4 +18,6 @@ public interface ResourceTypeRepository extends JpaRepository<ResourceType, Long
     List<ResourceType> findByOrganisation_IdAndActiveTrueAndAssignableTrueOrderByCodeAsc(Long organisationId);
 
     boolean existsByCodeAndOrganisation_Id(String code, Long organisationId);
+    List<ResourceType> findByOrganisation_IdAndActiveTrue(Long organisationId);
+    
 }
