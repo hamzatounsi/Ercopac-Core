@@ -8,8 +8,11 @@ import com.ercopac.ercopac_tracker.projectum.actions.repository.ActionItemReposi
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 
+import java.io.IOException;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -239,4 +242,95 @@ public class ActionService {
                 .sorted()
                 .toList();
     }
+
+    public record DownloadedActionAttachment(
+        String fileName,
+        String contentType,
+        byte[] data
+) {}
+
+public List<ActionAttachmentDto> uploadAttachments(
+        Long projectId,
+        Long actionId,
+        List<MultipartFile> files
+) {
+    if (files == null || files.isEmpty()) {
+        throw new IllegalArgumentException("No files selected");
+    }
+
+    ActionItem item = getAccessibleAction(projectId, actionId);
+
+    for (MultipartFile file : files) {
+        if (file.isEmpty()) continue;
+
+        try {
+            ActionAttachment attachment = new ActionAttachment();
+            attachment.setActionItem(item);
+            attachment.setFileName(file.getOriginalFilename());
+            attachment.setContentType(file.getContentType() == null ? "application/octet-stream" : file.getContentType());
+            attachment.setFileSize(file.getSize());
+            attachment.setData(file.getBytes());
+
+            item.getAttachments().add(attachment);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read uploaded file: " + file.getOriginalFilename(), e);
+        }
+    }
+
+    ActionItem saved = actionItemRepository.save(item);
+
+    return saved.getAttachments()
+            .stream()
+            .map(this::toAttachmentDto)
+            .toList();
+}
+
+@Transactional(readOnly = true)
+public DownloadedActionAttachment downloadAttachment(
+        Long projectId,
+        Long actionId,
+        Long attachmentId
+) {
+    ActionItem item = getAccessibleAction(projectId, actionId);
+
+    ActionAttachment attachment = item.getAttachments()
+            .stream()
+            .filter(a -> a.getId().equals(attachmentId))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Attachment not found"));
+
+    return new DownloadedActionAttachment(
+            attachment.getFileName(),
+            attachment.getContentType() == null ? "application/octet-stream" : attachment.getContentType(),
+            attachment.getData()
+    );
+}
+
+public void deleteAttachment(Long projectId, Long actionId, Long attachmentId) {
+    ActionItem item = getAccessibleAction(projectId, actionId);
+
+    boolean removed = item.getAttachments()
+            .removeIf(a -> a.getId().equals(attachmentId));
+
+    if (!removed) {
+        throw new IllegalArgumentException("Attachment not found");
+    }
+
+    actionItemRepository.save(item);
+}
+
+private ActionItem getAccessibleAction(Long projectId, Long actionId) {
+    Project project = getAccessibleProject(projectId);
+
+    if (securityUtils.isPlatformUser()) {
+        return actionItemRepository.findById(actionId)
+                .orElseThrow(() -> new IllegalArgumentException("Action not found"));
+    }
+
+    return actionItemRepository.findByIdAndProjectIdAndOrganisationId(
+            actionId,
+            projectId,
+            project.getOrganisation().getId()
+    ).orElseThrow(() -> new IllegalArgumentException("Action not found"));
+}
 }

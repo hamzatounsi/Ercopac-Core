@@ -14,27 +14,67 @@ public class ActionAttachment {
     @JoinColumn(name = "action_item_id", nullable = false)
     private ActionItem actionItem;
 
-    @Column(nullable = false, length = 255)
+    @Column(nullable = false)
     private String fileName;
 
-    @Column(length = 100)
     private String contentType;
 
     private Long fileSize;
 
-    public ActionAttachment() {}
+    @Lob
+    @Basic(fetch = FetchType.LAZY)
+    @Column(nullable = false)
+    private byte[] data;
 
-    public Long getId() { return id; }
+    public Long getId() {
+        return id;
+    }
 
-    public ActionItem getActionItem() { return actionItem; }
-    public void setActionItem(ActionItem actionItem) { this.actionItem = actionItem; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public String getFileName() { return fileName; }
-    public void setFileName(String fileName) { this.fileName = fileName; }
+    public ActionItem getActionItem() {
+        return actionItem;
+    }
 
-    public String getContentType() { return contentType; }
-    public void setContentType(String contentType) { this.contentType = contentType; }
+    public void setActionItem(ActionItem actionItem) {
+        this.actionItem = actionItem;
+    }
 
-    public Long getFileSize() { return fileSize; }
-    public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
+    public String getFileName() {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public void setContentType(String contentType) {
+        this.contentType = contentType;
+    }
+
+    public Long getFileSize() {
+        return fileSize;
+    }
+
+    public void setFileSize(Long fileSize) {
+        this.fileSize = fileSize;
+    }
+
+    public byte[] getData() {
+        return data;
+    }
+
+    public void setData(byte[] data) {
+        this.data = data;
+    }
+
+    // getters/setters
+
+    
 }
