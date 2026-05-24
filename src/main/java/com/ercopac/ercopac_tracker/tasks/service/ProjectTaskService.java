@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.tasks.service;
 
+import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskDependency;
@@ -16,7 +17,6 @@ import jakarta.transaction.Transactional;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import java.util.Map;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -35,6 +35,7 @@ public class ProjectTaskService {
     private final TaskResourceAssignmentRepository taskResourceAssignmentRepository;
     private final TaskSchedulingService            taskSchedulingService;
     private final ProjectTaskHistoryService        historyService;
+    private final TaskConsoleService taskConsoleService;
 
     public ProjectTaskService(
             ProjectTaskRepository projectTaskRepository,
@@ -43,7 +44,8 @@ public class ProjectTaskService {
             TaskDependencyRepository taskDependencyRepository,
             TaskResourceAssignmentRepository taskResourceAssignmentRepository,
             TaskSchedulingService taskSchedulingService,
-            ProjectTaskHistoryService historyService) {
+            ProjectTaskHistoryService historyService,
+            TaskConsoleService taskConsoleService) {
         this.projectTaskRepository            = projectTaskRepository;
         this.projectRepository                = projectRepository;
         this.userRepository                   = userRepository;
@@ -51,6 +53,7 @@ public class ProjectTaskService {
         this.taskResourceAssignmentRepository = taskResourceAssignmentRepository;
         this.taskSchedulingService            = taskSchedulingService;
         this.historyService                   = historyService;
+        this.taskConsoleService               = taskConsoleService;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -74,6 +77,11 @@ public class ProjectTaskService {
         task.setPlannedEnd(request.getPlannedEnd());
         task.setActualStart(request.getActualStart());
         task.setActualEnd(request.getActualEnd());
+
+        Integer oldPercent = task.getPercentComplete() != null
+        ? task.getPercentComplete()
+        : 0;
+
         task.setPercentComplete(request.getPercentComplete());
         task.setAllocationPercent(request.getAllocationPercent());
         task.setPriority(request.getPriority());
@@ -113,6 +121,21 @@ public class ProjectTaskService {
         );
 
         ProjectTask saved = projectTaskRepository.save(task);
+
+        Integer newPercent = saved.getPercentComplete() != null
+        ? saved.getPercentComplete()
+        : 0;
+
+        System.out.println("CHECKING TASK EMAIL NOTIFICATIONS old=" + oldPercent + " new=" + newPercent);
+
+        taskConsoleService.checkProgressNotifications(
+                saved,
+                oldPercent,
+                newPercent,
+                getOrganisationIdFromSecurityContext(),
+                getUserIdFromSecurityContext(),
+                getUsernameFromSecurityContext()
+        );
 
         rebuildParentIds(projectId);
         rollupSummaries(projectId);
@@ -157,6 +180,9 @@ public class ProjectTaskService {
         task.setPlannedEnd(request.getPlannedEnd() != null
                 ? request.getPlannedEnd() : request.getPlannedStart());
         task.setDurationDays(request.getDurationDays() != null ? request.getDurationDays() : 1);
+        Integer oldPercent = task.getPercentComplete() != null
+        ? task.getPercentComplete()
+        : 0;
         task.setPercentComplete(0);
         task.setPriority(500);
         task.setScheduleMode("AUTO");
@@ -167,6 +193,18 @@ public class ProjectTaskService {
 
         normalizeMilestone(task);
         ProjectTask saved = projectTaskRepository.save(task);
+            Integer newPercent = saved.getPercentComplete() != null
+                ? saved.getPercentComplete()
+                : 0;
+
+        taskConsoleService.checkProgressNotifications(
+                saved,
+                oldPercent,
+                newPercent,
+                getOrganisationIdFromSecurityContext(),
+                getUserIdFromSecurityContext(),
+                getUsernameFromSecurityContext()
+        );
 
         rebuildStructureFromParentId(projectId);
         rollupSummaries(projectId);
@@ -728,5 +766,138 @@ public class ProjectTaskService {
     private String getUsernameFromSecurityContext() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null ? authentication.getName() : "System";
+    }
+
+    public List<ProjectScheduleTaskResponse> importSchedule(
+            Long projectId,
+            List<UpdateProjectTaskRequest> importedTasks
+    ) {
+        if (importedTasks == null || importedTasks.isEmpty()) {
+            return List.of();
+        }
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+
+        Long organisationId = project.getOrganisation() != null
+                ? project.getOrganisation().getId()
+                : null;
+
+        if (organisationId == null) {
+            throw new IllegalStateException("Project has no organisation");
+        }
+
+        List<ProjectTask> oldTasks =
+                projectTaskRepository.findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
+
+        for (ProjectTask task : oldTasks) {
+            taskDependencyRepository.deleteByPredecessorTaskId(task.getId());
+            taskDependencyRepository.deleteBySuccessorTaskId(task.getId());
+            taskResourceAssignmentRepository.deleteByProjectIdAndTaskId(projectId, task.getId());
+            projectTaskRepository.delete(task);
+        }
+
+        projectTaskRepository.flush();
+
+        List<ProjectTask> savedTasks = new ArrayList<>();
+
+        for (int i = 0; i < importedTasks.size(); i++) {
+            UpdateProjectTaskRequest req = importedTasks.get(i);
+
+            ProjectTask task = new ProjectTask();
+
+            task.setProjectId(projectId);
+            task.setOrganisationId(organisationId);
+
+            task.setName(
+                    req.getName() != null && !req.getName().isBlank()
+                            ? req.getName()
+                            : "Imported Task " + (i + 1)
+            );
+
+            task.setDescription(req.getDescription());
+            task.setTaskType(req.getTaskType() != null ? req.getTaskType() : "ACTIVITY");
+
+            task.setBaselineStart(req.getBaselineStart() != null ? req.getBaselineStart() : req.getPlannedStart());
+            task.setBaselineEnd(req.getBaselineEnd() != null ? req.getBaselineEnd() : req.getPlannedEnd());
+
+            task.setPlannedStart(req.getPlannedStart() != null ? req.getPlannedStart() : task.getBaselineStart());
+            task.setPlannedEnd(req.getPlannedEnd() != null ? req.getPlannedEnd() : task.getBaselineEnd());
+
+            if (task.getBaselineStart() != null && task.getBaselineEnd() == null) {
+                task.setBaselineEnd(task.getBaselineStart());
+            }
+
+            if (task.getPlannedStart() != null && task.getPlannedEnd() == null) {
+                task.setPlannedEnd(task.getPlannedStart());
+            }
+
+            task.setActualStart(req.getActualStart());
+            task.setActualEnd(req.getActualEnd());
+
+            task.setDurationDays(
+                    req.getDurationDays() != null
+                            ? req.getDurationDays()
+                            : calculateImportedDuration(task)
+            );
+
+            task.setPercentComplete(req.getPercentComplete() != null ? req.getPercentComplete() : 0);
+            task.setAllocationPercent(req.getAllocationPercent() != null ? req.getAllocationPercent() : 100);
+            task.setPriority(req.getPriority() != null ? req.getPriority() : 500);
+
+            task.setWbsCode(req.getWbsCode());
+            task.setDepartmentCode(req.getDepartmentCode());
+            task.setResourceType(req.getResourceType());
+
+            task.setActive(req.getActive() != null ? req.getActive() : true);
+            task.setDisplayOrder(req.getDisplayOrder() != null ? req.getDisplayOrder() : i + 1);
+            task.setOutlineLevel(req.getOutlineLevel() != null ? req.getOutlineLevel() : 1);
+            task.setCustomerMilestone(req.getCustomerMilestone() != null ? req.getCustomerMilestone() : false);
+
+            task.setScheduleMode(req.getScheduleMode() != null ? req.getScheduleMode() : "AUTO");
+            task.setStatus(req.getStatus() != null ? req.getStatus() : "NOT_STARTED");
+            task.setColor(req.getColor());
+
+            if ("MILESTONE".equalsIgnoreCase(task.getTaskType())) {
+                task.setDurationDays(0);
+
+                if (task.getBaselineStart() != null) {
+                    task.setBaselineEnd(task.getBaselineStart());
+                }
+
+                if (task.getPlannedStart() != null) {
+                    task.setPlannedEnd(task.getPlannedStart());
+                }
+            }
+
+            savedTasks.add(projectTaskRepository.save(task));
+        }
+
+        rebuildStructureFromParentId(projectId);
+        rollupSummaries(projectId);
+
+        return projectTaskRepository
+                .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    private Integer calculateImportedDuration(ProjectTask task) {
+
+        if ("MILESTONE".equalsIgnoreCase(task.getTaskType())) {
+            return 0;
+        }
+
+        if (task.getBaselineStart() == null || task.getBaselineEnd() == null) {
+            return 1;
+        }
+
+        long days = ChronoUnit.DAYS.between(
+                task.getBaselineStart(),
+                task.getBaselineEnd()
+        ) + 1;
+
+        return Math.max(1, (int) days);
     }
 }

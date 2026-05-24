@@ -2,6 +2,7 @@ package com.ercopac.ercopac_tracker.planning.web;
 
 import com.ercopac.ercopac_tracker.planning.dto.CreateProjectBaselineRequest;
 import com.ercopac.ercopac_tracker.planning.dto.ProjectBaselineDto;
+import com.ercopac.ercopac_tracker.planning.dto.RenameProjectBaselineRequest;
 import com.ercopac.ercopac_tracker.planning.service.ProjectBaselineService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -47,5 +48,15 @@ public class ProjectBaselineController {
             @PathVariable Long baselineId
     ) {
         baselineService.deleteBaseline(projectId, baselineId);
+    }
+
+    @PutMapping("/{baselineId}")
+    @PreAuthorize(PLANNING_WRITE)
+    public ProjectBaselineDto renameBaseline(
+            @PathVariable Long projectId,
+            @PathVariable Long baselineId,
+            @Valid @RequestBody RenameProjectBaselineRequest request
+    ) {
+        return baselineService.renameBaseline(projectId, baselineId, request.getName());
     }
 }

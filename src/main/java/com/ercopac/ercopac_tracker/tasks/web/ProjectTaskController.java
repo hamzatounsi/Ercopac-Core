@@ -1,6 +1,7 @@
 package com.ercopac.ercopac_tracker.tasks.web;
 
 import com.ercopac.ercopac_tracker.tasks.dto.CreateTaskRequest;
+import com.ercopac.ercopac_tracker.tasks.dto.ImportScheduleRequest;
 import com.ercopac.ercopac_tracker.tasks.dto.ProjectScheduleTaskResponse;
 import com.ercopac.ercopac_tracker.tasks.dto.ResourceUserDto;
 import com.ercopac.ercopac_tracker.tasks.dto.UpdateProjectTaskRequest;
@@ -62,5 +63,14 @@ public class ProjectTaskController {
     @PreAuthorize(TASKS_READ)
     public ResponseEntity<List<ResourceUserDto>> getResourceUsers(@PathVariable Long projectId) {
         return ResponseEntity.ok(projectTaskService.getResourceUsersForProject(projectId));
+    }
+
+    @PostMapping("/api/projects/{projectId}/schedule/import")
+    @PreAuthorize(TASKS_WRITE)
+    public ResponseEntity<List<ProjectScheduleTaskResponse>> importSchedule(
+            @PathVariable Long projectId,
+            @RequestBody ImportScheduleRequest request
+    ) {
+        return ResponseEntity.ok(projectTaskService.importSchedule(projectId, request.tasks()));
     }
 }

@@ -77,6 +77,16 @@ public class AppUser {
     @Column(nullable = false)
     private boolean active = true;
 
+    private Boolean emailNotificationsEnabled = true;
+
+    public Boolean getEmailNotificationsEnabled() {
+        return emailNotificationsEnabled;
+    }
+
+    public void setEmailNotificationsEnabled(Boolean emailNotificationsEnabled) {
+        this.emailNotificationsEnabled = emailNotificationsEnabled;
+    }
+
     public AppUser() {
     }
 

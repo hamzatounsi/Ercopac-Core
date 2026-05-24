@@ -20,4 +20,5 @@ public interface ProjectTaskRepository extends JpaRepository<ProjectTask, Long> 
     Long organisationId
     );
     void deleteByProjectId(Long projectId);
+    void flush();
 }
