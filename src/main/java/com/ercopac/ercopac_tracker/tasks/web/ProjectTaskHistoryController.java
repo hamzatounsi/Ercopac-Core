@@ -1,60 +1,37 @@
 package com.ercopac.ercopac_tracker.tasks.web;
 
+import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.tasks.dto.ProjectTaskHistoryDto;
 import com.ercopac.ercopac_tracker.tasks.service.ProjectTaskHistoryService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/gm/projects/{projectId}/schedule/history")
 @RequiredArgsConstructor
 public class ProjectTaskHistoryController {
 
+    private static final String TASKS_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).TASKS)";
+
     private final ProjectTaskHistoryService service;
+    private final SecurityUtils securityUtils;
 
     @GetMapping
-    public List<ProjectTaskHistoryDto> getProjectHistory(
-            @PathVariable Long projectId
-    ) {
-        Long organisationId = getOrganisationIdFromSecurityContext();
-        return service.getProjectHistory(organisationId, projectId);
+    @PreAuthorize(TASKS_READ)
+    public List<ProjectTaskHistoryDto> getProjectHistory(@PathVariable Long projectId) {
+        return service.getProjectHistory(securityUtils.getCurrentOrganisationId(), projectId);
     }
 
     @GetMapping("/tasks/{taskId}")
+    @PreAuthorize(TASKS_READ)
     public List<ProjectTaskHistoryDto> getTaskHistory(
             @PathVariable Long projectId,
             @PathVariable Long taskId
     ) {
-        Long organisationId = getOrganisationIdFromSecurityContext();
-        return service.getTaskHistory(organisationId, projectId, taskId);
-    }
-
-    private Long getOrganisationIdFromSecurityContext() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication == null) {
-            throw new IllegalStateException("No authenticated user found");
-        }
-
-        Object details = authentication.getDetails();
-
-        System.out.println("HISTORY AUTH = " + authentication);
-        System.out.println("HISTORY AUTHORITIES = " + authentication.getAuthorities());
-        System.out.println("HISTORY DETAILS = " + details);
-
-        if (details instanceof Map<?, ?> detailsMap) {
-            Object organisationId = detailsMap.get("organisationId");
-
-            if (organisationId != null) {
-                return Long.valueOf(organisationId.toString());
-            }
-        }
-
-        throw new IllegalStateException("organisationId not found in security context");
+        return service.getTaskHistory(securityUtils.getCurrentOrganisationId(), projectId, taskId);
     }
 }

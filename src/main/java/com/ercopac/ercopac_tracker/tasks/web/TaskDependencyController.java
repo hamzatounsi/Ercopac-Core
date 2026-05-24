@@ -11,6 +11,12 @@ import java.util.List;
 @RequestMapping("/api/projects/{projectId}/dependencies")
 public class TaskDependencyController {
 
+    private static final String TASKS_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).TASKS)";
+
+    private static final String TASKS_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).TASKS)";
+
     private final TaskDependencyService service;
 
     public TaskDependencyController(TaskDependencyService service) {
@@ -18,13 +24,13 @@ public class TaskDependencyController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize(TASKS_READ)
     public List<TaskDependencyDto> getDependencies(@PathVariable Long projectId) {
         return service.getProjectDependencies(projectId);
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize(TASKS_WRITE)
     public TaskDependencyDto createDependency(
             @PathVariable Long projectId,
             @RequestBody TaskDependencyDto dto
@@ -33,7 +39,7 @@ public class TaskDependencyController {
     }
 
     @PutMapping("/{dependencyId}")
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize(TASKS_WRITE)
     public TaskDependencyDto updateDependency(
             @PathVariable Long projectId,
             @PathVariable Long dependencyId,
@@ -43,7 +49,7 @@ public class TaskDependencyController {
     }
 
     @DeleteMapping("/{dependencyId}")
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize(TASKS_WRITE)
     public void deleteDependency(
             @PathVariable Long projectId,
             @PathVariable Long dependencyId

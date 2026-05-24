@@ -12,6 +12,12 @@ import java.util.List;
 @RequestMapping("/api/projects/{projectId}/tasks/{taskId}/resources")
 public class TaskResourceAssignmentController {
 
+    private static final String TASKS_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).TASKS)";
+
+    private static final String TASKS_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).TASKS)";
+
     private final TaskResourceAssignmentService service;
 
     public TaskResourceAssignmentController(TaskResourceAssignmentService service) {
@@ -19,7 +25,7 @@ public class TaskResourceAssignmentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize(TASKS_READ)
     public List<TaskResourceAssignmentDto> getTaskResources(
             @PathVariable Long projectId,
             @PathVariable Long taskId
@@ -28,7 +34,7 @@ public class TaskResourceAssignmentController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize(TASKS_WRITE)
     public TaskResourceAssignmentDto createTaskResource(
             @PathVariable Long projectId,
             @PathVariable Long taskId,
@@ -36,16 +42,18 @@ public class TaskResourceAssignmentController {
     ) {
         return service.createTaskResource(projectId, taskId, dto);
     }
+
     @GetMapping("/users")
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize(TASKS_READ)
     public List<ResourceUserDto> getUsersByResourceType(
             @PathVariable Long projectId,
             @RequestParam(required = false) String resourceType
     ) {
         return service.getUsersByResourceType(projectId, resourceType);
     }
+
     @PutMapping("/{assignmentId}")
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize(TASKS_WRITE)
     public TaskResourceAssignmentDto updateTaskResource(
             @PathVariable Long projectId,
             @PathVariable Long taskId,
@@ -56,7 +64,7 @@ public class TaskResourceAssignmentController {
     }
 
     @DeleteMapping("/{assignmentId}")
-    @PreAuthorize("hasRole('GENERAL_MANAGER')")
+    @PreAuthorize(TASKS_WRITE)
     public void deleteTaskResource(
             @PathVariable Long projectId,
             @PathVariable Long taskId,

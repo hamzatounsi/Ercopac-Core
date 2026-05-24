@@ -13,31 +13,38 @@ import java.util.stream.Collectors;
 public class SecurityUtils {
 
     public String getCurrentUsername() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        Authentication auth = currentAuthentication();
         return auth != null ? auth.getName() : null;
     }
 
     public String getCurrentRole() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        Authentication auth = currentAuthentication();
+
         if (auth == null || auth.getAuthorities() == null || auth.getAuthorities().isEmpty()) {
             return null;
         }
-        String role = auth.getAuthorities().iterator().next().getAuthority();
-        System.out.println("CURRENT ROLE = " + role);
-        return role;
+
+        return auth.getAuthorities()
+                .iterator()
+                .next()
+                .getAuthority()
+                .replace("ROLE_", "");
     }
 
     public Long getCurrentOrganisationId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        Authentication auth = currentAuthentication();
+
         if (auth == null || auth.getDetails() == null) {
             throw new IllegalStateException("No authenticated user organisation found");
         }
 
         if (auth.getDetails() instanceof Map<?, ?> details) {
             Object value = details.get("organisationId");
+
             if (value == null) {
                 throw new IllegalStateException("Authenticated user has no organisationId");
             }
+
             return Long.valueOf(value.toString());
         }
 
@@ -45,16 +52,19 @@ public class SecurityUtils {
     }
 
     public Long getCurrentUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        Authentication auth = currentAuthentication();
+
         if (auth == null || auth.getDetails() == null) {
             throw new IllegalStateException("No authenticated user id found");
         }
 
         if (auth.getDetails() instanceof Map<?, ?> details) {
             Object value = details.get("userId");
+
             if (value == null) {
                 throw new IllegalStateException("Authenticated user has no userId");
             }
+
             return Long.valueOf(value.toString());
         }
 
@@ -62,14 +72,12 @@ public class SecurityUtils {
     }
 
     public boolean isPlatformUser() {
-        String role = getCurrentRole();
-        return "ROLE_PLATFORM_OWNER".equals(role)
-                || "ROLE_PLATFORM_ADMIN".equals(role)
-                || "ROLE_OWNER".equals(role);
+        return hasAnyRole("PLATFORM_OWNER");
     }
 
     public boolean hasAnyRole(String... roles) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        Authentication auth = currentAuthentication();
+
         if (auth == null || auth.getAuthorities() == null) {
             return false;
         }
@@ -80,11 +88,25 @@ public class SecurityUtils {
                 .collect(Collectors.toSet());
 
         for (String role : roles) {
-            if (authorities.contains(role) || authorities.contains("ROLE_" + role)) {
+            String cleanRole = role.replace("ROLE_", "");
+
+            if (
+                    authorities.contains(cleanRole) ||
+                    authorities.contains("ROLE_" + cleanRole)
+            ) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    public boolean isAuthenticated() {
+        Authentication auth = currentAuthentication();
+        return auth != null && auth.isAuthenticated();
+    }
+
+    private Authentication currentAuthentication() {
+        return SecurityContextHolder.getContext().getAuthentication();
     }
 }

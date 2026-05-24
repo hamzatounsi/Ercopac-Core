@@ -12,8 +12,8 @@ import java.util.List;
 @RequestMapping("/api/projects")
 public class ProjectScheduleController {
 
-    private static final String PROJECTUM_ACCESS =
-            "hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')";
+    private static final String TASKS_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).TASKS)";
 
     private final ProjectScheduleService projectScheduleService;
 
@@ -22,7 +22,7 @@ public class ProjectScheduleController {
     }
 
     @GetMapping("/{projectId}/schedule")
-    @PreAuthorize(PROJECTUM_ACCESS)
+    @PreAuthorize(TASKS_READ)
     public ResponseEntity<List<ProjectScheduleTaskResponse>> getProjectSchedule(@PathVariable Long projectId) {
         return ResponseEntity.ok(projectScheduleService.getProjectSchedule(projectId));
     }

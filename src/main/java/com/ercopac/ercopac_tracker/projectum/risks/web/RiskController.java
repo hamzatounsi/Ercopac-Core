@@ -20,12 +20,18 @@ public class RiskController {
 
     private final RiskService riskService;
 
+    private static final String RISKS_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).RISKS)";
+
+    private static final String RISKS_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).RISKS)";
+
     public RiskController(RiskService riskService) {
         this.riskService = riskService;
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize(RISKS_READ)
     public ResponseEntity<List<RiskItemDto>> getProjectRisks(@PathVariable Long projectId) {
         return ResponseEntity.ok(riskService.getProjectRisks(projectId));
     }
@@ -51,26 +57,26 @@ public class RiskController {
     }
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize(RISKS_READ)
     public ResponseEntity<RiskSummaryDto> getSummary(@PathVariable Long projectId) {
         return ResponseEntity.ok(riskService.getSummary(projectId));
     }
 
     @GetMapping("/pending-approvals")
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize(RISKS_WRITE)
     public ResponseEntity<List<RiskItemDto>> getPendingApprovals(@PathVariable Long projectId) {
         return ResponseEntity.ok(riskService.getPendingApprovals(projectId));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize(RISKS_WRITE)
     public ResponseEntity<RiskItemDto> create(@PathVariable Long projectId,
                                               @RequestBody UpsertRiskItemRequest request) {
         return ResponseEntity.ok(riskService.create(projectId, request));
     }
 
     @PutMapping("/{riskId}")
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize(RISKS_WRITE)
     public ResponseEntity<RiskItemDto> update(@PathVariable Long projectId,
                                               @PathVariable Long riskId,
                                               @RequestBody UpsertRiskItemRequest request) {
@@ -78,21 +84,21 @@ public class RiskController {
     }
 
     @PostMapping("/{riskId}/approve")
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize(RISKS_WRITE)
     public ResponseEntity<RiskItemDto> approve(@PathVariable Long projectId,
                                                @PathVariable Long riskId) {
         return ResponseEntity.ok(riskService.approve(projectId, riskId));
     }
 
     @PostMapping("/{riskId}/reject")
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize(RISKS_WRITE)
     public ResponseEntity<RiskItemDto> reject(@PathVariable Long projectId,
                                               @PathVariable Long riskId) {
         return ResponseEntity.ok(riskService.reject(projectId, riskId));
     }
 
     @DeleteMapping("/{riskId}")
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize(RISKS_WRITE)
     public ResponseEntity<Void> delete(@PathVariable Long projectId,
                                        @PathVariable Long riskId) {
         riskService.delete(projectId, riskId);

@@ -17,31 +17,37 @@ public class ChangeRequestController {
 
     private final ChangeRequestService changeRequestService;
 
+    private static final String CR_READ =
+        "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FORECAST)";
+
+    private static final String CR_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FORECAST)";
+
     public ChangeRequestController(ChangeRequestService changeRequestService) {
         this.changeRequestService = changeRequestService;
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(CR_READ)
     public ResponseEntity<List<ChangeRequestDto>> getProjectChangeRequests(@PathVariable Long projectId) {
         return ResponseEntity.ok(changeRequestService.getProjectChangeRequests(projectId));
     }
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(CR_READ)
     public ResponseEntity<ChangeRequestSummaryDto> getSummary(@PathVariable Long projectId) {
         return ResponseEntity.ok(changeRequestService.getSummary(projectId));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(CR_WRITE)
     public ResponseEntity<ChangeRequestDto> create(@PathVariable Long projectId,
                                                    @Valid @RequestBody UpsertChangeRequestRequest request) {
         return ResponseEntity.ok(changeRequestService.create(projectId, request));
     }
 
     @PutMapping("/{crId}")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(CR_WRITE)
     public ResponseEntity<ChangeRequestDto> update(@PathVariable Long projectId,
                                                    @PathVariable Long crId,
                                                    @Valid @RequestBody UpsertChangeRequestRequest request) {
@@ -49,7 +55,7 @@ public class ChangeRequestController {
     }
 
     @DeleteMapping("/{crId}")
-    @PreAuthorize("hasAnyRole('GENERAL_MANAGER','ORG_ADMIN','PLATFORM_OWNER','PLATFORM_ADMIN')")
+    @PreAuthorize(CR_WRITE)
     public ResponseEntity<Void> delete(@PathVariable Long projectId,
                                        @PathVariable Long crId) {
         changeRequestService.delete(projectId, crId);
