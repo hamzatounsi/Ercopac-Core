@@ -20,16 +20,15 @@ public class UpsertRiskItemRequest {
     private LocalDate inputDate;
     private LocalDate dueDate;
     private String mitigation;
-    private String ownerDept;
-    private String owner;
+ 
     private String wbsCode;
+ // ADD:
+    private Long resourceTypeId;  // ← send the ID, not the code string
+    private Long ownerUserId;
+   
+    private String impact;
 
-    @Min(1)
-    @Max(5)
-    private Integer impact;
-
-    @Min(1)
-    @Max(5)
+   
     private Integer probability;
 
     private String varianceStatus;
@@ -57,17 +56,17 @@ public class UpsertRiskItemRequest {
     public String getMitigation() { return mitigation; }
     public void setMitigation(String mitigation) { this.mitigation = mitigation; }
 
-    public String getOwnerDept() { return ownerDept; }
-    public void setOwnerDept(String ownerDept) { this.ownerDept = ownerDept; }
+    public Long getResourceTypeId() { return resourceTypeId; }
+    public void setResourceTypeId(Long resourceTypeId) { this.resourceTypeId = resourceTypeId; }
 
-    public String getOwner() { return owner; }
-    public void setOwner(String owner) { this.owner = owner; }
+    public Long getOwnerUserId() { return ownerUserId; }
+    public void setOwnerUserId(Long ownerUserId) { this.ownerUserId = ownerUserId; }
 
     public String getWbsCode() { return wbsCode; }
     public void setWbsCode(String wbsCode) { this.wbsCode = wbsCode; }
 
-    public Integer getImpact() { return impact; }
-    public void setImpact(Integer impact) { this.impact = impact; }
+    public String getImpact() { return impact; }
+    public void setImpact(String impact) { this.impact = impact; }
 
     public Integer getProbability() { return probability; }
     public void setProbability(Integer probability) { this.probability = probability; }

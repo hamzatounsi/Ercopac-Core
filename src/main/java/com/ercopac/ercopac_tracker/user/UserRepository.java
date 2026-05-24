@@ -6,6 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.ercopac.ercopac_tracker.projectum.risks.dto.RiskItemDto;
+
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -118,4 +121,7 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findByEmail1(@Param("email") String email);
 
     Optional<AppUser> findFirstByOrganisationIdAndRole(Long organisationId, Role role);
+    List<AppUser> findByOrganisation_IdAndResourceType_IdAndActiveTrue(
+    	    Long organisationId, Long resourceTypeId);
+    
 }

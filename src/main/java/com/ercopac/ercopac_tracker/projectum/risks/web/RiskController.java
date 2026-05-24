@@ -4,6 +4,9 @@ import com.ercopac.ercopac_tracker.projectum.risks.dto.RiskItemDto;
 import com.ercopac.ercopac_tracker.projectum.risks.dto.RiskSummaryDto;
 import com.ercopac.ercopac_tracker.projectum.risks.dto.UpsertRiskItemRequest;
 import com.ercopac.ercopac_tracker.projectum.risks.service.RiskService;
+import com.ercopac.ercopac_tracker.tasks.dto.ResourceUserDto;
+import com.ercopac.ercopac_tracker.user.ResourceTypeDto;
+
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,6 +36,26 @@ public class RiskController {
         return ResponseEntity.ok(riskService.getProjectRisks(projectId));
     }
 
+    @GetMapping("/resource-types")
+    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    public ResponseEntity<List<ResourceTypeDto>> getResourceTypes(@PathVariable Long projectId) {
+        return ResponseEntity.ok(riskService.getResourceTypes(projectId));
+    }
+
+    @GetMapping("/users-by-resource-type")
+    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    public ResponseEntity<List<ResourceUserDto>> getUsersByResourceType(
+            @PathVariable Long projectId,
+            @RequestParam Long resourceTypeId) {
+        return ResponseEntity.ok(riskService.getUsersByResourceType(projectId, resourceTypeId));
+    }
+
+    @GetMapping("/wbs-codes")
+    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    public ResponseEntity<List<String>> getWbsCodes(@PathVariable Long projectId) {
+        return ResponseEntity.ok(riskService.getWbsCodes(projectId));
+    }
+
     @GetMapping("/summary")
     @PreAuthorize(RISKS_READ)
     public ResponseEntity<RiskSummaryDto> getSummary(@PathVariable Long projectId) {
@@ -48,7 +71,7 @@ public class RiskController {
     @PostMapping
     @PreAuthorize(RISKS_WRITE)
     public ResponseEntity<RiskItemDto> create(@PathVariable Long projectId,
-                                              @Valid @RequestBody UpsertRiskItemRequest request) {
+                                              @RequestBody UpsertRiskItemRequest request) {
         return ResponseEntity.ok(riskService.create(projectId, request));
     }
 
@@ -56,7 +79,7 @@ public class RiskController {
     @PreAuthorize(RISKS_WRITE)
     public ResponseEntity<RiskItemDto> update(@PathVariable Long projectId,
                                               @PathVariable Long riskId,
-                                              @Valid @RequestBody UpsertRiskItemRequest request) {
+                                              @RequestBody UpsertRiskItemRequest request) {
         return ResponseEntity.ok(riskService.update(projectId, riskId, request));
     }
 
