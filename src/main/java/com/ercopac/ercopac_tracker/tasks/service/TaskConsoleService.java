@@ -11,11 +11,6 @@ import com.ercopac.ercopac_tracker.tasks.dto.TaskConsoleConfigDto;
 import com.ercopac.ercopac_tracker.tasks.dto.TaskConsoleLogDto;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskConsoleConfigRepository;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskConsoleLogRepository;
-import com.ercopac.ercopac_tracker.notifications.domain.NotificationChannel;
-import com.ercopac.ercopac_tracker.notifications.dto.NotificationRequest;
-import com.ercopac.ercopac_tracker.notifications.service.NotificationService;
-import com.ercopac.ercopac_tracker.notifications.service.NotificationTemplateService;
-
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
@@ -29,7 +24,7 @@ public class TaskConsoleService {
     private final TaskConsoleConfigRepository configRepository;
     private final TaskConsoleLogRepository logRepository;
     private final NotificationService notificationService;
-private final NotificationTemplateService templateService;
+    private final NotificationTemplateService templateService;
 
     public TaskConsoleService(
             TaskConsoleConfigRepository configRepository,
@@ -128,6 +123,124 @@ private final NotificationTemplateService templateService;
         logRepository.save(log);
     }
 
+    public void checkProgressNotifications(
+            ProjectTask task,
+            Integer oldPercent,
+            Integer newPercent,
+            Long organisationId,
+            Long userId,
+            String username
+    ) {
+        if (task == null) {
+            return;
+        }
+
+        TaskConsoleConfig config = configRepository
+                .findByOrganisationIdAndProjectIdAndTaskId(
+                        organisationId,
+                        task.getProjectId(),
+                        task.getId()
+                )
+                .orElse(null);
+
+        if (config == null) {
+            return;
+        }
+
+        int oldValue = oldPercent != null ? oldPercent : 0;
+        int newValue = newPercent != null ? newPercent : 0;
+
+        if (config.isCheckpoint25() && oldValue < 25 && newValue >= 25) {
+            createCheckpointLog(task, config, organisationId, userId, username,
+                    "Task reached 25% completion", "INFO");
+        }
+
+        if (config.isCheckpoint50() && oldValue < 50 && newValue >= 50) {
+            createCheckpointLog(task, config, organisationId, userId, username,
+                    "Task reached 50% completion", "INFO");
+        }
+
+        if (config.isCheckpoint75() && oldValue < 75 && newValue >= 75) {
+            createCheckpointLog(task, config, organisationId, userId, username,
+                    "Task reached 75% completion", "WARNING");
+        }
+    }
+
+    private void createCheckpointLog(
+            ProjectTask task,
+            TaskConsoleConfig config,
+            Long organisationId,
+            Long userId,
+            String username,
+            String message,
+            String severity
+    ) {
+        TaskConsoleLog log = new TaskConsoleLog();
+
+        log.setOrganisationId(organisationId);
+        log.setProjectId(task.getProjectId());
+        log.setTaskId(task.getId());
+        log.setSeverity(severity);
+        log.setMessage(message);
+        log.setChannel(config.getChannel());
+        log.setNotifyTarget(buildNotifyTarget(config));
+        log.setCreatedAt(LocalDateTime.now());
+
+        logRepository.save(log);
+
+        createEmailNotificationIfNeeded(task, config, organisationId, message, severity);
+    }
+
+    private void createEmailNotificationIfNeeded(
+            ProjectTask task,
+            TaskConsoleConfig config,
+            Long organisationId,
+            String message,
+            String severity
+    ) {
+        if (!"EMAIL".equalsIgnoreCase(config.getChannel())
+                && !"BOTH".equalsIgnoreCase(config.getChannel())) {
+            return;
+        }
+
+        if (task.getAssignedUser() == null) {
+            return;
+        }
+
+        if (task.getAssignedUser().getEmail() == null
+                || task.getAssignedUser().getEmail().isBlank()) {
+            return;
+        }
+
+        Boolean emailEnabled = task.getAssignedUser().getEmailNotificationsEnabled();
+
+        if (emailEnabled != null && !emailEnabled) {
+            return;
+        }
+
+        String html = templateService.taskCheckpointTemplate(
+                task.getName(),
+                "Project #" + task.getProjectId(),
+                task.getPercentComplete(),
+                message
+        );
+
+        notificationService.create(
+                new NotificationRequest(
+                        organisationId,
+                        task.getProjectId(),
+                        task.getId(),
+                        task.getAssignedUser().getId(),
+                        task.getAssignedUser().getEmail(),
+                        NotificationChannel.EMAIL,
+                        severity,
+                        "Projectum Task Alert - " + task.getName(),
+                        message,
+                        html
+                )
+        );
+    }
+
     private TaskConsoleConfig createDefaultConfig(Long organisationId, Long projectId, Long taskId) {
         TaskConsoleConfig config = new TaskConsoleConfig();
         config.setOrganisationId(organisationId);
@@ -188,147 +301,5 @@ private final NotificationTemplateService templateService;
         if (sb.isEmpty()) return "NONE";
 
         return sb.substring(0, sb.length() - 2);
-    }
-
-    @Transactional
-    public void checkProgressNotifications(
-            ProjectTask task,
-            Integer oldPercent,
-            Integer newPercent,
-            Long organisationId,
-            Long userId,
-            String username
-    ) {
-
-        if (task == null) {
-            return;
-        }
-
-        TaskConsoleConfig config = configRepository
-                .findByProjectIdAndTaskId(
-                        task.getProjectId(),
-                        task.getId()
-                )
-                .orElse(null);
-
-
-        if (config == null) {
-            return;
-        }
-
-        int oldValue = oldPercent != null ? oldPercent : 0;
-        int newValue = newPercent != null ? newPercent : 0;
-
-        if (config.isCheckpoint25()
-                && oldValue < 25
-                && newValue >= 25) {
-
-            createCheckpointLog(
-                    task,
-                    config,
-                    organisationId,
-                    userId,
-                    username,
-                    "Task reached 25% completion",
-                    "INFO"
-            );
-        }
-
-        if (config.isCheckpoint50()
-                && oldValue < 50
-                && newValue >= 50) {
-
-            createCheckpointLog(
-                    task,
-                    config,
-                    organisationId,
-                    userId,
-                    username,
-                    "Task reached 50% completion",
-                    "INFO"
-            );
-        }
-
-        if (config.isCheckpoint75()
-                && oldValue < 75
-                && newValue >= 75) {
-
-            createCheckpointLog(
-                    task,
-                    config,
-                    organisationId,
-                    userId,
-                    username,
-                    "Task reached 75% completion",
-                    "WARNING"
-            );
-        }
-    }
-
-    private void createCheckpointLog(
-            ProjectTask task,
-            TaskConsoleConfig config,
-            Long organisationId,
-            Long userId,
-            String username,
-            String message,
-            String severity
-    ) {
-
-        TaskConsoleLog log = new TaskConsoleLog();
-
-        log.setOrganisationId(organisationId);
-        log.setProjectId(task.getProjectId());
-        log.setTaskId(task.getId());
-
-        log.setSeverity(severity);
-        log.setMessage(message);
-
-        log.setChannel(config.getChannel());
-
-        log.setCreatedAt(LocalDateTime.now());
-
-        logRepository.save(log);
-
-        if ("EMAIL".equalsIgnoreCase(config.getChannel())
-        || "BOTH".equalsIgnoreCase(config.getChannel())) {
-
-        if (task.getAssignedUser() == null) {
-            return;
-        }
-
-        if (task.getAssignedUser().getEmail() == null
-                || task.getAssignedUser().getEmail().isBlank()) {
-            return;
-        }
-
-        String html = templateService.taskCheckpointTemplate(
-                task.getName(),
-                "Project #" + task.getProjectId(),
-                task.getPercentComplete(),
-                message
-        );
-
-        Boolean emailEnabled = task.getAssignedUser().getEmailNotificationsEnabled();
-
-        if (emailEnabled != null && !emailEnabled) {
-            return;
-        }
-
-        notificationService.create(
-                new NotificationRequest(
-                        organisationId,
-                        task.getProjectId(),
-                        task.getId(),
-                        task.getAssignedUser().getId(),
-                        task.getAssignedUser().getEmail(),
-                        NotificationChannel.EMAIL,
-                        severity,
-                        "Projectum Task Alert - " + task.getName(),
-                        message,
-                        html
-                )
-        );
-    }
     }
 }

@@ -44,11 +44,7 @@ public class NotificationService {
         notification.setCreatedAt(LocalDateTime.now());
         notification.setNextRetryAt(LocalDateTime.now());
 
-        Notification saved = repository.save(notification);
-
-        sendAsync(saved.getId());
-
-        return saved;
+        return repository.save(notification);
     }
 
     @Async
