@@ -23,13 +23,25 @@ public class NotificationRetryWorker {
         this.notificationService = notificationService;
     }
 
-    @Scheduled(fixedDelay = 60000)
-    public void retryFailedNotifications() {
+    @Scheduled(fixedDelay = 15000)
+    public void processPendingAndFailedNotifications() {
+        LocalDateTime now = LocalDateTime.now();
+
+        List<Notification> pending = repository
+                .findTop20ByStatusAndNextRetryAtLessThanEqualOrderByCreatedAtAsc(
+                        NotificationStatus.PENDING,
+                        now
+                );
+
         List<Notification> failed = repository
                 .findTop20ByStatusAndNextRetryAtLessThanEqualOrderByCreatedAtAsc(
                         NotificationStatus.FAILED,
-                        LocalDateTime.now()
+                        now
                 );
+
+        for (Notification notification : pending) {
+            notificationService.sendAsync(notification.getId());
+        }
 
         for (Notification notification : failed) {
             if (notification.getRetryCount() < 3) {

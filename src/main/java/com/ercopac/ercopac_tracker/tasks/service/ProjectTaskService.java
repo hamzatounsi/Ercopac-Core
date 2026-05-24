@@ -63,10 +63,14 @@ public class ProjectTaskService {
         ProjectTask task = projectTaskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
 
-        ProjectTask oldTask = copyForHistory(task);        
+        ProjectTask oldTask = copyForHistory(task);
 
         validateDates(request);
         validatePercent(request.getPercentComplete(), "percentComplete");
+
+        Integer oldPercent = task.getPercentComplete() != null
+                ? task.getPercentComplete()
+                : 0;
 
         task.setName(request.getName());
         task.setDescription(request.getDescription());
@@ -77,11 +81,6 @@ public class ProjectTaskService {
         task.setPlannedEnd(request.getPlannedEnd());
         task.setActualStart(request.getActualStart());
         task.setActualEnd(request.getActualEnd());
-
-        Integer oldPercent = task.getPercentComplete() != null
-        ? task.getPercentComplete()
-        : 0;
-
         task.setPercentComplete(request.getPercentComplete());
         task.setAllocationPercent(request.getAllocationPercent());
         task.setPriority(request.getPriority());
@@ -123,26 +122,32 @@ public class ProjectTaskService {
         ProjectTask saved = projectTaskRepository.save(task);
 
         Integer newPercent = saved.getPercentComplete() != null
-        ? saved.getPercentComplete()
-        : 0;
-
-        System.out.println("CHECKING TASK EMAIL NOTIFICATIONS old=" + oldPercent + " new=" + newPercent);
-
-        taskConsoleService.checkProgressNotifications(
-                saved,
-                oldPercent,
-                newPercent,
-                getOrganisationIdFromSecurityContext(),
-                getUserIdFromSecurityContext(),
-                getUsernameFromSecurityContext()
-        );
+                ? saved.getPercentComplete()
+                : 0;
 
         rebuildParentIds(projectId);
         rollupSummaries(projectId);
         taskSchedulingService.rescheduleFromTask(projectId, saved.getId());
 
-        return mapToResponse(projectTaskRepository.findById(saved.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + saved.getId())));
+        ProjectTask finalTask = projectTaskRepository.findById(saved.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + saved.getId()));
+
+        try {
+            System.out.println("CHECKING TASK EMAIL NOTIFICATIONS old=" + oldPercent + " new=" + newPercent);
+
+            taskConsoleService.checkProgressNotifications(
+                    finalTask,
+                    oldPercent,
+                    newPercent,
+                    getOrganisationIdFromSecurityContext(),
+                    getUserIdFromSecurityContext(),
+                    getUsernameFromSecurityContext()
+            );
+        } catch (Exception e) {
+            System.out.println("NOTIFICATION ERROR, TASK SAVE CONTINUES: " + e.getMessage());
+        }
+
+        return mapToResponse(finalTask);
     }
 
     // ══════════════════════════════════════════════════════════════
