@@ -34,6 +34,8 @@ public class Notification {
     private String htmlBody;
 
     private int retryCount;
+
+    @Column(columnDefinition = "TEXT")
     private String errorMessage;
 
     private LocalDateTime createdAt;
