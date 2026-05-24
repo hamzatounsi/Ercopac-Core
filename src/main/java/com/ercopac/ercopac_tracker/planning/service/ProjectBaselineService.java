@@ -68,4 +68,19 @@ public class ProjectBaselineService {
         );
     }
     
+    public ProjectBaselineDto renameBaseline(
+            Long projectId,
+            Long baselineId,
+            String name
+    ) {
+        Long organisationId = securityUtils.getCurrentOrganisationId();
+
+        ProjectBaseline baseline = baselineRepository
+                .findByIdAndProjectIdAndOrganisationId(baselineId, projectId, organisationId)
+                .orElseThrow(() -> new EntityNotFoundException("Baseline not found"));
+
+        baseline.setName(name.trim());
+
+        return toDto(baselineRepository.save(baseline));
+    }
 }

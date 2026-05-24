@@ -34,7 +34,11 @@ public class TaskConsoleController {
             @PathVariable Long projectId,
             @PathVariable Long taskId
     ) {
-        return service.getConfig(securityUtils.getCurrentOrganisationId(), projectId, taskId);
+        return service.getConfig(
+                securityUtils.getCurrentOrganisationId(),
+                projectId,
+                taskId
+        );
     }
 
     @PutMapping
@@ -44,7 +48,12 @@ public class TaskConsoleController {
             @PathVariable Long taskId,
             @RequestBody TaskConsoleConfigDto request
     ) {
-        return service.saveConfig(securityUtils.getCurrentOrganisationId(), projectId, taskId, request);
+        return service.saveConfig(
+                securityUtils.getCurrentOrganisationId(),
+                projectId,
+                taskId,
+                request
+        );
     }
 
     @GetMapping("/logs")
@@ -53,7 +62,11 @@ public class TaskConsoleController {
             @PathVariable Long projectId,
             @PathVariable Long taskId
     ) {
-        return service.getLogs(securityUtils.getCurrentOrganisationId(), projectId, taskId);
+        return service.getLogs(
+                securityUtils.getCurrentOrganisationId(),
+                projectId,
+                taskId
+        );
     }
 
     @DeleteMapping("/logs")
@@ -62,7 +75,12 @@ public class TaskConsoleController {
             @PathVariable Long projectId,
             @PathVariable Long taskId
     ) {
-        service.clearLogs(securityUtils.getCurrentOrganisationId(), projectId, taskId);
+        service.clearLogs(
+                securityUtils.getCurrentOrganisationId(),
+                projectId,
+                taskId
+        );
+
         return ResponseEntity.noContent().build();
     }
 }
