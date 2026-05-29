@@ -35,7 +35,7 @@ public class ProjectTaskService {
     private final TaskResourceAssignmentRepository taskResourceAssignmentRepository;
     private final TaskSchedulingService            taskSchedulingService;
     private final ProjectTaskHistoryService        historyService;
-    private final TaskConsoleService taskConsoleService;
+    private final TaskConsoleService               taskConsoleService;
 
     public ProjectTaskService(
             ProjectTaskRepository projectTaskRepository,
@@ -58,7 +58,7 @@ public class ProjectTaskService {
 
     // ══════════════════════════════════════════════════════════════
     // UPDATE
-    // ══════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
     public ProjectScheduleTaskResponse updateTask(Long taskId, UpdateProjectTaskRequest request) {
         ProjectTask task = projectTaskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
@@ -68,9 +68,7 @@ public class ProjectTaskService {
         validateDates(request);
         validatePercent(request.getPercentComplete(), "percentComplete");
 
-        Integer oldPercent = task.getPercentComplete() != null
-                ? task.getPercentComplete()
-                : 0;
+        Integer oldPercent = task.getPercentComplete() != null ? task.getPercentComplete() : 0;
 
         task.setName(request.getName());
         task.setDescription(request.getDescription());
@@ -95,8 +93,12 @@ public class ProjectTaskService {
         task.setStatus(request.getStatus());
         task.setColor(request.getColor());
 
+        // FIX #3: parentId set directly from request — never rebuilt from wbsCode
         if (request.getParentId() != null) {
             task.setParentId(request.getParentId());
+        } else {
+            // explicitly null means root task
+            task.setParentId(null);
         }
 
         if (request.getAssignedUserId() != null) {
@@ -106,6 +108,7 @@ public class ProjectTaskService {
             task.setAssignedUser(null);
         }
 
+        // FIX #4: correct duration/dates resolution
         resolveDatesAndDuration(task, request);
         normalizeMilestone(task);
 
@@ -121,11 +124,9 @@ public class ProjectTaskService {
 
         ProjectTask saved = projectTaskRepository.save(task);
 
-        Integer newPercent = saved.getPercentComplete() != null
-                ? saved.getPercentComplete()
-                : 0;
+        Integer newPercent = saved.getPercentComplete() != null ? saved.getPercentComplete() : 0;
 
-        rebuildParentIds(projectId);
+        // FIX #3: removed rebuildParentIds() — parentId comes from frontend only
         rollupSummaries(projectId);
         taskSchedulingService.rescheduleFromTask(projectId, saved.getId());
 
@@ -133,8 +134,6 @@ public class ProjectTaskService {
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + saved.getId()));
 
         try {
-            System.out.println("CHECKING TASK EMAIL NOTIFICATIONS old=" + oldPercent + " new=" + newPercent);
-
             taskConsoleService.checkProgressNotifications(
                     finalTask,
                     oldPercent,
@@ -153,7 +152,6 @@ public class ProjectTaskService {
     // ══════════════════════════════════════════════════════════════
     // CREATE BELOW
     // ══════════════════════════════════════════════════════════════
-
     public ProjectScheduleTaskResponse createTaskBelow(Long projectId, Long afterTaskId,
                                                         CreateTaskRequest request) {
         ProjectTask anchor = projectTaskRepository.findById(afterTaskId)
@@ -182,12 +180,8 @@ public class ProjectTaskService {
         task.setName(request.getName() != null ? request.getName() : "New Task");
         task.setTaskType("ACTIVITY");
         task.setPlannedStart(request.getPlannedStart());
-        task.setPlannedEnd(request.getPlannedEnd() != null
-                ? request.getPlannedEnd() : request.getPlannedStart());
+        task.setPlannedEnd(request.getPlannedEnd() != null ? request.getPlannedEnd() : request.getPlannedStart());
         task.setDurationDays(request.getDurationDays() != null ? request.getDurationDays() : 1);
-        Integer oldPercent = task.getPercentComplete() != null
-        ? task.getPercentComplete()
-        : 0;
         task.setPercentComplete(0);
         task.setPriority(500);
         task.setScheduleMode("AUTO");
@@ -198,14 +192,11 @@ public class ProjectTaskService {
 
         normalizeMilestone(task);
         ProjectTask saved = projectTaskRepository.save(task);
-            Integer newPercent = saved.getPercentComplete() != null
-                ? saved.getPercentComplete()
-                : 0;
+
+        Integer newPercent = saved.getPercentComplete() != null ? saved.getPercentComplete() : 0;
 
         taskConsoleService.checkProgressNotifications(
-                saved,
-                oldPercent,
-                newPercent,
+                saved, 0, newPercent,
                 getOrganisationIdFromSecurityContext(),
                 getUserIdFromSecurityContext(),
                 getUsernameFromSecurityContext()
@@ -219,71 +210,35 @@ public class ProjectTaskService {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // COPY BELOW — copies task + full subtree with correct hierarchy
-    // Example: Summary 1 (1.1, 1.2, 1.2.1) → Summary 2 (2.1, 2.2, 2.2.1)
+    // COPY BELOW
     // ══════════════════════════════════════════════════════════════
-
- // REPLACE copyTaskBelow() in ProjectTaskService.java
-
     public ProjectScheduleTaskResponse copyTaskBelow(Long projectId, Long sourceTaskId) {
-
-        // Load ALL tasks fresh from DB
         List<ProjectTask> allTasks = projectTaskRepository
                 .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
 
-        // Find source FROM the fresh list — same Hibernate session, consistent state
         ProjectTask source = allTasks.stream()
                 .filter(t -> sourceTaskId.equals(t.getId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + sourceTaskId));
 
-        // Use source from allTasks — guaranteed correct displayOrder
         int sourceLevel        = source.getOutlineLevel() != null ? source.getOutlineLevel() : 1;
         int sourceDisplayOrder = source.getDisplayOrder() != null ? source.getDisplayOrder() : 0;
 
-        System.out.println("=== SOURCE: id=" + source.getId()
-                + " name=" + source.getName()
-                + " level=" + sourceLevel
-                + " order=" + sourceDisplayOrder);
-
-        // Collect subtree: source + all tasks that immediately follow
-        // with outlineLevel > sourceLevel
         List<ProjectTask> subtree = new ArrayList<>();
-
-        for (ProjectTask t : allTasks) {  // already sorted by displayOrder
+        for (ProjectTask t : allTasks) {
             int tOrder = t.getDisplayOrder() != null ? t.getDisplayOrder() : 0;
             int tLevel = t.getOutlineLevel() != null ? t.getOutlineLevel() : 1;
-
-            if (tOrder < sourceDisplayOrder) continue; // before source
-
-            if (tOrder == sourceDisplayOrder) {
-                subtree.add(t);
-                continue;
-            }
-
-            // tOrder > sourceDisplayOrder
-            if (tLevel > sourceLevel) {
-                subtree.add(t); // descendant
-            } else {
-                break; // same or higher level = end of subtree
-            }
+            if (tOrder < sourceDisplayOrder) continue;
+            if (tOrder == sourceDisplayOrder) { subtree.add(t); continue; }
+            if (tLevel > sourceLevel) subtree.add(t);
+            else break;
         }
 
-        System.out.println("=== COPY subtree size: " + subtree.size());
-        subtree.forEach(t -> System.out.println(
-                "  id=" + t.getId()
-                + " | " + t.getName()
-                + " | level=" + t.getOutlineLevel()
-                + " | order=" + t.getDisplayOrder()
-                + " | parentId=" + t.getParentId()));
-
         int subtreeSize = subtree.size();
-
         int lastOrder = subtree.stream()
                 .mapToInt(t -> t.getDisplayOrder() != null ? t.getDisplayOrder() : 0)
                 .max().orElse(sourceDisplayOrder);
 
-        // Shift tasks after the subtree down by subtreeSize
         for (ProjectTask t : allTasks) {
             int tOrder = t.getDisplayOrder() != null ? t.getDisplayOrder() : 0;
             boolean inSubtree = subtree.stream().anyMatch(s -> s.getId().equals(t.getId()));
@@ -293,14 +248,10 @@ public class ProjectTaskService {
             }
         }
 
-        // Save copies — index i → savedList[i]
-        // For each child, scan backwards in subtree for nearest task with level = myLevel-1
         List<ProjectTask> savedList = new ArrayList<>();
-
         for (int i = 0; i < subtreeSize; i++) {
             ProjectTask orig = subtree.get(i);
             ProjectTask copy = new ProjectTask();
-
             copy.setProjectId(projectId);
             copy.setOrganisationId(orig.getOrganisationId());
             copy.setName(orig.getName() + (i == 0 ? " (Copy)" : ""));
@@ -326,32 +277,21 @@ public class ProjectTaskService {
             copy.setColor(orig.getColor());
             copy.setOutlineLevel(orig.getOutlineLevel());
 
-            // Set parentId
             if (i == 0) {
-                copy.setParentId(source.getParentId()); // root copy → same parent as source
+                copy.setParentId(source.getParentId());
             } else {
-                int myLevel     = orig.getOutlineLevel() != null ? orig.getOutlineLevel() : 1;
+                int myLevel = orig.getOutlineLevel() != null ? orig.getOutlineLevel() : 1;
                 int parentLevel = myLevel - 1;
                 ProjectTask parentCopy = null;
                 for (int j = i - 1; j >= 0; j--) {
-                    int jLevel = subtree.get(j).getOutlineLevel() != null
-                            ? subtree.get(j).getOutlineLevel() : 1;
-                    if (jLevel == parentLevel) {
-                        parentCopy = savedList.get(j);
-                        break;
-                    }
+                    int jLevel = subtree.get(j).getOutlineLevel() != null ? subtree.get(j).getOutlineLevel() : 1;
+                    if (jLevel == parentLevel) { parentCopy = savedList.get(j); break; }
                 }
                 copy.setParentId(parentCopy != null ? parentCopy.getId() : source.getParentId());
             }
 
             normalizeMilestone(copy);
-            ProjectTask saved = projectTaskRepository.save(copy);
-            savedList.add(saved);
-
-            System.out.println("  SAVED[" + i + "]: id=" + saved.getId()
-                    + " | " + saved.getName()
-                    + " | parentId=" + saved.getParentId()
-                    + " | level=" + saved.getOutlineLevel());
+            savedList.add(projectTaskRepository.save(copy));
         }
 
         rebuildStructureFromParentId(projectId);
@@ -362,9 +302,8 @@ public class ProjectTaskService {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // DELETE — recursively deletes children first
+    // DELETE
     // ══════════════════════════════════════════════════════════════
-
     public void deleteTask(Long taskId) {
         ProjectTask task = projectTaskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
@@ -391,7 +330,6 @@ public class ProjectTaskService {
     // ══════════════════════════════════════════════════════════════
     // RESOURCE USERS
     // ══════════════════════════════════════════════════════════════
-
     public List<ResourceUserDto> getResourceUsersForProject(Long projectId) {
         List<ProjectTask> tasks = projectTaskRepository
                 .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
@@ -422,9 +360,11 @@ public class ProjectTaskService {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // ROLLUP SUMMARIES — bottom-up weighted average
+    // FIX #5: ROLLUP SUMMARIES
+    // Summary duration = sum of direct children durations (not editable)
+    // Summary dates = min(childStart) to max(childEnd)
+    // Summary % = weighted average by duration
     // ══════════════════════════════════════════════════════════════
-
     public void rollupSummariesPublic(Long projectId) {
         rollupSummaries(projectId);
     }
@@ -438,6 +378,7 @@ public class ProjectTaskService {
                 .mapToInt(t -> t.getOutlineLevel() != null ? t.getOutlineLevel() : 1)
                 .max().orElse(1);
 
+        // Process deepest summaries first (bottom-up)
         for (int level = maxLevel; level >= 1; level--) {
             final int currentLevel = level;
             List<ProjectTask> summaries = tasks.stream()
@@ -450,28 +391,51 @@ public class ProjectTaskService {
                 List<ProjectTask> children = getDirectChildren(summary, tasks);
                 if (children.isEmpty()) continue;
 
-                Optional<LocalDate> minStart = children.stream()
+                // Dates: min start to max end
+                Optional<LocalDate> minPlannedStart = children.stream()
                         .map(ProjectTask::getPlannedStart).filter(Objects::nonNull)
                         .min(Comparator.naturalOrder());
-                Optional<LocalDate> maxEnd = children.stream()
+                Optional<LocalDate> maxPlannedEnd = children.stream()
                         .map(ProjectTask::getPlannedEnd).filter(Objects::nonNull)
                         .max(Comparator.naturalOrder());
+                Optional<LocalDate> minBaselineStart = children.stream()
+                        .map(ProjectTask::getBaselineStart).filter(Objects::nonNull)
+                        .min(Comparator.naturalOrder());
+                Optional<LocalDate> maxBaselineEnd = children.stream()
+                        .map(ProjectTask::getBaselineEnd).filter(Objects::nonNull)
+                        .max(Comparator.naturalOrder());
+                Optional<LocalDate> minActualStart = children.stream()
+                        .map(ProjectTask::getActualStart).filter(Objects::nonNull)
+                        .min(Comparator.naturalOrder());
+                Optional<LocalDate> maxActualEnd = children.stream()
+                        .map(ProjectTask::getActualEnd).filter(Objects::nonNull)
+                        .max(Comparator.naturalOrder());
 
+                // FIX #5: Duration = sum of children durations
                 int totalDuration = children.stream()
-                        .mapToInt(c -> c.getDurationDays() != null ? c.getDurationDays() : 0).sum();
+                        .mapToInt(c -> c.getDurationDays() != null ? c.getDurationDays() : 0)
+                        .sum();
 
+                // Weighted average progress
                 long totalWeight = children.stream()
-                        .mapToLong(c -> c.getDurationDays() != null ? c.getDurationDays() : 1).sum();
+                        .mapToLong(c -> c.getDurationDays() != null && c.getDurationDays() > 0
+                                ? c.getDurationDays() : 1)
+                        .sum();
                 double weightedPct = children.stream()
                         .mapToDouble(c -> {
-                            int dur = c.getDurationDays() != null ? c.getDurationDays() : 1;
+                            int dur = c.getDurationDays() != null && c.getDurationDays() > 0
+                                    ? c.getDurationDays() : 1;
                             int pct = c.getPercentComplete() != null ? c.getPercentComplete() : 0;
                             return (double) dur * pct;
                         }).sum();
                 int avgPct = totalWeight > 0 ? (int) Math.round(weightedPct / totalWeight) : 0;
 
-                minStart.ifPresent(summary::setPlannedStart);
-                maxEnd.ifPresent(summary::setPlannedEnd);
+                minPlannedStart.ifPresent(summary::setPlannedStart);
+                maxPlannedEnd.ifPresent(summary::setPlannedEnd);
+                minBaselineStart.ifPresent(summary::setBaselineStart);
+                maxBaselineEnd.ifPresent(summary::setBaselineEnd);
+                minActualStart.ifPresent(summary::setActualStart);
+                maxActualEnd.ifPresent(summary::setActualEnd);
                 summary.setDurationDays(totalDuration);
                 summary.setPercentComplete(avgPct);
                 projectTaskRepository.save(summary);
@@ -480,92 +444,78 @@ public class ProjectTaskService {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // REBUILD STRUCTURE FROM PARENT ID
-    // Builds WBS codes using parentId FK — correct for all cases
+    // FIX #2: REBUILD STRUCTURE — recursive tree walk
+    // Prevents duplicate WBS codes
     // ══════════════════════════════════════════════════════════════
-
     private void rebuildStructureFromParentId(Long projectId) {
         List<ProjectTask> tasks = projectTaskRepository
                 .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
+        if (tasks.isEmpty()) return;
 
-        // Sequential displayOrder
+        // Step 1: reassign sequential displayOrder
         for (int i = 0; i < tasks.size(); i++) {
             tasks.get(i).setDisplayOrder(i + 1);
         }
 
-        // parentId → child counter
-        Map<Long, Integer> childCounters = new HashMap<>();
-        final Long ROOT_KEY = -1L;
+        // Step 2: build children map (preserving display order)
+        Map<Long, List<ProjectTask>> childrenMap = new LinkedHashMap<>();
+        List<ProjectTask> roots = new ArrayList<>();
 
         for (ProjectTask task : tasks) {
-            Long parentId  = task.getParentId();
-            Long counterKey = parentId != null ? parentId : ROOT_KEY;
-
-            int count = childCounters.getOrDefault(counterKey, 0) + 1;
-            childCounters.put(counterKey, count);
-
-            if (parentId == null) {
-                task.setWbsCode(String.valueOf(count));
-                task.setOutlineLevel(1);
+            if (task.getParentId() == null) {
+                roots.add(task);
             } else {
-                ProjectTask parent = tasks.stream()
-                        .filter(t -> t.getId().equals(parentId))
-                        .findFirst().orElse(null);
-
-                if (parent != null && parent.getWbsCode() != null) {
-                    task.setWbsCode(parent.getWbsCode() + "." + count);
-                    task.setOutlineLevel(
-                            (int) parent.getWbsCode().chars().filter(c -> c == '.').count() + 2);
-                } else {
-                    task.setWbsCode(String.valueOf(count));
-                    task.setOutlineLevel(1);
-                }
+                childrenMap
+                    .computeIfAbsent(task.getParentId(), k -> new ArrayList<>())
+                    .add(task);
             }
+        }
 
+        // Step 3: recursively assign WBS codes
+        assignWbsCodes(roots, childrenMap, "", 1);
+
+        // Step 4: save all
+        for (ProjectTask task : tasks) {
             projectTaskRepository.save(task);
         }
     }
 
-    // ══════════════════════════════════════════════════════════════
-    // REBUILD PARENT IDs — sets parentId from wbsCode
-    // ══════════════════════════════════════════════════════════════
+    private void assignWbsCodes(
+            List<ProjectTask> tasks,
+            Map<Long, List<ProjectTask>> childrenMap,
+            String prefix,
+            int level) {
 
-    private void rebuildParentIds(Long projectId) {
-        List<ProjectTask> tasks = projectTaskRepository
-                .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
+        for (int i = 0; i < tasks.size(); i++) {
+            ProjectTask task = tasks.get(i);
+            String wbs = prefix.isEmpty()
+                ? String.valueOf(i + 1)
+                : prefix + "." + (i + 1);
 
-        Map<String, ProjectTask> wbsMap = tasks.stream()
-                .filter(t -> t.getWbsCode() != null && !t.getWbsCode().isEmpty())
-                .collect(Collectors.toMap(ProjectTask::getWbsCode, t -> t, (a, b) -> a));
+            task.setWbsCode(wbs);
+            task.setOutlineLevel(level);
 
-        for (ProjectTask task : tasks) {
-            String wbs = task.getWbsCode();
-            if (wbs == null || !wbs.contains(".")) {
-                task.setParentId(null);
-            } else {
-                String parentWbs = wbs.substring(0, wbs.lastIndexOf('.'));
-                ProjectTask parent = wbsMap.get(parentWbs);
-                task.setParentId(parent != null ? parent.getId() : null);
+            List<ProjectTask> children = childrenMap.get(task.getId());
+            if (children != null && !children.isEmpty()) {
+                assignWbsCodes(children, childrenMap, wbs, level + 1);
             }
-            projectTaskRepository.save(task);
         }
     }
 
     // ══════════════════════════════════════════════════════════════
-    // COLLECT SUBTREE — by outlineLevel + displayOrder
+    // FIX #3: rebuildParentIds REMOVED — parentId comes from frontend
     // ══════════════════════════════════════════════════════════════
 
+    // ══════════════════════════════════════════════════════════════
+    // COLLECT SUBTREE
+    // ══════════════════════════════════════════════════════════════
     private List<ProjectTask> collectSubtree(ProjectTask root, List<ProjectTask> allTasks) {
         List<ProjectTask> result = new ArrayList<>();
         result.add(root);
-
         int rootLevel = root.getOutlineLevel() != null ? root.getOutlineLevel() : 1;
-
         List<ProjectTask> sorted = allTasks.stream()
-                .sorted(Comparator.comparingInt(
-                        t -> t.getDisplayOrder() != null ? t.getDisplayOrder() : 0))
+                .sorted(Comparator.comparingInt(t -> t.getDisplayOrder() != null ? t.getDisplayOrder() : 0))
                 .collect(Collectors.toList());
-
         boolean collecting = false;
         for (ProjectTask t : sorted) {
             if (t.getId().equals(root.getId())) { collecting = true; continue; }
@@ -581,9 +531,8 @@ public class ProjectTaskService {
     // ══════════════════════════════════════════════════════════════
     // GET DIRECT CHILDREN
     // ══════════════════════════════════════════════════════════════
-
     private List<ProjectTask> getDirectChildren(ProjectTask parent, List<ProjectTask> allTasks) {
-        // Prefer parentId lookup
+        // Prefer parentId lookup (most reliable)
         List<ProjectTask> byParentId = allTasks.stream()
                 .filter(t -> parent.getId().equals(t.getParentId()))
                 .collect(Collectors.toList());
@@ -591,21 +540,17 @@ public class ProjectTaskService {
 
         // Fallback: outlineLevel + displayOrder
         int parentLevel = parent.getOutlineLevel() != null ? parent.getOutlineLevel() : 1;
-        int childLevel  = parentLevel + 1;
-
+        int childLevel = parentLevel + 1;
         List<ProjectTask> sorted = allTasks.stream()
-                .sorted(Comparator.comparingInt(
-                        t -> t.getDisplayOrder() != null ? t.getDisplayOrder() : 0))
+                .sorted(Comparator.comparingInt(t -> t.getDisplayOrder() != null ? t.getDisplayOrder() : 0))
                 .collect(Collectors.toList());
-
         List<ProjectTask> children = new ArrayList<>();
         boolean inScope = false;
-
         for (ProjectTask t : sorted) {
             if (t.getId().equals(parent.getId())) { inScope = true; continue; }
             if (inScope) {
                 int tLevel = t.getOutlineLevel() != null ? t.getOutlineLevel() : 1;
-                if (tLevel == childLevel)       children.add(t);
+                if (tLevel == childLevel) children.add(t);
                 else if (tLevel <= parentLevel) break;
             }
         }
@@ -615,43 +560,74 @@ public class ProjectTaskService {
     // ══════════════════════════════════════════════════════════════
     // NORMALIZE MILESTONE
     // ══════════════════════════════════════════════════════════════
-
     private void normalizeMilestone(ProjectTask task) {
         if ("MILESTONE".equalsIgnoreCase(task.getTaskType())) {
             task.setDurationDays(0);
             if (task.getPlannedStart() != null) task.setPlannedEnd(task.getPlannedStart());
+            if (task.getBaselineStart() != null) task.setBaselineEnd(task.getBaselineStart());
+            if (task.getActualStart() != null) task.setActualEnd(task.getActualStart());
         }
     }
 
     // ══════════════════════════════════════════════════════════════
-    // RESOLVE DATES & DURATION
+    // FIX #4: RESOLVE DATES & DURATION
+    // MILESTONE: always 0, dates locked
+    // SUMMARY: skip — handled by rollupSummaries
+    // ACTIVITY: duration drives end date if sent; else dates drive duration
     // ══════════════════════════════════════════════════════════════
-
     private void resolveDatesAndDuration(ProjectTask task, UpdateProjectTaskRequest req) {
-        if ("MILESTONE".equalsIgnoreCase(task.getTaskType())) {
+        String type = (task.getTaskType() != null ? task.getTaskType() : "ACTIVITY").toUpperCase();
+
+        // MILESTONE — always 0, start = end
+        if ("MILESTONE".equals(type)) {
             task.setDurationDays(0);
-            if (task.getPlannedStart() != null) task.setPlannedEnd(task.getPlannedStart());
+            if (task.getPlannedStart() != null)   task.setPlannedEnd(task.getPlannedStart());
+            if (task.getBaselineStart() != null)  task.setBaselineEnd(task.getBaselineStart());
+            if (task.getActualStart() != null)    task.setActualEnd(task.getActualStart());
             return;
         }
-        LocalDate s = task.getPlannedStart();
-        LocalDate e = task.getPlannedEnd();
-        Integer d   = req.getDurationDays();
 
-        if (s != null && d != null && d > 0) {
-            task.setPlannedEnd(s.plusDays(d - 1));
-            task.setDurationDays(d);
-        } else if (s != null && e != null) {
-            long days = ChronoUnit.DAYS.between(s, e) + 1;
+        // SUMMARY — duration calculated by rollupSummaries, don't touch here
+        if ("SUMMARY".equals(type)) {
+            return;
+        }
+
+        // ACTIVITY — user controls duration or dates
+        LocalDate plannedStart  = task.getPlannedStart();
+        LocalDate baselineStart = task.getBaselineStart();
+        Integer requestedDuration = req.getDurationDays();
+
+        // Priority 1: duration explicitly sent AND > 0 → duration drives end date
+        if (requestedDuration != null && requestedDuration > 0) {
+            task.setDurationDays(requestedDuration);
+            if (plannedStart != null) {
+                task.setPlannedEnd(plannedStart.plusDays(requestedDuration - 1));
+            }
+            if (baselineStart != null) {
+                task.setBaselineEnd(baselineStart.plusDays(requestedDuration - 1));
+            }
+            return;
+        }
+
+        // Priority 2: planned dates sent → dates drive duration
+        if (plannedStart != null && task.getPlannedEnd() != null) {
+            long days = ChronoUnit.DAYS.between(plannedStart, task.getPlannedEnd()) + 1;
             task.setDurationDays((int) Math.max(1, days));
-        } else if (s != null && task.getDurationDays() != null && task.getDurationDays() > 0) {
-            task.setPlannedEnd(s.plusDays(task.getDurationDays() - 1));
+            return;
+        }
+
+        // Priority 3: baseline dates → calculate duration
+        if (baselineStart != null && task.getBaselineEnd() != null) {
+            long days = ChronoUnit.DAYS.between(baselineStart, task.getBaselineEnd()) + 1;
+            task.setDurationDays((int) Math.max(1, days));
+            if (plannedStart == null) task.setPlannedStart(baselineStart);
+            if (task.getPlannedEnd() == null) task.setPlannedEnd(task.getBaselineEnd());
         }
     }
 
     // ══════════════════════════════════════════════════════════════
     // MAP TO RESPONSE
     // ══════════════════════════════════════════════════════════════
-
     public ProjectScheduleTaskResponse mapToResponse(ProjectTask task) {
         List<TaskDependency> deps = taskDependencyRepository
                 .findByProjectIdAndSuccessorTaskId(task.getProjectId(), task.getId());
@@ -697,9 +673,89 @@ public class ProjectTaskService {
     }
 
     // ══════════════════════════════════════════════════════════════
+    // IMPORT SCHEDULE
+    // ══════════════════════════════════════════════════════════════
+    public List<ProjectScheduleTaskResponse> importSchedule(
+            Long projectId,
+            List<UpdateProjectTaskRequest> importedTasks) {
+
+        if (importedTasks == null || importedTasks.isEmpty()) return List.of();
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        Long organisationId = project.getOrganisation() != null
+                ? project.getOrganisation().getId() : null;
+        if (organisationId == null) throw new IllegalStateException("Project has no organisation");
+
+        List<ProjectTask> oldTasks =
+                projectTaskRepository.findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
+        for (ProjectTask task : oldTasks) {
+            taskDependencyRepository.deleteByPredecessorTaskId(task.getId());
+            taskDependencyRepository.deleteBySuccessorTaskId(task.getId());
+            taskResourceAssignmentRepository.deleteByProjectIdAndTaskId(projectId, task.getId());
+            projectTaskRepository.delete(task);
+        }
+        projectTaskRepository.flush();
+
+        List<ProjectTask> savedTasks = new ArrayList<>();
+        for (int i = 0; i < importedTasks.size(); i++) {
+            UpdateProjectTaskRequest req = importedTasks.get(i);
+            ProjectTask task = new ProjectTask();
+            task.setProjectId(projectId);
+            task.setOrganisationId(organisationId);
+            task.setName(req.getName() != null && !req.getName().isBlank()
+                    ? req.getName() : "Imported Task " + (i + 1));
+            task.setDescription(req.getDescription());
+            task.setTaskType(req.getTaskType() != null ? req.getTaskType() : "ACTIVITY");
+            task.setBaselineStart(req.getBaselineStart() != null ? req.getBaselineStart() : req.getPlannedStart());
+            task.setBaselineEnd(req.getBaselineEnd() != null ? req.getBaselineEnd() : req.getPlannedEnd());
+            task.setPlannedStart(req.getPlannedStart() != null ? req.getPlannedStart() : task.getBaselineStart());
+            task.setPlannedEnd(req.getPlannedEnd() != null ? req.getPlannedEnd() : task.getBaselineEnd());
+            if (task.getBaselineStart() != null && task.getBaselineEnd() == null)
+                task.setBaselineEnd(task.getBaselineStart());
+            if (task.getPlannedStart() != null && task.getPlannedEnd() == null)
+                task.setPlannedEnd(task.getPlannedStart());
+            task.setActualStart(req.getActualStart());
+            task.setActualEnd(req.getActualEnd());
+            task.setDurationDays(req.getDurationDays() != null
+                    ? req.getDurationDays() : calculateImportedDuration(task));
+            task.setPercentComplete(req.getPercentComplete() != null ? req.getPercentComplete() : 0);
+            task.setAllocationPercent(req.getAllocationPercent() != null ? req.getAllocationPercent() : 100);
+            task.setPriority(req.getPriority() != null ? req.getPriority() : 500);
+            task.setWbsCode(req.getWbsCode());
+            task.setDepartmentCode(req.getDepartmentCode());
+            task.setResourceType(req.getResourceType());
+            task.setActive(req.getActive() != null ? req.getActive() : true);
+            task.setDisplayOrder(req.getDisplayOrder() != null ? req.getDisplayOrder() : i + 1);
+            task.setOutlineLevel(req.getOutlineLevel() != null ? req.getOutlineLevel() : 1);
+            task.setCustomerMilestone(req.getCustomerMilestone() != null ? req.getCustomerMilestone() : false);
+            task.setScheduleMode(req.getScheduleMode() != null ? req.getScheduleMode() : "AUTO");
+            task.setStatus(req.getStatus() != null ? req.getStatus() : "NOT_STARTED");
+            task.setColor(req.getColor());
+            normalizeMilestone(task);
+            savedTasks.add(projectTaskRepository.save(task));
+        }
+
+        rebuildStructureFromParentId(projectId);
+        rollupSummaries(projectId);
+
+        return projectTaskRepository
+                .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    private Integer calculateImportedDuration(ProjectTask task) {
+        if ("MILESTONE".equalsIgnoreCase(task.getTaskType())) return 0;
+        if (task.getBaselineStart() == null || task.getBaselineEnd() == null) return 1;
+        long days = ChronoUnit.DAYS.between(task.getBaselineStart(), task.getBaselineEnd()) + 1;
+        return Math.max(1, (int) days);
+    }
+
+    // ══════════════════════════════════════════════════════════════
     // HELPERS
     // ══════════════════════════════════════════════════════════════
-
     private TaskDependencyDto toDependencyDto(TaskDependency dep) {
         TaskDependencyDto dto = new TaskDependencyDto();
         dto.setId(dep.getId());
@@ -728,181 +784,42 @@ public class ProjectTaskService {
     }
 
     private ProjectTask copyForHistory(ProjectTask source) {
-    ProjectTask copy = new ProjectTask();
-
-    copy.setName(source.getName());
-    copy.setPlannedStart(source.getPlannedStart());
-    copy.setPlannedEnd(source.getPlannedEnd());
-    copy.setBaselineStart(source.getBaselineStart());
-    copy.setBaselineEnd(source.getBaselineEnd());
-    copy.setActualStart(source.getActualStart());
-    copy.setActualEnd(source.getActualEnd());
-    copy.setDurationDays(source.getDurationDays());
-    copy.setPercentComplete(source.getPercentComplete());
-    copy.setDepartmentCode(source.getDepartmentCode());
-    copy.setResourceType(source.getResourceType());
-    copy.setCustomerMilestone(source.getCustomerMilestone());
-
-    return copy;
+        ProjectTask copy = new ProjectTask();
+        copy.setName(source.getName());
+        copy.setPlannedStart(source.getPlannedStart());
+        copy.setPlannedEnd(source.getPlannedEnd());
+        copy.setBaselineStart(source.getBaselineStart());
+        copy.setBaselineEnd(source.getBaselineEnd());
+        copy.setActualStart(source.getActualStart());
+        copy.setActualEnd(source.getActualEnd());
+        copy.setDurationDays(source.getDurationDays());
+        copy.setPercentComplete(source.getPercentComplete());
+        copy.setDepartmentCode(source.getDepartmentCode());
+        copy.setResourceType(source.getResourceType());
+        copy.setCustomerMilestone(source.getCustomerMilestone());
+        return copy;
     }
 
     private Long getOrganisationIdFromSecurityContext() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
         if (authentication != null && authentication.getDetails() instanceof Map<?, ?> details) {
             Object value = details.get("organisationId");
             return value == null ? null : Long.valueOf(value.toString());
         }
-
         return null;
     }
 
     private Long getUserIdFromSecurityContext() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
         if (authentication != null && authentication.getDetails() instanceof Map<?, ?> details) {
             Object value = details.get("userId");
             return value == null ? null : Long.valueOf(value.toString());
         }
-
         return null;
     }
 
     private String getUsernameFromSecurityContext() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null ? authentication.getName() : "System";
-    }
-
-    public List<ProjectScheduleTaskResponse> importSchedule(
-            Long projectId,
-            List<UpdateProjectTaskRequest> importedTasks
-    ) {
-        if (importedTasks == null || importedTasks.isEmpty()) {
-            return List.of();
-        }
-
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
-
-        Long organisationId = project.getOrganisation() != null
-                ? project.getOrganisation().getId()
-                : null;
-
-        if (organisationId == null) {
-            throw new IllegalStateException("Project has no organisation");
-        }
-
-        List<ProjectTask> oldTasks =
-                projectTaskRepository.findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
-
-        for (ProjectTask task : oldTasks) {
-            taskDependencyRepository.deleteByPredecessorTaskId(task.getId());
-            taskDependencyRepository.deleteBySuccessorTaskId(task.getId());
-            taskResourceAssignmentRepository.deleteByProjectIdAndTaskId(projectId, task.getId());
-            projectTaskRepository.delete(task);
-        }
-
-        projectTaskRepository.flush();
-
-        List<ProjectTask> savedTasks = new ArrayList<>();
-
-        for (int i = 0; i < importedTasks.size(); i++) {
-            UpdateProjectTaskRequest req = importedTasks.get(i);
-
-            ProjectTask task = new ProjectTask();
-
-            task.setProjectId(projectId);
-            task.setOrganisationId(organisationId);
-
-            task.setName(
-                    req.getName() != null && !req.getName().isBlank()
-                            ? req.getName()
-                            : "Imported Task " + (i + 1)
-            );
-
-            task.setDescription(req.getDescription());
-            task.setTaskType(req.getTaskType() != null ? req.getTaskType() : "ACTIVITY");
-
-            task.setBaselineStart(req.getBaselineStart() != null ? req.getBaselineStart() : req.getPlannedStart());
-            task.setBaselineEnd(req.getBaselineEnd() != null ? req.getBaselineEnd() : req.getPlannedEnd());
-
-            task.setPlannedStart(req.getPlannedStart() != null ? req.getPlannedStart() : task.getBaselineStart());
-            task.setPlannedEnd(req.getPlannedEnd() != null ? req.getPlannedEnd() : task.getBaselineEnd());
-
-            if (task.getBaselineStart() != null && task.getBaselineEnd() == null) {
-                task.setBaselineEnd(task.getBaselineStart());
-            }
-
-            if (task.getPlannedStart() != null && task.getPlannedEnd() == null) {
-                task.setPlannedEnd(task.getPlannedStart());
-            }
-
-            task.setActualStart(req.getActualStart());
-            task.setActualEnd(req.getActualEnd());
-
-            task.setDurationDays(
-                    req.getDurationDays() != null
-                            ? req.getDurationDays()
-                            : calculateImportedDuration(task)
-            );
-
-            task.setPercentComplete(req.getPercentComplete() != null ? req.getPercentComplete() : 0);
-            task.setAllocationPercent(req.getAllocationPercent() != null ? req.getAllocationPercent() : 100);
-            task.setPriority(req.getPriority() != null ? req.getPriority() : 500);
-
-            task.setWbsCode(req.getWbsCode());
-            task.setDepartmentCode(req.getDepartmentCode());
-            task.setResourceType(req.getResourceType());
-
-            task.setActive(req.getActive() != null ? req.getActive() : true);
-            task.setDisplayOrder(req.getDisplayOrder() != null ? req.getDisplayOrder() : i + 1);
-            task.setOutlineLevel(req.getOutlineLevel() != null ? req.getOutlineLevel() : 1);
-            task.setCustomerMilestone(req.getCustomerMilestone() != null ? req.getCustomerMilestone() : false);
-
-            task.setScheduleMode(req.getScheduleMode() != null ? req.getScheduleMode() : "AUTO");
-            task.setStatus(req.getStatus() != null ? req.getStatus() : "NOT_STARTED");
-            task.setColor(req.getColor());
-
-            if ("MILESTONE".equalsIgnoreCase(task.getTaskType())) {
-                task.setDurationDays(0);
-
-                if (task.getBaselineStart() != null) {
-                    task.setBaselineEnd(task.getBaselineStart());
-                }
-
-                if (task.getPlannedStart() != null) {
-                    task.setPlannedEnd(task.getPlannedStart());
-                }
-            }
-
-            savedTasks.add(projectTaskRepository.save(task));
-        }
-
-        rebuildStructureFromParentId(projectId);
-        rollupSummaries(projectId);
-
-        return projectTaskRepository
-                .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId)
-                .stream()
-                .map(this::mapToResponse)
-                .toList();
-    }
-
-    private Integer calculateImportedDuration(ProjectTask task) {
-
-        if ("MILESTONE".equalsIgnoreCase(task.getTaskType())) {
-            return 0;
-        }
-
-        if (task.getBaselineStart() == null || task.getBaselineEnd() == null) {
-            return 1;
-        }
-
-        long days = ChronoUnit.DAYS.between(
-                task.getBaselineStart(),
-                task.getBaselineEnd()
-        ) + 1;
-
-        return Math.max(1, (int) days);
     }
 }

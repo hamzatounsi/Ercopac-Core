@@ -21,7 +21,11 @@ public class ChangeRequestAttachment {
     private String contentType;
 
     private Long fileSize;
+    @Column(name = "data", columnDefinition = "BYTEA")
+    private byte[] data;
 
+    public byte[] getData() { return data; }
+    public void setData(byte[] data) { this.data = data; }
     public ChangeRequestAttachment() {}
 
     public Long getId() { return id; }
