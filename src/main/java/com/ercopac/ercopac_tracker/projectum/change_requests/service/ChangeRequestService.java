@@ -15,7 +15,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
-
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
 @Service
 @Transactional
 public class ChangeRequestService {
@@ -218,5 +221,56 @@ public class ChangeRequestService {
     private String currentActor() {
         String username = securityUtils.getCurrentUsername();
         return username == null || username.isBlank() ? "User" : username;
+    }
+    public List<ChangeRequestAttachmentDto> uploadAttachments(Long projectId, Long crId, List<MultipartFile> files) {
+        ChangeRequest cr = getAccessibleChangeRequest(projectId, crId);
+
+        for (MultipartFile file : files) {
+            try {
+                ChangeRequestAttachment att = new ChangeRequestAttachment();
+                att.setChangeRequest(cr);
+                att.setFileName(file.getOriginalFilename());
+                att.setContentType(file.getContentType());
+                att.setFileSize(file.getSize());
+                att.setData(file.getBytes());
+                cr.getAttachments().add(att);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to read file: " + file.getOriginalFilename());
+            }
+        }
+
+        ChangeRequest saved = changeRequestRepository.save(cr);
+        return saved.getAttachments().stream().map(this::toAttachmentDto).toList();
+    }
+
+    public ChangeRequestAttachmentDownload downloadAttachment(Long projectId, Long crId, Long attachmentId) {
+        ChangeRequest cr = getAccessibleChangeRequest(projectId, crId);
+
+        ChangeRequestAttachment att = cr.getAttachments().stream()
+            .filter(a -> a.getId().equals(attachmentId))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Attachment not found"));
+
+        return new ChangeRequestAttachmentDownload(
+            att.getFileName(),
+            new ByteArrayResource(att.getData())
+        );
+    }
+
+    public void deleteAttachment(Long projectId, Long crId, Long attachmentId) {
+        ChangeRequest cr = getAccessibleChangeRequest(projectId, crId);
+
+        cr.getAttachments().removeIf(a -> a.getId().equals(attachmentId));
+        changeRequestRepository.save(cr);
+    }
+
+    private ChangeRequest getAccessibleChangeRequest(Long projectId, Long crId) {
+        Project project = getAccessibleProject(projectId);
+        return securityUtils.isPlatformUser()
+            ? changeRequestRepository.findById(crId)
+                .orElseThrow(() -> new IllegalArgumentException("Change request not found"))
+            : changeRequestRepository.findByIdAndProjectIdAndOrganisationId(
+                crId, projectId, project.getOrganisation().getId())
+                .orElseThrow(() -> new IllegalArgumentException("Change request not found"));
     }
 }
