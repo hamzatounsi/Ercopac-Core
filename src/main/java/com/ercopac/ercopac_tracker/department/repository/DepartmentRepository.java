@@ -15,4 +15,6 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
     List<Department> findByOrganisation_IdOrderByCodeAsc(Long organisationId);
 
     boolean existsByCodeAndOrganisation_Id(String code, Long organisationId);
+    List<Department> findByOrganisationIdOrderByCodeAsc(Long organisationId);
+    Optional<Department> findByCodeAndOrganisationId(String code, Long organisationId);
 }

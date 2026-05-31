@@ -9,7 +9,7 @@ public interface ResourceTypeRepository extends JpaRepository<ResourceType, Long
 
     Optional<ResourceType> findByCodeAndOrganisation_Id(String code, Long organisationId);
 
-    Optional<ResourceType> findByCodeAndOrganisationId(String code, Long organisationId);
+    
 
     Optional<ResourceType> findByIdAndOrganisation_Id(Long id, Long organisationId);
 
@@ -20,4 +20,6 @@ public interface ResourceTypeRepository extends JpaRepository<ResourceType, Long
     boolean existsByCodeAndOrganisation_Id(String code, Long organisationId);
     List<ResourceType> findByOrganisation_IdAndActiveTrue(Long organisationId);
     
+    List<ResourceType> findByOrganisationIdAndActiveTrueOrderByCodeAsc(Long organisationId);
+    Optional<ResourceType> findByCodeAndOrganisationId(String code, Long organisationId);
 }

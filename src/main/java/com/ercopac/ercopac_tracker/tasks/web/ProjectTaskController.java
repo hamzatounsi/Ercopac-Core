@@ -1,11 +1,14 @@
 package com.ercopac.ercopac_tracker.tasks.web;
 
+import com.ercopac.ercopac_tracker.department.dto.DepartmentDto;
 import com.ercopac.ercopac_tracker.tasks.dto.CreateTaskRequest;
 import com.ercopac.ercopac_tracker.tasks.dto.ImportScheduleRequest;
 import com.ercopac.ercopac_tracker.tasks.dto.ProjectScheduleTaskResponse;
 import com.ercopac.ercopac_tracker.tasks.dto.ResourceUserDto;
 import com.ercopac.ercopac_tracker.tasks.dto.UpdateProjectTaskRequest;
 import com.ercopac.ercopac_tracker.tasks.service.ProjectTaskService;
+import com.ercopac.ercopac_tracker.user.ResourceTypeDto;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +29,18 @@ public class ProjectTaskController {
         this.projectTaskService = projectTaskService;
     }
 
+@GetMapping("/projects/{projectId}/resource-types")
+public ResponseEntity<List<ResourceTypeDto>> getResourceTypes(
+        @PathVariable Long projectId) {
+    return ResponseEntity.ok(projectTaskService.getResourceTypesForProject(projectId));
+}
+ 
+@GetMapping("/projects/{projectId}/departments")
+public ResponseEntity<List<DepartmentDto>> getDepartments(
+        @PathVariable Long projectId) {
+    return ResponseEntity.ok(projectTaskService.getDepartmentsForProject(projectId));
+}
+ 
     @PutMapping("/api/projects/{projectId}/tasks/{taskId}")
     @PreAuthorize(TASKS_WRITE)
     public ResponseEntity<ProjectScheduleTaskResponse> updateTask(
