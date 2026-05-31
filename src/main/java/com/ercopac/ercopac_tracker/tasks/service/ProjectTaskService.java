@@ -1,5 +1,7 @@
 package com.ercopac.ercopac_tracker.tasks.service;
 
+import com.ercopac.ercopac_tracker.department.dto.DepartmentDto;
+import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
@@ -12,6 +14,8 @@ import com.ercopac.ercopac_tracker.tasks.dto.UpdateProjectTaskRequest;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskDependencyRepository;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository;
+import com.ercopac.ercopac_tracker.user.ResourceTypeDto;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import jakarta.transaction.Transactional;
 
@@ -36,6 +40,8 @@ public class ProjectTaskService {
     private final TaskSchedulingService            taskSchedulingService;
     private final ProjectTaskHistoryService        historyService;
     private final TaskConsoleService               taskConsoleService;
+    private final ResourceTypeRepository           resourceTypeRepository;
+    private final DepartmentRepository             departmentRepository;
 
     public ProjectTaskService(
             ProjectTaskRepository projectTaskRepository,
@@ -45,7 +51,9 @@ public class ProjectTaskService {
             TaskResourceAssignmentRepository taskResourceAssignmentRepository,
             TaskSchedulingService taskSchedulingService,
             ProjectTaskHistoryService historyService,
-            TaskConsoleService taskConsoleService) {
+            TaskConsoleService taskConsoleService,
+            ResourceTypeRepository resourceTypeRepository,
+            DepartmentRepository departmentRepository) {
         this.projectTaskRepository            = projectTaskRepository;
         this.projectRepository                = projectRepository;
         this.userRepository                   = userRepository;
@@ -54,6 +62,8 @@ public class ProjectTaskService {
         this.taskSchedulingService            = taskSchedulingService;
         this.historyService                   = historyService;
         this.taskConsoleService               = taskConsoleService;
+        this.resourceTypeRepository           = resourceTypeRepository;
+        this.departmentRepository             = departmentRepository;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -83,8 +93,6 @@ public class ProjectTaskService {
         task.setAllocationPercent(request.getAllocationPercent());
         task.setPriority(request.getPriority());
         task.setWbsCode(request.getWbsCode());
-        task.setDepartmentCode(request.getDepartmentCode());
-        task.setResourceType(request.getResourceType());
         task.setActive(request.getActive());
         task.setDisplayOrder(request.getDisplayOrder());
         task.setOutlineLevel(request.getOutlineLevel());
@@ -93,40 +101,71 @@ public class ProjectTaskService {
         task.setStatus(request.getStatus());
         task.setColor(request.getColor());
 
-        // FIX #3: parentId set directly from request — never rebuilt from wbsCode
+        // parentId set directly from request
         if (request.getParentId() != null) {
             task.setParentId(request.getParentId());
         } else {
-            // explicitly null means root task
             task.setParentId(null);
         }
 
+        // Assigned user — sync department from user
         if (request.getAssignedUserId() != null) {
-            userRepository.findById(request.getAssignedUserId())
-                    .ifPresent(task::setAssignedUser);
+            userRepository.findById(request.getAssignedUserId()).ifPresent(user -> {
+                task.setAssignedUser(user);
+                if (user.getDepartment() != null) {
+                    task.setDepartment(user.getDepartment());
+                } else if (user.getDepartmentCode() != null) {
+                    task.setDepartmentCode(user.getDepartmentCode());
+                }
+            });
         } else {
             task.setAssignedUser(null);
         }
 
-        // FIX #4: correct duration/dates resolution
+        // Resolve resourceType FK from code string sent by frontend
+        if (request.getResourceType() != null && !request.getResourceType().isBlank()) {
+            Long orgId = getOrganisationIdFromSecurityContext();
+            if (orgId != null) {
+                resourceTypeRepository.findByCodeAndOrganisationId(
+                    request.getResourceType(), orgId)
+                    .ifPresent(task::setResourceType);
+            } else {
+                task.setResourceTypeCode(request.getResourceType());
+            }
+        } else {
+            task.setResourceType(null);
+            task.setResourceTypeCode(null);
+        }
+
+        // Resolve department FK from code string sent by frontend
+        if (task.getDepartment() == null &&
+            request.getDepartmentCode() != null &&
+            !request.getDepartmentCode().isBlank()) {
+            Long orgId = getOrganisationIdFromSecurityContext();
+            if (orgId != null) {
+                departmentRepository.findByCodeAndOrganisationId(
+                    request.getDepartmentCode(), orgId)
+                    .ifPresent(task::setDepartment);
+            } else {
+                task.setDepartmentCode(request.getDepartmentCode());
+            }
+        }
+
         resolveDatesAndDuration(task, request);
         normalizeMilestone(task);
 
         Long projectId = task.getProjectId();
 
         historyService.logTaskUpdate(
-                oldTask,
-                task,
+                oldTask, task,
                 getOrganisationIdFromSecurityContext(),
                 getUserIdFromSecurityContext(),
                 getUsernameFromSecurityContext()
         );
 
         ProjectTask saved = projectTaskRepository.save(task);
-
         Integer newPercent = saved.getPercentComplete() != null ? saved.getPercentComplete() : 0;
 
-        // FIX #3: removed rebuildParentIds() — parentId comes from frontend only
         rollupSummaries(projectId);
         taskSchedulingService.rescheduleFromTask(projectId, saved.getId());
 
@@ -135,9 +174,7 @@ public class ProjectTaskService {
 
         try {
             taskConsoleService.checkProgressNotifications(
-                    finalTask,
-                    oldPercent,
-                    newPercent,
+                    finalTask, oldPercent, newPercent,
                     getOrganisationIdFromSecurityContext(),
                     getUserIdFromSecurityContext(),
                     getUsernameFromSecurityContext()
@@ -147,6 +184,35 @@ public class ProjectTaskService {
         }
 
         return mapToResponse(finalTask);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // RESOURCE TYPES & DEPARTMENTS
+    // ══════════════════════════════════════════════════════════════
+    public List<ResourceTypeDto> getResourceTypesForProject(Long projectId) {
+        Long orgId = getOrgIdForProject(projectId);
+        if (orgId == null) return List.of();
+        return resourceTypeRepository
+            .findByOrganisationIdAndActiveTrueOrderByCodeAsc(orgId)
+            .stream()
+            .map(rt -> new ResourceTypeDto(rt.getId(), rt.getCode(), rt.getLabel(), rt.getColour()))
+            .collect(Collectors.toList());
+    }
+
+    public List<DepartmentDto> getDepartmentsForProject(Long projectId) {
+        Long orgId = getOrgIdForProject(projectId);
+        if (orgId == null) return List.of();
+        return departmentRepository
+            .findByOrganisationIdOrderByCodeAsc(orgId)
+            .stream()
+            .map(d -> new DepartmentDto(d.getId(), d.getCode(), d.getLabel()))
+            .collect(Collectors.toList());
+    }
+
+    private Long getOrgIdForProject(Long projectId) {
+        return projectRepository.findById(projectId)
+            .map(p -> p.getOrganisation() != null ? p.getOrganisation().getId() : null)
+            .orElse(null);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -192,7 +258,6 @@ public class ProjectTaskService {
 
         normalizeMilestone(task);
         ProjectTask saved = projectTaskRepository.save(task);
-
         Integer newPercent = saved.getPercentComplete() != null ? saved.getPercentComplete() : 0;
 
         taskConsoleService.checkProgressNotifications(
@@ -265,8 +330,11 @@ public class ProjectTaskService {
             copy.setPercentComplete(0);
             copy.setPriority(orig.getPriority());
             copy.setWbsCode(null);
-            copy.setDepartmentCode(orig.getDepartmentCode());
+            // FIX: copy FK entity + string code separately
             copy.setResourceType(orig.getResourceType());
+            copy.setResourceTypeCode(orig.getResourceTypeCode());
+            copy.setDepartment(orig.getDepartment());
+            copy.setDepartmentCode(orig.getDepartmentCode());
             copy.setScheduleMode(orig.getScheduleMode() != null ? orig.getScheduleMode() : "AUTO");
             copy.setActive(orig.getActive());
             copy.setDisplayOrder(lastOrder + 1 + i);
@@ -360,10 +428,7 @@ public class ProjectTaskService {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // FIX #5: ROLLUP SUMMARIES
-    // Summary duration = sum of direct children durations (not editable)
-    // Summary dates = min(childStart) to max(childEnd)
-    // Summary % = weighted average by duration
+    // ROLLUP SUMMARIES
     // ══════════════════════════════════════════════════════════════
     public void rollupSummariesPublic(Long projectId) {
         rollupSummaries(projectId);
@@ -378,9 +443,11 @@ public class ProjectTaskService {
                 .mapToInt(t -> t.getOutlineLevel() != null ? t.getOutlineLevel() : 1)
                 .max().orElse(1);
 
-        // Process deepest summaries first (bottom-up)
         for (int level = maxLevel; level >= 1; level--) {
             final int currentLevel = level;
+
+            tasks = projectTaskRepository
+                    .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
             List<ProjectTask> summaries = tasks.stream()
                     .filter(t -> "SUMMARY".equalsIgnoreCase(t.getTaskType()))
                     .filter(t -> Objects.equals(
@@ -391,7 +458,6 @@ public class ProjectTaskService {
                 List<ProjectTask> children = getDirectChildren(summary, tasks);
                 if (children.isEmpty()) continue;
 
-                // Dates: min start to max end
                 Optional<LocalDate> minPlannedStart = children.stream()
                         .map(ProjectTask::getPlannedStart).filter(Objects::nonNull)
                         .min(Comparator.naturalOrder());
@@ -411,12 +477,10 @@ public class ProjectTaskService {
                         .map(ProjectTask::getActualEnd).filter(Objects::nonNull)
                         .max(Comparator.naturalOrder());
 
-                // FIX #5: Duration = sum of children durations
                 int totalDuration = children.stream()
                         .mapToInt(c -> c.getDurationDays() != null ? c.getDurationDays() : 0)
                         .sum();
 
-                // Weighted average progress
                 long totalWeight = children.stream()
                         .mapToLong(c -> c.getDurationDays() != null && c.getDurationDays() > 0
                                 ? c.getDurationDays() : 1)
@@ -444,20 +508,17 @@ public class ProjectTaskService {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // FIX #2: REBUILD STRUCTURE — recursive tree walk
-    // Prevents duplicate WBS codes
+    // REBUILD STRUCTURE
     // ══════════════════════════════════════════════════════════════
     private void rebuildStructureFromParentId(Long projectId) {
         List<ProjectTask> tasks = projectTaskRepository
                 .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
         if (tasks.isEmpty()) return;
 
-        // Step 1: reassign sequential displayOrder
         for (int i = 0; i < tasks.size(); i++) {
             tasks.get(i).setDisplayOrder(i + 1);
         }
 
-        // Step 2: build children map (preserving display order)
         Map<Long, List<ProjectTask>> childrenMap = new LinkedHashMap<>();
         List<ProjectTask> roots = new ArrayList<>();
 
@@ -471,10 +532,8 @@ public class ProjectTaskService {
             }
         }
 
-        // Step 3: recursively assign WBS codes
         assignWbsCodes(roots, childrenMap, "", 1);
 
-        // Step 4: save all
         for (ProjectTask task : tasks) {
             projectTaskRepository.save(task);
         }
@@ -503,10 +562,6 @@ public class ProjectTaskService {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // FIX #3: rebuildParentIds REMOVED — parentId comes from frontend
-    // ══════════════════════════════════════════════════════════════
-
-    // ══════════════════════════════════════════════════════════════
     // COLLECT SUBTREE
     // ══════════════════════════════════════════════════════════════
     private List<ProjectTask> collectSubtree(ProjectTask root, List<ProjectTask> allTasks) {
@@ -532,13 +587,11 @@ public class ProjectTaskService {
     // GET DIRECT CHILDREN
     // ══════════════════════════════════════════════════════════════
     private List<ProjectTask> getDirectChildren(ProjectTask parent, List<ProjectTask> allTasks) {
-        // Prefer parentId lookup (most reliable)
         List<ProjectTask> byParentId = allTasks.stream()
                 .filter(t -> parent.getId().equals(t.getParentId()))
                 .collect(Collectors.toList());
         if (!byParentId.isEmpty()) return byParentId;
 
-        // Fallback: outlineLevel + displayOrder
         int parentLevel = parent.getOutlineLevel() != null ? parent.getOutlineLevel() : 1;
         int childLevel = parentLevel + 1;
         List<ProjectTask> sorted = allTasks.stream()
@@ -570,53 +623,38 @@ public class ProjectTaskService {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // FIX #4: RESOLVE DATES & DURATION
-    // MILESTONE: always 0, dates locked
-    // SUMMARY: skip — handled by rollupSummaries
-    // ACTIVITY: duration drives end date if sent; else dates drive duration
+    // RESOLVE DATES & DURATION
     // ══════════════════════════════════════════════════════════════
     private void resolveDatesAndDuration(ProjectTask task, UpdateProjectTaskRequest req) {
         String type = (task.getTaskType() != null ? task.getTaskType() : "ACTIVITY").toUpperCase();
 
-        // MILESTONE — always 0, start = end
         if ("MILESTONE".equals(type)) {
             task.setDurationDays(0);
-            if (task.getPlannedStart() != null)   task.setPlannedEnd(task.getPlannedStart());
-            if (task.getBaselineStart() != null)  task.setBaselineEnd(task.getBaselineStart());
-            if (task.getActualStart() != null)    task.setActualEnd(task.getActualStart());
+            if (task.getPlannedStart() != null)  task.setPlannedEnd(task.getPlannedStart());
+            if (task.getBaselineStart() != null) task.setBaselineEnd(task.getBaselineStart());
+            if (task.getActualStart() != null)   task.setActualEnd(task.getActualStart());
             return;
         }
 
-        // SUMMARY — duration calculated by rollupSummaries, don't touch here
-        if ("SUMMARY".equals(type)) {
-            return;
-        }
+        if ("SUMMARY".equals(type)) return;
 
-        // ACTIVITY — user controls duration or dates
-        LocalDate plannedStart  = task.getPlannedStart();
-        LocalDate baselineStart = task.getBaselineStart();
+        LocalDate plannedStart    = task.getPlannedStart();
+        LocalDate baselineStart   = task.getBaselineStart();
         Integer requestedDuration = req.getDurationDays();
 
-        // Priority 1: duration explicitly sent AND > 0 → duration drives end date
         if (requestedDuration != null && requestedDuration > 0) {
             task.setDurationDays(requestedDuration);
-            if (plannedStart != null) {
-                task.setPlannedEnd(plannedStart.plusDays(requestedDuration - 1));
-            }
-            if (baselineStart != null) {
-                task.setBaselineEnd(baselineStart.plusDays(requestedDuration - 1));
-            }
+            if (plannedStart != null)  task.setPlannedEnd(plannedStart.plusDays(requestedDuration - 1));
+            if (baselineStart != null) task.setBaselineEnd(baselineStart.plusDays(requestedDuration - 1));
             return;
         }
 
-        // Priority 2: planned dates sent → dates drive duration
         if (plannedStart != null && task.getPlannedEnd() != null) {
             long days = ChronoUnit.DAYS.between(plannedStart, task.getPlannedEnd()) + 1;
             task.setDurationDays((int) Math.max(1, days));
             return;
         }
 
-        // Priority 3: baseline dates → calculate duration
         if (baselineStart != null && task.getBaselineEnd() != null) {
             long days = ChronoUnit.DAYS.between(baselineStart, task.getBaselineEnd()) + 1;
             task.setDurationDays((int) Math.max(1, days));
@@ -639,6 +677,18 @@ public class ProjectTaskService {
         List<TaskDependencyDto> depDtos = deps.stream()
                 .map(this::toDependencyDto).collect(Collectors.toList());
 
+        // FIX: use getResourceTypeCode() — returns String code from FK or fallback string
+        String resourceTypeCode = task.getResourceTypeCode() != null && !task.getResourceTypeCode().isBlank()
+                ? task.getResourceTypeCode()
+                : (task.getAssignedUser() != null && task.getAssignedUser().getResourceType() != null
+                    ? task.getAssignedUser().getResourceType().getCode() : null);
+
+        // FIX: use getDepartmentCode() — returns String code from FK or fallback string
+        String departmentCode = task.getDepartmentCode() != null && !task.getDepartmentCode().isBlank()
+                ? task.getDepartmentCode()
+                : (task.getAssignedUser() != null
+                    ? task.getAssignedUser().getDepartmentCode() : null);
+
         return new ProjectScheduleTaskResponse()
                 .setId(task.getId())
                 .setProjectId(task.getProjectId())
@@ -648,8 +698,8 @@ public class ProjectTaskService {
                 .setName(task.getName())
                 .setDescription(task.getDescription())
                 .setTaskType(task.getTaskType())
-                .setDepartmentCode(task.getDepartmentCode())
-                .setResourceType(task.getResourceType())
+                .setDepartmentCode(departmentCode)
+                .setResourceType(resourceTypeCode)
                 .setBaselineStart(task.getBaselineStart())
                 .setBaselineEnd(task.getBaselineEnd())
                 .setPlannedStart(task.getPlannedStart())
@@ -724,7 +774,8 @@ public class ProjectTaskService {
             task.setPriority(req.getPriority() != null ? req.getPriority() : 500);
             task.setWbsCode(req.getWbsCode());
             task.setDepartmentCode(req.getDepartmentCode());
-            task.setResourceType(req.getResourceType());
+            // FIX: use setResourceTypeCode for String from request
+            task.setResourceTypeCode(req.getResourceType());
             task.setActive(req.getActive() != null ? req.getActive() : true);
             task.setDisplayOrder(req.getDisplayOrder() != null ? req.getDisplayOrder() : i + 1);
             task.setOutlineLevel(req.getOutlineLevel() != null ? req.getOutlineLevel() : 1);
@@ -795,7 +846,9 @@ public class ProjectTaskService {
         copy.setDurationDays(source.getDurationDays());
         copy.setPercentComplete(source.getPercentComplete());
         copy.setDepartmentCode(source.getDepartmentCode());
+        // FIX: copy both FK entity and string code
         copy.setResourceType(source.getResourceType());
+        copy.setResourceTypeCode(source.getResourceTypeCode());
         copy.setCustomerMilestone(source.getCustomerMilestone());
         return copy;
     }

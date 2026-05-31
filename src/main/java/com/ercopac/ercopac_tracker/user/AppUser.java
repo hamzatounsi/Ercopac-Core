@@ -1,8 +1,8 @@
 package com.ercopac.ercopac_tracker.user;
 
+import com.ercopac.ercopac_tracker.department.domain.Department;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import jakarta.persistence.*;
-
 import java.math.BigDecimal;
 
 @Entity
@@ -33,13 +33,18 @@ public class AppUser {
     @Column(name = "employee_code", length = 40)
     private String employeeCode;
 
+    // ── PROPER FK to Department ─────────────────────────────────
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
+
+    // ── KEPT for backward compat ────────────────────────────────
     @Column(name = "department_code", length = 30)
     private String departmentCode;
 
     @Column(name = "job_title", length = 80)
     private String jobTitle;
 
- // Add this:
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "resource_type_id")
     private ResourceType resourceType;
@@ -79,16 +84,7 @@ public class AppUser {
 
     private Boolean emailNotificationsEnabled = true;
 
-    public Boolean getEmailNotificationsEnabled() {
-        return emailNotificationsEnabled;
-    }
-
-    public void setEmailNotificationsEnabled(Boolean emailNotificationsEnabled) {
-        this.emailNotificationsEnabled = emailNotificationsEnabled;
-    }
-
-    public AppUser() {
-    }
+    public AppUser() {}
 
     public AppUser(String fullName, String email, String passwordHash, Role role) {
         this.fullName = fullName;
@@ -102,165 +98,61 @@ public class AppUser {
         this.workdays = "MON-FRI";
     }
 
-    public Long getId() {
-        return id;
+    public Long getId() { return id; }
+    public String getFullName() { return fullName; }
+    public void setFullName(String fullName) { this.fullName = fullName; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+    public String getPasswordHash() { return passwordHash; }
+    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+    public Role getRole() { return role; }
+    public void setRole(Role role) { this.role = role; }
+    public Organisation getOrganisation() { return organisation; }
+    public void setOrganisation(Organisation organisation) { this.organisation = organisation; }
+    public String getEmployeeCode() { return employeeCode; }
+    public void setEmployeeCode(String employeeCode) { this.employeeCode = employeeCode; }
+
+    // Department FK — keeps departmentCode string in sync
+    public Department getDepartment() { return department; }
+    public void setDepartment(Department department) {
+        this.department = department;
+        this.departmentCode = department != null ? department.getCode() : null;
     }
 
-    public String getFullName() {
-        return fullName;
-    }
-
-    public void setFullName(String fullName) {
-        this.fullName = fullName;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public void setPasswordHash(String passwordHash) {
-        this.passwordHash = passwordHash;
-    }
-
-    public Role getRole() {
-        return role;
-    }
-
-    public void setRole(Role role) {
-        this.role = role;
-    }
-
-    public Organisation getOrganisation() {
-        return organisation;
-    }
-
-    public void setOrganisation(Organisation organisation) {
-        this.organisation = organisation;
-    }
-
-    public String getEmployeeCode() {
-        return employeeCode;
-    }
-
-    public void setEmployeeCode(String employeeCode) {
-        this.employeeCode = employeeCode;
-    }
-
+    // departmentCode string — derived from FK
     public String getDepartmentCode() {
+        if (department != null) return department.getCode();
         return departmentCode;
     }
+    public void setDepartmentCode(String departmentCode) { this.departmentCode = departmentCode; }
 
-    public void setDepartmentCode(String departmentCode) {
-        this.departmentCode = departmentCode;
-    }
-
-    public String getJobTitle() {
-        return jobTitle;
-    }
-
-    public void setJobTitle(String jobTitle) {
-        this.jobTitle = jobTitle;
-    }
-
+    public String getJobTitle() { return jobTitle; }
+    public void setJobTitle(String jobTitle) { this.jobTitle = jobTitle; }
     public ResourceType getResourceType() { return resourceType; }
     public void setResourceType(ResourceType resourceType) { this.resourceType = resourceType; }
-    public String getSeniority() {
-        return seniority;
-    }
-
-    public void setSeniority(String seniority) {
-        this.seniority = seniority;
-    }
-
-    public Integer getHoursPerDay() {
-        return hoursPerDay;
-    }
-
-    public void setHoursPerDay(Integer hoursPerDay) {
-        this.hoursPerDay = hoursPerDay;
-    }
-
-    public Integer getDaysPerWeek() {
-        return daysPerWeek;
-    }
-
-    public void setDaysPerWeek(Integer daysPerWeek) {
-        this.daysPerWeek = daysPerWeek;
-    }
-
-    public String getWorkdays() {
-        return workdays;
-    }
-
-    public void setWorkdays(String workdays) {
-        this.workdays = workdays;
-    }
-
-    public String getColor() {
-        return color;
-    }
-
-    public void setColor(String color) {
-        this.color = color;
-    }
-
-    public boolean isInternalUser() {
-        return internalUser;
-    }
-
-    public void setInternalUser(boolean internalUser) {
-        this.internalUser = internalUser;
-    }
-
-    public BigDecimal getDefaultRate() {
-        return defaultRate;
-    }
-
-    public void setDefaultRate(BigDecimal defaultRate) {
-        this.defaultRate = defaultRate;
-    }
-
-    public String getRateType() {
-        return rateType;
-    }
-
-    public void setRateType(String rateType) {
-        this.rateType = rateType;
-    }
-
-    public String getCurrency() {
-        return currency;
-    }
-
-    public void setCurrency(String currency) {
-        this.currency = currency;
-    }
-
-    public String getNotes() {
-        return notes;
-    }
-
-    public void setNotes(String notes) {
-        this.notes = notes;
-    }
-
-    public boolean isActive() {
-        return active;
-    }
-
-    public void setActive(boolean active) {
-        this.active = active;
-    }
-
-    public String getUsername() {
-        return email;
-    }
+    public String getSeniority() { return seniority; }
+    public void setSeniority(String seniority) { this.seniority = seniority; }
+    public Integer getHoursPerDay() { return hoursPerDay; }
+    public void setHoursPerDay(Integer hoursPerDay) { this.hoursPerDay = hoursPerDay; }
+    public Integer getDaysPerWeek() { return daysPerWeek; }
+    public void setDaysPerWeek(Integer daysPerWeek) { this.daysPerWeek = daysPerWeek; }
+    public String getWorkdays() { return workdays; }
+    public void setWorkdays(String workdays) { this.workdays = workdays; }
+    public String getColor() { return color; }
+    public void setColor(String color) { this.color = color; }
+    public boolean isInternalUser() { return internalUser; }
+    public void setInternalUser(boolean internalUser) { this.internalUser = internalUser; }
+    public BigDecimal getDefaultRate() { return defaultRate; }
+    public void setDefaultRate(BigDecimal defaultRate) { this.defaultRate = defaultRate; }
+    public String getRateType() { return rateType; }
+    public void setRateType(String rateType) { this.rateType = rateType; }
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
+    public Boolean getEmailNotificationsEnabled() { return emailNotificationsEnabled; }
+    public void setEmailNotificationsEnabled(Boolean v) { this.emailNotificationsEnabled = v; }
+    public String getUsername() { return email; }
 }

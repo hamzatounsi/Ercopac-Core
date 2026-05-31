@@ -452,7 +452,7 @@ public void recalculateLabourRowsFromTasks(Long projectId) {
             return task.getAssignedUser().getDefaultRate();
         }
 
-        String resourceType = task.getResourceType();
+        String resourceType = task.getResourceTypeCode();
 
         if ((resourceType == null || resourceType.isBlank()) && task.getAssignedUser() != null) {
             resourceType = task.getAssignedUser().getResourceType() != null

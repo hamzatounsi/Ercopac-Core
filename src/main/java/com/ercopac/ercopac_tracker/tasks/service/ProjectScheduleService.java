@@ -79,7 +79,7 @@ public class ProjectScheduleService {
                 .setTaskType(task.getTaskType())
                 .setWbsCode(task.getWbsCode())
                 .setDepartmentCode(task.getDepartmentCode())
-                .setResourceType(task.getResourceType())
+                .setResourceType(task.getResourceTypeCode())
                 .setActive(task.getActive())
                 .setDisplayOrder(task.getDisplayOrder())
                 .setOutlineLevel(task.getOutlineLevel())
