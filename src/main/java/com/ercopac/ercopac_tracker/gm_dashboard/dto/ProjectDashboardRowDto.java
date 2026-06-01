@@ -34,6 +34,15 @@ public class ProjectDashboardRowDto {
 
     private Boolean archived;
     private String timeHealth;
+    private String applicationType;
+
+    public String getApplicationType() {
+        return applicationType;
+    }
+
+    public void setApplicationType(String applicationType) {
+        this.applicationType = applicationType;
+    }
 
     public ProjectDashboardRowDto() {
     }

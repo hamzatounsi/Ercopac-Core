@@ -44,6 +44,16 @@ public class Project {
     private String salesManagerName;
     private Boolean archived = false;
     private Integer progress = 0;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ProjectApplicationType applicationType = ProjectApplicationType.PROJECTUM;
+
+    public ProjectApplicationType getApplicationType() {
+        return applicationType;
+    }
+    public void setApplicationType(ProjectApplicationType applicationType) {
+        this.applicationType = applicationType;
+    }
     public String getCustomer() {
         return customer;
     }
