@@ -3,6 +3,7 @@ package com.ercopac.ercopac_tracker.gm_dashboard.service;
 import com.ercopac.ercopac_tracker.gm_dashboard.dto.ProjectDashboardRowDto;
 import com.ercopac.ercopac_tracker.kpi.domain.HealthStatus;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
+import com.ercopac.ercopac_tracker.projects.domain.ProjectApplicationType;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import org.springframework.stereotype.Service;
@@ -23,10 +24,11 @@ public class GmDashboardService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProjectDashboardRowDto> getProjects() {
+    public List<ProjectDashboardRowDto> getProjects(String applicationType) {
         LocalDate today = LocalDate.now();
+        ProjectApplicationType type = ProjectApplicationType.valueOf(applicationType.toUpperCase());
 
-        return getAccessibleProjects()
+        return getAccessibleProjects(type)
                 .stream()
                 .map(p -> {
                     ProjectDashboardRowDto dto = new ProjectDashboardRowDto();
@@ -50,13 +52,19 @@ public class GmDashboardService {
                     dto.setEstimatedCost(p.getEstimatedCost());
                     dto.setArchived(p.getArchived());
                     dto.setTimeHealth(computeTimeHealth(p.getPlannedEnd(), today).name());
+                    dto.setApplicationType(
+                        p.getApplicationType() != null ? p.getApplicationType().name() : "PROJECTUM"
+                    );
                     return dto;
                 })
                 .toList();
     }
-    private List<Project> getAccessibleProjects() {
+    private List<Project> getAccessibleProjects(ProjectApplicationType applicationType) {
         if (securityUtils.isPlatformUser()) {
-            return projectRepository.findAll();
+            return projectRepository.findAll()
+                    .stream()
+                    .filter(p -> p.getApplicationType() == applicationType)
+                    .toList();
         }
 
         Long organisationId = securityUtils.getCurrentOrganisationId();
@@ -64,7 +72,10 @@ public class GmDashboardService {
             throw new IllegalStateException("No organisation context found for current user.");
         }
 
-        return projectRepository.findAllByOrganisationId(organisationId);
+        return projectRepository.findAllByOrganisationIdAndApplicationType(
+                organisationId,
+                applicationType
+        );
     }
 
     private HealthStatus computeTimeHealth(LocalDate plannedEnd, LocalDate today) {
