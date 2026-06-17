@@ -298,5 +298,65 @@ public class FinanceSettingsService {
         return value == null ? BigDecimal.ZERO : value;
     }
 
+    public FinanceSettingsDto importWbsTemplate(ImportFinanceWbsTemplateRequest request) {
+    Long orgId = requireOrganisationId();
+
+    Organisation organisation = organisationRepository.findById(orgId)
+            .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
+
+    if (request.getRows() == null || request.getRows().isEmpty()) {
+        throw new IllegalArgumentException("Import file contains no WBS rows");
+    }
+
+    if (request.isReplaceExisting()) {
+        templateRowRepository.deleteAllByOrganisationId(orgId);
+    }
+
+    int startSort = request.isReplaceExisting()
+            ? 0
+            : templateRowRepository.findAllByOrganisationIdOrderBySortOrderAscIdAsc(orgId).size();
+
+    int index = 1;
+
+    for (FinanceWbsTemplateRowDto dto : request.getRows()) {
+        if (dto.getCodeTemplate() == null || dto.getCodeTemplate().isBlank()) {
+            continue;
+        }
+
+        FinanceWbsTemplateRow row = new FinanceWbsTemplateRow();
+        row.setOrganisation(organisation);
+        row.setSortOrder(startSort + index);
+        row.setLevel(dto.getLevel() == null ? detectLevel(dto.getCodeTemplate()) : dto.getLevel());
+        row.setCodeTemplate(dto.getCodeTemplate().trim());
+        row.setDescription(blankToNull(dto.getDescription()));
+        row.setType(dto.getType() == null ? FinanceWbsRowType.COST : dto.getType());
+        row.setOwnerKey(blankToNull(dto.getOwnerKey()));
+        row.setHourRate(dto.getHourRate());
+
+        templateRowRepository.save(row);
+        index++;
+    }
+
+    return getSettings();
+}
+
+private int detectLevel(String code) {
+    if (code == null || code.isBlank()) {
+        return 1;
+    }
+
+    String cleaned = code.trim();
+
+    if (cleaned.contains(".")) {
+        return Math.max(1, cleaned.split("\\.").length);
+    }
+
+    if (cleaned.contains("-")) {
+        return Math.max(1, cleaned.split("-").length - 1);
+    }
+
+    return 1;
+}
+
     
 }

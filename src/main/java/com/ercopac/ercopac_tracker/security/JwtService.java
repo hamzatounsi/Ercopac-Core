@@ -15,12 +15,19 @@ public class JwtService {
     private static final String SECRET =
             "CHANGE_ME_TO_A_LONG_RANDOM_SECRET_KEY_1234567890";
 
-    public String generateToken(Long userId, String username, String role, Long organisationId) {
+    public String generateToken(
+            Long userId,
+            String username,
+            String role,
+            Long organisationId,
+            String organisationName
+    ) {
         return Jwts.builder()
                 .setSubject(username)
                 .claim("userId", userId)
                 .claim("role", role)
                 .claim("organisationId", organisationId)
+                .claim("organisationName", organisationName)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 6))
                 .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)), SignatureAlgorithm.HS256)
@@ -52,5 +59,10 @@ public class JwtService {
     public Long extractOrganisationId(String token) {
         Object value = parseClaims(token).get("organisationId");
         return value == null ? null : Long.valueOf(value.toString());
+    }
+
+    public String extractOrganisationName(String token) {
+        Object value = parseClaims(token).get("organisationName");
+        return value == null ? null : value.toString();
     }
 }
