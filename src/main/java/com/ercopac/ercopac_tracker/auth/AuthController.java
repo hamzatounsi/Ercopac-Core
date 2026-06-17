@@ -1,5 +1,7 @@
 package com.ercopac.ercopac_tracker.auth;
 
+import com.ercopac.ercopac_tracker.auth.AuthDtos.LoginRequest;
+import com.ercopac.ercopac_tracker.auth.AuthDtos.LoginResponse;
 import com.ercopac.ercopac_tracker.security.JwtService;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.UserRepository;
@@ -42,7 +44,8 @@ public class AuthController {
                 user.getId(),
                 user.getEmail(),
                 user.getRole().name(),
-                organisationId
+                user.getOrganisation() != null ? user.getOrganisation().getId() : null,
+                user.getOrganisation() != null ? user.getOrganisation().getName() : null
         );
 
         return new LoginResponse(

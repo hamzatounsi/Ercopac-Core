@@ -3,6 +3,7 @@ package com.ercopac.ercopac_tracker.projectum.finance.settings.web;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.ApplyFinanceTemplateRequest;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.ApplyFinanceTemplateResultDto;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.FinanceSettingsDto;
+import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.ImportFinanceWbsTemplateRequest;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.SaveFinanceSettingsRequest;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.service.FinanceSettingsService;
 import jakarta.validation.Valid;
@@ -36,5 +37,12 @@ public class FinanceSettingsController {
             @RequestBody ApplyFinanceTemplateRequest request
     ) {
         return ResponseEntity.ok(financeSettingsService.applyTemplate(request));
+    }
+
+    @PostMapping("/import-wbs")
+    public ResponseEntity<FinanceSettingsDto> importWbsTemplate(
+            @Valid @RequestBody ImportFinanceWbsTemplateRequest request
+    ) {
+        return ResponseEntity.ok(financeSettingsService.importWbsTemplate(request));
     }
 }
