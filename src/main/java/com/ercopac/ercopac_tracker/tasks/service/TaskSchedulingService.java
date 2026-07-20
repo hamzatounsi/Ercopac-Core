@@ -12,9 +12,17 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * FIX: TaskSchedulingService now calls rollupSummaries() after cascading
- * so parent SUMMARY tasks update their dates and progress automatically
- * whenever a child task moves due to a dependency.
+ * Cascades date changes across task dependencies using a topological BFS.
+ *
+ * Two independent cascades run for each dependency edge:
+ *  1. Baseline/Planned cascade — the working schedule. The successor SLIDES
+ *     with the predecessor in both directions (earlier or later), not just
+ *     pushed forward.
+ *  2. Actual cascade — derived from the PREDECESSOR's actual dates, not
+ *     baseline. Only runs if the predecessor actually has real progress
+ *     recorded (actualStart/actualEnd set). Same bidirectional slide.
+ *
+ * After cascading, runs rollupSummaries so SUMMARY parents update.
  */
 @Service
 public class TaskSchedulingService {
@@ -83,9 +91,10 @@ public class TaskSchedulingService {
 
                 if (predecessor == null) continue;
 
-                boolean changed = applyDependency(predecessor, successor, dep);
+                boolean plannedChanged = applyDependency(predecessor, successor, dep);
+                boolean actualChanged = applyActualDependency(predecessor, successor, dep);
 
-                if (changed) {
+                if (plannedChanged || actualChanged) {
                     taskRepository.save(successor);
                     queue.add(successorId);
                 }
@@ -97,20 +106,29 @@ public class TaskSchedulingService {
     }
 
     /**
-     * Apply a single dependency constraint and return true if successor dates changed.
+     * Apply a single dependency constraint to baseline/planned dates and
+     * return true if successor dates changed.
+     *
+     * FIX: the successor now SLIDES with the predecessor in both directions
+     * (earlier or later), instead of only ever being pushed forward.
+     * Note: with multiple predecessors on the same successor, whichever
+     * dependency edge is processed last in the BFS will win — this keeps
+     * the behavior simple and correct for the common single-predecessor
+     * chain case.
      */
     private boolean applyDependency(ProjectTask pred, ProjectTask succ, TaskDependency dep) {
-        if (pred.getPlannedEnd() == null && pred.getPlannedStart() == null) return false;
+        LocalDate predStart = pred.getBaselineStart() != null ? pred.getBaselineStart() : pred.getPlannedStart();
+        LocalDate predEndRaw = pred.getBaselineEnd() != null ? pred.getBaselineEnd() : pred.getPlannedEnd();
+        if (predStart == null && predEndRaw == null) return false;
+        LocalDate predEnd = predEndRaw != null ? predEndRaw : predStart;
 
         String type = dep.getDependencyType() == null ? "FS" : dep.getDependencyType().toUpperCase();
         int lag = dep.getLagDays() == null ? 0 : dep.getLagDays();
 
-        LocalDate predStart = pred.getPlannedStart();
-        LocalDate predEnd   = pred.getPlannedEnd() != null ? pred.getPlannedEnd()
-                                                           : pred.getPlannedStart();
-
-        LocalDate newSuccStart = succ.getPlannedStart();
-        LocalDate newSuccEnd   = succ.getPlannedEnd();
+        // Use baseline dates as source of truth (what the UI actually shows/edits),
+        // not plannedStart/plannedEnd, which can silently diverge from baseline.
+        LocalDate newSuccStart = succ.getBaselineStart() != null ? succ.getBaselineStart() : succ.getPlannedStart();
+        LocalDate newSuccEnd   = succ.getBaselineEnd() != null ? succ.getBaselineEnd() : succ.getPlannedEnd();
 
         int duration = succ.getDurationDays() != null ? Math.max(1, succ.getDurationDays()) : 1;
         boolean isMilestone = "MILESTONE".equalsIgnoreCase(succ.getTaskType());
@@ -120,57 +138,121 @@ public class TaskSchedulingService {
         LocalDate requiredEnd   = null;
 
         switch (type) {
-            case "FS": // Finish-to-Start: successor starts after predecessor ends
-                requiredStart = predEnd.plusDays(1+lag);
-                break;
-            case "SS": // Start-to-Start: successor starts after predecessor starts
-                requiredStart = predStart.plusDays(lag);
-                break;
-            case "FF": // Finish-to-Finish: successor ends after predecessor ends
-                requiredEnd = predEnd.plusDays(lag);
-                break;
-            case "SF": // Start-to-Finish: successor ends after predecessor starts
-                requiredEnd = predStart.plusDays(lag);
-                break;
-            default:
-                requiredStart = predEnd.plusDays(1+lag);
+            case "FS": requiredStart = predEnd.plusDays(1 + lag); break;
+            case "SS": requiredStart = predStart.plusDays(lag); break;
+            case "FF": requiredEnd = predEnd.plusDays(lag); break;
+            case "SF": requiredEnd = predStart.plusDays(lag); break;
+            default:   requiredStart = predEnd.plusDays(1 + lag);
         }
 
-        // Compute new dates for successor
         LocalDate computedStart = newSuccStart;
         LocalDate computedEnd   = newSuccEnd;
 
         if (requiredStart != null) {
-            if (newSuccStart == null || requiredStart.isAfter(newSuccStart)) {
-                computedStart = requiredStart;
-                if (isMilestone) {
-                    computedEnd = computedStart;
-                } else {
-                    computedEnd = computedStart.plusDays(duration - 1);
-                }
-            }
+            computedStart = requiredStart;
+            computedEnd = isMilestone ? computedStart : computedStart.plusDays(duration - 1);
         } else if (requiredEnd != null) {
-            if (newSuccEnd == null || requiredEnd.isAfter(newSuccEnd)) {
-                computedEnd = requiredEnd;
-                if (isMilestone) {
-                    computedStart = computedEnd;
-                } else {
-                    computedStart = computedEnd.minusDays(duration - 1);
-                }
-            }
+            computedEnd = requiredEnd;
+            computedStart = isMilestone ? computedEnd : computedEnd.minusDays(duration - 1);
         }
 
-        // Check if anything changed
         boolean changed = !Objects.equals(computedStart, newSuccStart)
                 || !Objects.equals(computedEnd, newSuccEnd);
 
         if (changed) {
+            // Write to BOTH baseline and planned so the UI (which reads baseline) updates
+            succ.setBaselineStart(computedStart);
+            succ.setBaselineEnd(computedEnd);
             succ.setPlannedStart(computedStart);
             succ.setPlannedEnd(computedEnd);
             if (!isMilestone && computedStart != null && computedEnd != null) {
                 long days = computedStart.until(computedEnd, java.time.temporal.ChronoUnit.DAYS) + 1;
                 succ.setDurationDays((int) Math.max(1, days));
             }
+        }
+
+        return changed;
+    }
+
+    /**
+     * Apply a single dependency constraint to ACTUAL dates and return true
+     * if the successor's actual dates changed.
+     *
+     * This cascade is independent from the baseline/planned one above and
+     * uses the PREDECESSOR's actual dates as the source of truth. It only
+     * runs when the predecessor has real actual progress recorded — if the
+     * predecessor hasn't actually started/finished, there is nothing real
+     * yet to cascade onto the successor.
+     *
+     * FIX: same bidirectional slide as the baseline/planned cascade — the
+     * successor's actual dates follow the predecessor's actual dates in
+     * both directions (earlier or later), not just pushed forward.
+     */
+    private boolean applyActualDependency(ProjectTask pred, ProjectTask succ, TaskDependency dep) {
+        if (pred.getActualStart() == null && pred.getActualEnd() == null) return false;
+
+        String type = dep.getDependencyType() == null ? "FS" : dep.getDependencyType().toUpperCase();
+        int lag = dep.getLagDays() == null ? 0 : dep.getLagDays();
+
+        LocalDate predActualStart = pred.getActualStart();
+        LocalDate predActualEnd   = pred.getActualEnd() != null ? pred.getActualEnd() : pred.getActualStart();
+
+        LocalDate newSuccActualStart = succ.getActualStart();
+        LocalDate newSuccActualEnd   = succ.getActualEnd();
+
+        boolean isMilestone = "MILESTONE".equalsIgnoreCase(succ.getTaskType());
+
+        // Duration for the successor's actual span: prefer its own existing
+        // actual span if both dates are already set, otherwise fall back to
+        // the task's planned durationDays.
+        int duration;
+        if (!isMilestone && newSuccActualStart != null && newSuccActualEnd != null) {
+            long days = newSuccActualStart.until(newSuccActualEnd, java.time.temporal.ChronoUnit.DAYS) + 1;
+            duration = (int) Math.max(1, days);
+        } else {
+            duration = succ.getDurationDays() != null ? Math.max(1, succ.getDurationDays()) : 1;
+        }
+        if (isMilestone) duration = 0;
+
+        LocalDate requiredStart = null;
+        LocalDate requiredEnd   = null;
+
+        switch (type) {
+            case "FS":
+                if (predActualEnd != null) requiredStart = predActualEnd.plusDays(1 + lag);
+                break;
+            case "SS":
+                if (predActualStart != null) requiredStart = predActualStart.plusDays(lag);
+                break;
+            case "FF":
+                if (predActualEnd != null) requiredEnd = predActualEnd.plusDays(lag);
+                break;
+            case "SF":
+                if (predActualStart != null) requiredEnd = predActualStart.plusDays(lag);
+                break;
+            default:
+                if (predActualEnd != null) requiredStart = predActualEnd.plusDays(1 + lag);
+        }
+
+        if (requiredStart == null && requiredEnd == null) return false;
+
+        LocalDate computedStart = newSuccActualStart;
+        LocalDate computedEnd   = newSuccActualEnd;
+
+        if (requiredStart != null) {
+            computedStart = requiredStart;
+            computedEnd = isMilestone ? computedStart : computedStart.plusDays(duration - 1);
+        } else if (requiredEnd != null) {
+            computedEnd = requiredEnd;
+            computedStart = isMilestone ? computedEnd : computedEnd.minusDays(duration - 1);
+        }
+
+        boolean changed = !Objects.equals(computedStart, newSuccActualStart)
+                || !Objects.equals(computedEnd, newSuccActualEnd);
+
+        if (changed) {
+            succ.setActualStart(computedStart);
+            succ.setActualEnd(computedEnd);
         }
 
         return changed;

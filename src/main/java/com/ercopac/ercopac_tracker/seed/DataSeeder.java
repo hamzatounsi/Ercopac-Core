@@ -71,7 +71,7 @@ public class DataSeeder implements CommandLineRunner {
         AppUser orgAdmin = seedUser(
                 "admin@pharmastore.com",
                 "Organisation Admin",
-                "Hamza123!",
+                "admin123!",
                 Role.ORG_ADMIN,
                 org,
                 "Administration"
