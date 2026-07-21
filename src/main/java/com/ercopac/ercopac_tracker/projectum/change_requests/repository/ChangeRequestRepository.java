@@ -13,4 +13,10 @@ public interface ChangeRequestRepository extends JpaRepository<ChangeRequest, Lo
     List<ChangeRequest> findAllByProjectIdAndOrganisationIdOrderByIdAsc(Long projectId, Long organisationId);
 
     Optional<ChangeRequest> findByIdAndProjectIdAndOrganisationId(Long id, Long projectId, Long organisationId);
+
+    List<ChangeRequest> findAllByRequester_IdAndOrganisationIdOrderByRequestDateDescIdDesc(Long requesterId, Long organisationId);
+
+    List<ChangeRequest> findAllByApprover_IdAndOrganisationIdOrderByRequestDateDescIdDesc(Long approverId, Long organisationId);
+
+    List<ChangeRequest> findAllByAffectedTask_IdAndOrganisationIdOrderByRequestDateDescIdDesc(Long taskId, Long organisationId);
 }

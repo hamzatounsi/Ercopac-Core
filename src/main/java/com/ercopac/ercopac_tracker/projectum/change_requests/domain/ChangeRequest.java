@@ -1,7 +1,11 @@
 package com.ercopac.ercopac_tracker.projectum.change_requests.domain;
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionItem;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
+import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
+import com.ercopac.ercopac_tracker.user.AppUser;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -42,6 +46,18 @@ public class ChangeRequest {
     @Column(length = 120)
     private String owner;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "requester_id")
+    private AppUser requester;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "approver_id")
+    private AppUser approver;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "affected_task_id")
+    private ProjectTask affectedTask;
+
     @Column(length = 2000)
     private String note;
 
@@ -51,6 +67,10 @@ public class ChangeRequest {
     @OneToMany(mappedBy = "changeRequest", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("createdAt ASC")
     private List<ChangeRequestHistoryEntry> history = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "changeRequest")
+    private List<ActionItem> actionItems = new ArrayList<>();
 
     public ChangeRequest() {}
 
@@ -79,6 +99,12 @@ public class ChangeRequest {
 
     public String getOwner() { return owner; }
     public void setOwner(String owner) { this.owner = owner; }
+    public AppUser getRequester() { return requester; }
+    public void setRequester(AppUser requester) { this.requester = requester; }
+    public AppUser getApprover() { return approver; }
+    public void setApprover(AppUser approver) { this.approver = approver; }
+    public ProjectTask getAffectedTask() { return affectedTask; }
+    public void setAffectedTask(ProjectTask affectedTask) { this.affectedTask = affectedTask; }
 
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
@@ -88,4 +114,6 @@ public class ChangeRequest {
 
     public List<ChangeRequestHistoryEntry> getHistory() { return history; }
     public void setHistory(List<ChangeRequestHistoryEntry> history) { this.history = history; }
+    public List<ActionItem> getActionItems() { return actionItems; }
+    public void setActionItems(List<ActionItem> actionItems) { this.actionItems = actionItems; }
 }

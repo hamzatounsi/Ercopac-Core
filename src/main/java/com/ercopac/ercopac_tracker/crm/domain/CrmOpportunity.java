@@ -3,6 +3,7 @@ package com.ercopac.ercopac_tracker.crm.domain;
 // Path: src/main/java/com/ercopac/ercopac_tracker/crm/domain/CrmOpportunity.java
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
@@ -51,6 +52,10 @@ public class CrmOpportunity {
     @JoinColumn(name = "lead_id")
     private CrmLead lead;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id")
+    private Project project;
+
     @Column(name = "is_won", nullable = false)
     private boolean won = false;
 
@@ -92,6 +97,8 @@ public class CrmOpportunity {
     public void setOwner(AppUser owner) { this.owner = owner; }
     public CrmLead getLead() { return lead; }
     public void setLead(CrmLead lead) { this.lead = lead; }
+    public Project getProject() { return project; }
+    public void setProject(Project project) { this.project = project; }
     public boolean isWon() { return won; }
     public void setWon(boolean won) { this.won = won; }
     public boolean isLost() { return lost; }

@@ -7,6 +7,7 @@ import com.ercopac.ercopac_tracker.crm.dto.*;
 import com.ercopac.ercopac_tracker.crm.repository.*;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
+import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.springframework.data.domain.PageRequest;
@@ -29,30 +30,68 @@ public class CrmService {
     private final CrmActivityRepository activityRepo;
     private final OrganisationRepository orgRepo;
     private final UserRepository userRepo;
+    private final SecurityUtils securityUtils;
 
     public CrmService(CrmPipelineStageRepository stageRepo,
                       CrmLeadRepository leadRepo,
                       CrmOpportunityRepository oppRepo,
                       CrmActivityRepository activityRepo,
                       OrganisationRepository orgRepo,
-                      UserRepository userRepo) {
+                      UserRepository userRepo,
+                      SecurityUtils securityUtils) {
         this.stageRepo   = stageRepo;
         this.leadRepo    = leadRepo;
         this.oppRepo     = oppRepo;
         this.activityRepo = activityRepo;
         this.orgRepo     = orgRepo;
         this.userRepo    = userRepo;
+        this.securityUtils = securityUtils;
     }
 
     // ── Helpers ───────────────────────────────────────────────
     private Organisation getOrg(Long orgId) {
+        assertAccessibleOrg(orgId);
         return orgRepo.findById(orgId)
             .orElseThrow(() -> new IllegalArgumentException("Organisation not found: " + orgId));
     }
 
-    private AppUser getUser(Long userId) {
-        return userRepo.findById(userId)
+    private AppUser getUser(Long orgId, Long userId) {
+        AppUser user = userRepo.findById(userId)
             .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+        Long userOrgId = user.getOrganisation() != null ? user.getOrganisation().getId() : null;
+        if (!Objects.equals(userOrgId, orgId)) {
+            throw new IllegalArgumentException("User not accessible for organisation");
+        }
+        return user;
+    }
+
+    private void assertAccessibleOrg(Long orgId) {
+        if (securityUtils.isPlatformUser()) {
+            return;
+        }
+
+        Long currentOrgId = securityUtils.getCurrentOrganisationId();
+        if (!Objects.equals(currentOrgId, orgId)) {
+            throw new IllegalArgumentException("Organisation not accessible");
+        }
+    }
+
+    private CrmPipelineStage getStage(Long orgId, Long stageId) {
+        assertAccessibleOrg(orgId);
+        return stageRepo.findByIdAndOrganisation_Id(stageId, orgId)
+            .orElseThrow(() -> new IllegalArgumentException("Stage not found: " + stageId));
+    }
+
+    private CrmLead getLead(Long orgId, Long leadId) {
+        assertAccessibleOrg(orgId);
+        return leadRepo.findByIdAndOrganisation_Id(leadId, orgId)
+            .orElseThrow(() -> new IllegalArgumentException("Lead not found: " + leadId));
+    }
+
+    private CrmOpportunity getOpportunity(Long orgId, Long oppId) {
+        assertAccessibleOrg(orgId);
+        return oppRepo.findByIdAndOrganisation_Id(oppId, orgId)
+            .orElseThrow(() -> new IllegalArgumentException("Opportunity not found: " + oppId));
     }
 
     // ══════════════════════════════════════════════════════════
@@ -60,6 +99,7 @@ public class CrmService {
     // ══════════════════════════════════════════════════════════
 
     public List<CrmPipelineStageDto> getStages(Long orgId) {
+        assertAccessibleOrg(orgId);
         seedDefaultStagesIfNone(orgId);
         return stageRepo.findByOrganisation_IdOrderByDisplayOrderAsc(orgId)
             .stream().map(this::toStageDto).collect(Collectors.toList());
@@ -74,14 +114,13 @@ public class CrmService {
     }
 
     public CrmPipelineStageDto updateStage(Long orgId, Long stageId, CrmPipelineStageDto dto) {
-        CrmPipelineStage stage = stageRepo.findById(stageId)
-            .orElseThrow(() -> new IllegalArgumentException("Stage not found: " + stageId));
+        CrmPipelineStage stage = getStage(orgId, stageId);
         mapStageFromDto(stage, dto);
         return toStageDto(stageRepo.save(stage));
     }
 
     public void deleteStage(Long orgId, Long stageId) {
-        stageRepo.deleteById(stageId);
+        stageRepo.delete(getStage(orgId, stageId));
     }
 
     private void seedDefaultStagesIfNone(Long orgId) {
@@ -121,6 +160,7 @@ public class CrmService {
     // ══════════════════════════════════════════════════════════
 
     public List<CrmLeadDto> getLeads(Long orgId, String search, String status) {
+        assertAccessibleOrg(orgId);
         List<CrmLead> leads;
         if (search != null && !search.isBlank()) {
             leads = leadRepo.searchByOrgAndTerm(orgId, search);
@@ -141,7 +181,7 @@ public class CrmService {
         lead = leadRepo.save(lead);
 
         // Log activity
-        logActivity(org, dto.getOwnerId() != null ? getUser(dto.getOwnerId()) : null,
+        logActivity(org, dto.getOwnerId() != null ? getUser(orgId, dto.getOwnerId()) : null,
             CrmActivity.ActivityType.LEAD_CREATED,
             "New lead created: " + lead.getFullName(), lead, null);
 
@@ -149,20 +189,18 @@ public class CrmService {
     }
 
     public CrmLeadDto updateLead(Long orgId, Long leadId, CrmLeadDto dto) {
-        CrmLead lead = leadRepo.findById(leadId)
-            .orElseThrow(() -> new IllegalArgumentException("Lead not found: " + leadId));
+        CrmLead lead = getLead(orgId, leadId);
         mapLeadFromDto(lead, dto);
         return toLeadDto(leadRepo.save(lead));
     }
 
     public void deleteLead(Long orgId, Long leadId) {
-        leadRepo.deleteById(leadId);
+        leadRepo.delete(getLead(orgId, leadId));
     }
 
     // Convert lead to opportunity
     public CrmOpportunityDto convertLead(Long orgId, Long leadId, Long stageId) {
-        CrmLead lead = leadRepo.findById(leadId)
-            .orElseThrow(() -> new IllegalArgumentException("Lead not found: " + leadId));
+        CrmLead lead = getLead(orgId, leadId);
         Organisation org = getOrg(orgId);
 
         // Mark lead as converted
@@ -180,7 +218,7 @@ public class CrmService {
         opp.setLead(lead);
 
         if (stageId != null) {
-            stageRepo.findById(stageId).ifPresent(opp::setStage);
+            opp.setStage(getStage(orgId, stageId));
         }
 
         opp = oppRepo.save(opp);
@@ -194,13 +232,14 @@ public class CrmService {
     }
 
     private void mapLeadFromDto(CrmLead lead, CrmLeadDto dto) {
+        Long orgId = lead.getOrganisation() != null ? lead.getOrganisation().getId() : null;
         lead.setFullName(dto.getFullName());
         lead.setCompany(dto.getCompany());
         lead.setEmail(dto.getEmail());
         lead.setPhone(dto.getPhone());
         if (dto.getSource() != null) lead.setSource(CrmLead.Source.valueOf(dto.getSource()));
         if (dto.getStatus() != null) lead.setStatus(CrmLead.Status.valueOf(dto.getStatus()));
-        if (dto.getOwnerId() != null) lead.setOwner(getUser(dto.getOwnerId()));
+        if (dto.getOwnerId() != null) lead.setOwner(getUser(orgId, dto.getOwnerId()));
         lead.setNotes(dto.getNotes());
         lead.setActive(dto.isActive());
     }
@@ -231,6 +270,7 @@ public class CrmService {
     // ══════════════════════════════════════════════════════════
 
     public List<CrmOpportunityDto> getOpportunities(Long orgId, Long ownerId) {
+        assertAccessibleOrg(orgId);
         List<CrmOpportunity> list = ownerId != null
             ? oppRepo.findByOrganisation_IdAndOwner_IdOrderByCreatedAtDesc(orgId, ownerId)
             : oppRepo.findByOrganisation_IdOrderByCreatedAtDesc(orgId);
@@ -252,8 +292,7 @@ public class CrmService {
     }
 
     public CrmOpportunityDto updateOpportunity(Long orgId, Long oppId, CrmOpportunityDto dto) {
-        CrmOpportunity opp = oppRepo.findById(oppId)
-            .orElseThrow(() -> new IllegalArgumentException("Opportunity not found: " + oppId));
+        CrmOpportunity opp = getOpportunity(orgId, oppId);
         String oldStageName = opp.getStage() != null ? opp.getStage().getName() : "—";
         mapOppFromDto(opp, dto);
         opp = oppRepo.save(opp);
@@ -270,8 +309,7 @@ public class CrmService {
     }
 
     public CrmOpportunityDto markWon(Long orgId, Long oppId) {
-        CrmOpportunity opp = oppRepo.findById(oppId)
-            .orElseThrow(() -> new IllegalArgumentException("Opportunity not found: " + oppId));
+        CrmOpportunity opp = getOpportunity(orgId, oppId);
         opp.setWon(true);
         opp.setLost(false);
         // Set to won stage if exists
@@ -288,8 +326,7 @@ public class CrmService {
     }
 
     public CrmOpportunityDto markLost(Long orgId, Long oppId) {
-        CrmOpportunity opp = oppRepo.findById(oppId)
-            .orElseThrow(() -> new IllegalArgumentException("Opportunity not found: " + oppId));
+        CrmOpportunity opp = getOpportunity(orgId, oppId);
         opp.setLost(true);
         opp.setWon(false);
         stageRepo.findByOrganisation_IdOrderByDisplayOrderAsc(orgId)
@@ -305,10 +342,11 @@ public class CrmService {
     }
 
     public void deleteOpportunity(Long orgId, Long oppId) {
-        oppRepo.deleteById(oppId);
+        oppRepo.delete(getOpportunity(orgId, oppId));
     }
 
     private void mapOppFromDto(CrmOpportunity opp, CrmOpportunityDto dto) {
+        Long orgId = opp.getOrganisation() != null ? opp.getOrganisation().getId() : null;
         opp.setName(dto.getName());
         opp.setAccountName(dto.getAccountName());
         opp.setValue(dto.getValue());
@@ -317,14 +355,13 @@ public class CrmService {
         opp.setClosingDate(dto.getClosingDate());
         opp.setNotes(dto.getNotes());
         if (dto.getStageId() != null) {
-            stageRepo.findById(dto.getStageId()).ifPresent(s -> {
-                opp.setStage(s);
-                opp.setWon(s.isWon());
-                opp.setLost(s.isLost());
-            });
+            CrmPipelineStage stage = getStage(orgId, dto.getStageId());
+            opp.setStage(stage);
+            opp.setWon(stage.isWon());
+            opp.setLost(stage.isLost());
         }
-        if (dto.getOwnerId() != null) opp.setOwner(getUser(dto.getOwnerId()));
-        if (dto.getLeadId() != null) leadRepo.findById(dto.getLeadId()).ifPresent(opp::setLead);
+        if (dto.getOwnerId() != null) opp.setOwner(getUser(orgId, dto.getOwnerId()));
+        if (dto.getLeadId() != null) opp.setLead(getLead(orgId, dto.getLeadId()));
     }
 
     private CrmOpportunityDto toOppDto(CrmOpportunity o) {
@@ -358,6 +395,7 @@ public class CrmService {
     // ══════════════════════════════════════════════════════════
 
     public CrmDashboardDto getDashboard(Long orgId) {
+        assertAccessibleOrg(orgId);
         seedDefaultStagesIfNone(orgId);
         CrmDashboardDto dash = new CrmDashboardDto();
 
@@ -388,14 +426,15 @@ public class CrmService {
         dash.setLeadsBySource(bySource);
 
         // Pipeline stages with opp counts
+        Map<Long, Long> countsByStage = new HashMap<>();
+        oppRepo.countByStage(orgId).forEach(row ->
+            countsByStage.put((Long) row[0], (Long) row[1]));
+
         List<CrmPipelineStageDto> pipeline = stageRepo
             .findByOrganisation_IdOrderByDisplayOrderAsc(orgId)
             .stream().map(s -> {
                 CrmPipelineStageDto sdto = toStageDto(s);
-                long count = oppRepo.findByOrganisation_IdOrderByCreatedAtDesc(orgId)
-                    .stream().filter(o -> o.getStage() != null &&
-                        o.getStage().getId().equals(s.getId())).count();
-                sdto.setOpportunityCount((int) count);
+                sdto.setOpportunityCount(countsByStage.getOrDefault(s.getId(), 0L).intValue());
                 return sdto;
             }).collect(Collectors.toList());
         dash.setPipeline(pipeline);

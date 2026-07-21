@@ -3,10 +3,17 @@ package com.ercopac.ercopac_tracker.tasks.domain;
 // Path: src/main/java/com/ercopac/ercopac_tracker/tasks/domain/ProjectTask.java
 // REPLACE your entire file with this
 
+import com.ercopac.ercopac_tracker.department.domain.Department;
+import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projects.domain.Project;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionItem;
 import com.ercopac.ercopac_tracker.user.AppUser;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "project_tasks")
@@ -19,13 +26,30 @@ public class ProjectTask {
     @Column(name = "project_id", nullable = false)
     private Long projectId;
 
-    // ── organisation_id EXISTS in DB as NOT NULL ──────────────
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "project_id", nullable = false, insertable = false, updatable = false)
+    private Project project;
+
+    
     @Column(name = "organisation_id", nullable = false)
     private Long organisationId;
 
-    // ── Parent/Child ──────────────────────────────────────────
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "organisation_id", nullable = false, insertable = false, updatable = false)
+    private Organisation organisation;
+
+    
     @Column(name = "parent_id")
     private Long parentId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id", insertable = false, updatable = false)
+    private ProjectTask parent;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "parent")
+    @OrderBy("displayOrder ASC, id ASC")
+    private List<ProjectTask> children = new ArrayList<>();
 
     @Column(nullable = false, length = 200)
     private String name;
@@ -96,6 +120,10 @@ public class ProjectTask {
     @Column(name = "department_code", length = 30)
     private String departmentCode;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
+
     @Column(name = "customer_milestone")
     private Boolean customerMilestone = false;
 
@@ -106,6 +134,22 @@ public class ProjectTask {
     @Column(name = "resource_type", length = 30)
     private String resourceType;
 
+    @JsonIgnore
+    @OneToMany(mappedBy = "task")
+    private List<TaskResourceAssignment> resourceAssignments = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "predecessorTask")
+    private List<TaskDependency> outgoingDependencies = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "successorTask")
+    private List<TaskDependency> incomingDependencies = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "projectTask")
+    private List<ActionItem> actionItems = new ArrayList<>();
+
     public ProjectTask() {}
 
     // ── Getters / Setters ─────────────────────────────────────
@@ -114,12 +158,20 @@ public class ProjectTask {
 
     public Long getProjectId() { return projectId; }
     public void setProjectId(Long projectId) { this.projectId = projectId; }
+    public Project getProject() { return project; }
+    public void setProject(Project project) { this.project = project; }
 
     public Long getOrganisationId() { return organisationId; }
     public void setOrganisationId(Long organisationId) { this.organisationId = organisationId; }
+    public Organisation getOrganisation() { return organisation; }
+    public void setOrganisation(Organisation organisation) { this.organisation = organisation; }
 
     public Long getParentId() { return parentId; }
     public void setParentId(Long parentId) { this.parentId = parentId; }
+    public ProjectTask getParent() { return parent; }
+    public void setParent(ProjectTask parent) { this.parent = parent; }
+    public List<ProjectTask> getChildren() { return children; }
+    public void setChildren(List<ProjectTask> children) { this.children = children; }
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
@@ -189,6 +241,8 @@ public class ProjectTask {
 
     public String getDepartmentCode() { return departmentCode; }
     public void setDepartmentCode(String departmentCode) { this.departmentCode = departmentCode; }
+    public Department getDepartment() { return department; }
+    public void setDepartment(Department department) { this.department = department; }
 
     public Boolean getCustomerMilestone() { return customerMilestone; }
     public void setCustomerMilestone(Boolean customerMilestone) { this.customerMilestone = customerMilestone; }
@@ -198,4 +252,12 @@ public class ProjectTask {
 
     public String getResourceType() { return resourceType; }
     public void setResourceType(String resourceType) { this.resourceType = resourceType; }
+    public List<TaskResourceAssignment> getResourceAssignments() { return resourceAssignments; }
+    public void setResourceAssignments(List<TaskResourceAssignment> resourceAssignments) { this.resourceAssignments = resourceAssignments; }
+    public List<TaskDependency> getOutgoingDependencies() { return outgoingDependencies; }
+    public void setOutgoingDependencies(List<TaskDependency> outgoingDependencies) { this.outgoingDependencies = outgoingDependencies; }
+    public List<TaskDependency> getIncomingDependencies() { return incomingDependencies; }
+    public void setIncomingDependencies(List<TaskDependency> incomingDependencies) { this.incomingDependencies = incomingDependencies; }
+    public List<ActionItem> getActionItems() { return actionItems; }
+    public void setActionItems(List<ActionItem> actionItems) { this.actionItems = actionItems; }
 }

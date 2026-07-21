@@ -1,7 +1,26 @@
 package com.ercopac.ercopac_tracker.organisation.domain;
 
+import com.ercopac.ercopac_tracker.admin.domain.Customer;
+import com.ercopac.ercopac_tracker.crm.domain.CrmActivity;
+import com.ercopac.ercopac_tracker.crm.domain.CrmLead;
+import com.ercopac.ercopac_tracker.crm.domain.CrmOpportunity;
+import com.ercopac.ercopac_tracker.crm.domain.CrmPipelineStage;
+import com.ercopac.ercopac_tracker.department.domain.Department;
+import com.ercopac.ercopac_tracker.department.domain.DepartmentHoliday;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionItem;
+import com.ercopac.ercopac_tracker.projectum.change_requests.domain.ChangeRequest;
+import com.ercopac.ercopac_tracker.projectum.finance.domain.FinanceEntry;
+import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceSettings;
+import com.ercopac.ercopac_tracker.projectum.forecast.domain.ForecastEntry;
+import com.ercopac.ercopac_tracker.projectum.risks.domain.RiskItem;
+import com.ercopac.ercopac_tracker.projects.domain.Project;
+import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
+import com.ercopac.ercopac_tracker.user.AppUser;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "organisations")
@@ -110,6 +129,70 @@ public class Organisation {
 
     @Column(nullable = false)
     private boolean active = true;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<AppUser> users = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<Project> projects = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<Department> departments = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<ProjectTask> projectTasks = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<FinanceEntry> financeEntries = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<ForecastEntry> forecastEntries = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<RiskItem> risks = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<ChangeRequest> changeRequests = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<ActionItem> actionItems = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<Customer> customers = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<CrmLead> crmLeads = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<CrmOpportunity> crmOpportunities = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<CrmPipelineStage> crmPipelineStages = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<CrmActivity> crmActivities = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "organisation")
+    private List<DepartmentHoliday> departmentHolidays = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToOne(mappedBy = "organisation")
+    private FinanceSettings financeSettings;
 
     public Long getId() {
         return id;
@@ -383,4 +466,37 @@ public class Organisation {
     public void setActive(boolean active) {
         this.active = active;
     }
+
+    public List<AppUser> getUsers() { return users; }
+    public void setUsers(List<AppUser> users) { this.users = users; }
+    public List<Project> getProjects() { return projects; }
+    public void setProjects(List<Project> projects) { this.projects = projects; }
+    public List<Department> getDepartments() { return departments; }
+    public void setDepartments(List<Department> departments) { this.departments = departments; }
+    public List<ProjectTask> getProjectTasks() { return projectTasks; }
+    public void setProjectTasks(List<ProjectTask> projectTasks) { this.projectTasks = projectTasks; }
+    public List<FinanceEntry> getFinanceEntries() { return financeEntries; }
+    public void setFinanceEntries(List<FinanceEntry> financeEntries) { this.financeEntries = financeEntries; }
+    public List<ForecastEntry> getForecastEntries() { return forecastEntries; }
+    public void setForecastEntries(List<ForecastEntry> forecastEntries) { this.forecastEntries = forecastEntries; }
+    public List<RiskItem> getRisks() { return risks; }
+    public void setRisks(List<RiskItem> risks) { this.risks = risks; }
+    public List<ChangeRequest> getChangeRequests() { return changeRequests; }
+    public void setChangeRequests(List<ChangeRequest> changeRequests) { this.changeRequests = changeRequests; }
+    public List<ActionItem> getActionItems() { return actionItems; }
+    public void setActionItems(List<ActionItem> actionItems) { this.actionItems = actionItems; }
+    public List<Customer> getCustomers() { return customers; }
+    public void setCustomers(List<Customer> customers) { this.customers = customers; }
+    public List<CrmLead> getCrmLeads() { return crmLeads; }
+    public void setCrmLeads(List<CrmLead> crmLeads) { this.crmLeads = crmLeads; }
+    public List<CrmOpportunity> getCrmOpportunities() { return crmOpportunities; }
+    public void setCrmOpportunities(List<CrmOpportunity> crmOpportunities) { this.crmOpportunities = crmOpportunities; }
+    public List<CrmPipelineStage> getCrmPipelineStages() { return crmPipelineStages; }
+    public void setCrmPipelineStages(List<CrmPipelineStage> crmPipelineStages) { this.crmPipelineStages = crmPipelineStages; }
+    public List<CrmActivity> getCrmActivities() { return crmActivities; }
+    public void setCrmActivities(List<CrmActivity> crmActivities) { this.crmActivities = crmActivities; }
+    public List<DepartmentHoliday> getDepartmentHolidays() { return departmentHolidays; }
+    public void setDepartmentHolidays(List<DepartmentHoliday> departmentHolidays) { this.departmentHolidays = departmentHolidays; }
+    public FinanceSettings getFinanceSettings() { return financeSettings; }
+    public void setFinanceSettings(FinanceSettings financeSettings) { this.financeSettings = financeSettings; }
 }

@@ -1,9 +1,23 @@
 package com.ercopac.ercopac_tracker.projects.domain;
 
+import com.ercopac.ercopac_tracker.crm.domain.CrmOpportunity;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.planning.domain.ProjectBaseline;
+import com.ercopac.ercopac_tracker.planning.domain.ProjectCalendar;
+import com.ercopac.ercopac_tracker.planning.domain.ProjectPlanning;
+import com.ercopac.ercopac_tracker.planning.domain.ProjectTemplate;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionItem;
+import com.ercopac.ercopac_tracker.projectum.change_requests.domain.ChangeRequest;
+import com.ercopac.ercopac_tracker.projectum.finance.domain.FinanceEntry;
+import com.ercopac.ercopac_tracker.projectum.forecast.domain.ForecastEntry;
+import com.ercopac.ercopac_tracker.projectum.risks.domain.RiskItem;
+import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "projects")
@@ -126,6 +140,50 @@ public class Project {
 
     @Column(length = 1000)
     private String comment;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "project")
+    private List<ProjectTask> tasks = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToOne(mappedBy = "project")
+    private ProjectPlanning planning;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "project")
+    private List<ProjectCalendar> calendars = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "project")
+    private List<ProjectBaseline> baselines = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "project")
+    private List<ProjectTemplate> templates = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "project")
+    private List<FinanceEntry> financeEntries = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "project")
+    private List<ForecastEntry> forecastEntries = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "project")
+    private List<RiskItem> risks = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "project")
+    private List<ChangeRequest> changeRequests = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "project")
+    private List<ActionItem> actionItems = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "project")
+    private List<CrmOpportunity> crmOpportunities = new ArrayList<>();
 
     public Project() {
     }
@@ -265,4 +323,27 @@ public class Project {
     public void setComment(String comment) {
         this.comment = comment;
     }
+
+    public List<ProjectTask> getTasks() { return tasks; }
+    public void setTasks(List<ProjectTask> tasks) { this.tasks = tasks; }
+    public ProjectPlanning getPlanning() { return planning; }
+    public void setPlanning(ProjectPlanning planning) { this.planning = planning; }
+    public List<ProjectCalendar> getCalendars() { return calendars; }
+    public void setCalendars(List<ProjectCalendar> calendars) { this.calendars = calendars; }
+    public List<ProjectBaseline> getBaselines() { return baselines; }
+    public void setBaselines(List<ProjectBaseline> baselines) { this.baselines = baselines; }
+    public List<ProjectTemplate> getTemplates() { return templates; }
+    public void setTemplates(List<ProjectTemplate> templates) { this.templates = templates; }
+    public List<FinanceEntry> getFinanceEntries() { return financeEntries; }
+    public void setFinanceEntries(List<FinanceEntry> financeEntries) { this.financeEntries = financeEntries; }
+    public List<ForecastEntry> getForecastEntries() { return forecastEntries; }
+    public void setForecastEntries(List<ForecastEntry> forecastEntries) { this.forecastEntries = forecastEntries; }
+    public List<RiskItem> getRisks() { return risks; }
+    public void setRisks(List<RiskItem> risks) { this.risks = risks; }
+    public List<ChangeRequest> getChangeRequests() { return changeRequests; }
+    public void setChangeRequests(List<ChangeRequest> changeRequests) { this.changeRequests = changeRequests; }
+    public List<ActionItem> getActionItems() { return actionItems; }
+    public void setActionItems(List<ActionItem> actionItems) { this.actionItems = actionItems; }
+    public List<CrmOpportunity> getCrmOpportunities() { return crmOpportunities; }
+    public void setCrmOpportunities(List<CrmOpportunity> crmOpportunities) { this.crmOpportunities = crmOpportunities; }
 }

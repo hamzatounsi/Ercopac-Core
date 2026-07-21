@@ -132,7 +132,7 @@ public class SupplierService {
         try {
             return securityUtils.getCurrentOrganisationId();
         } catch (IllegalStateException ex) {
-            if (securityUtils.hasAnyRole("PLATFORM_OWNER", "PLATFORM_ADMIN", "OWNER")) {
+            if (securityUtils.hasAnyRole("PLATFORM_OWNER")) {
                 return null;
             }
             throw ex;

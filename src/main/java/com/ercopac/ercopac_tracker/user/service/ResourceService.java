@@ -113,6 +113,10 @@ public class ResourceService {
         AppUser user = userRepository.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
 
+        if (user.getRole() == Role.ORG_ADMIN || user.getRole() == Role.PLATFORM_OWNER) {
+            throw new IllegalArgumentException("Administrative accounts must be managed in the administration console");
+        }
+
         if (request.fullName() != null && !request.fullName().isBlank()) {
             user.setFullName(request.fullName().trim());
         }
@@ -153,6 +157,9 @@ public class ResourceService {
         Long organisationId = requireOrganisationIdForWrite();
         AppUser user = userRepository.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
+        if (user.getRole() == Role.ORG_ADMIN || user.getRole() == Role.PLATFORM_OWNER) {
+            throw new IllegalArgumentException("Administrative accounts must be managed in the administration console");
+        }
         user.setActive(active);
         userRepository.save(user);
     }
@@ -302,7 +309,7 @@ public class ResourceService {
         try {
             return securityUtils.getCurrentOrganisationId();
         } catch (IllegalStateException ex) {
-            if (securityUtils.hasAnyRole("PLATFORM_OWNER", "PLATFORM_ADMIN", "OWNER"))
+            if (securityUtils.hasAnyRole("PLATFORM_OWNER"))
                 return null;
             throw ex;
         }
@@ -345,8 +352,15 @@ public class ResourceService {
 
     private Role parseRequiredRole(String role) {
         if (role == null || role.isBlank()) throw new IllegalArgumentException("Role is required");
-        try { return Role.valueOf(role.trim().toUpperCase()); }
+        Role parsed;
+        try {
+            parsed = Role.valueOf(role.trim().toUpperCase());
+        }
         catch (Exception ex) { throw new IllegalArgumentException("Invalid role: " + role); }
+        if (parsed == Role.PLATFORM_OWNER || parsed == Role.ORG_ADMIN) {
+            throw new IllegalArgumentException("Administrative roles cannot be assigned through resource management");
+        }
+        return parsed;
     }
 
     private String normalize(String value) {

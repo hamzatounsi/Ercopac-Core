@@ -32,7 +32,15 @@ public class ProjectTaskController {
             @PathVariable Long projectId,
             @PathVariable Long taskId,
             @RequestBody UpdateProjectTaskRequest request) {
-        return ResponseEntity.ok(projectTaskService.updateTask(taskId, request));
+        return ResponseEntity.ok(projectTaskService.updateTask(projectId, taskId, request));
+    }
+
+    @PostMapping("/api/projects/{projectId}/tasks")
+    @PreAuthorize(TASKS_WRITE)
+    public ResponseEntity<ProjectScheduleTaskResponse> createTask(
+            @PathVariable Long projectId,
+            @RequestBody CreateTaskRequest request) {
+        return ResponseEntity.ok(projectTaskService.createTask(projectId, request));
     }
 
     @PostMapping("/api/projects/{projectId}/tasks/below/{afterTaskId}")
@@ -56,6 +64,15 @@ public class ProjectTaskController {
     @PreAuthorize(TASKS_WRITE)
     public ResponseEntity<Void> deleteTask(@PathVariable Long taskId) {
         projectTaskService.deleteTask(taskId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/api/projects/{projectId}/tasks/{taskId}")
+    @PreAuthorize(TASKS_WRITE)
+    public ResponseEntity<Void> deleteProjectTask(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId) {
+        projectTaskService.deleteTask(projectId, taskId);
         return ResponseEntity.noContent().build();
     }
 

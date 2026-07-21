@@ -1,9 +1,23 @@
 package com.ercopac.ercopac_tracker.user;
 
+import com.ercopac.ercopac_tracker.department.domain.Department;
+import com.ercopac.ercopac_tracker.department.domain.DepartmentHoliday;
+import com.ercopac.ercopac_tracker.crm.domain.CrmActivity;
+import com.ercopac.ercopac_tracker.crm.domain.CrmLead;
+import com.ercopac.ercopac_tracker.crm.domain.CrmOpportunity;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionAssignee;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionItem;
+import com.ercopac.ercopac_tracker.projectum.change_requests.domain.ChangeRequest;
+import com.ercopac.ercopac_tracker.projectum.risks.domain.RiskItem;
+import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
+import com.ercopac.ercopac_tracker.tasks.domain.TaskResourceAssignment;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "users")
@@ -35,6 +49,10 @@ public class AppUser {
 
     @Column(name = "department_code", length = 30)
     private String departmentCode;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
 
     @Column(name = "job_title", length = 80)
     private String jobTitle;
@@ -78,6 +96,54 @@ public class AppUser {
     private boolean active = true;
 
     private Boolean emailNotificationsEnabled = true;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "manager")
+    private List<Department> managedDepartments = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "assignedUser")
+    private List<ProjectTask> assignedTasks = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "assignedUser")
+    private List<TaskResourceAssignment> taskResourceAssignments = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "ownerUser")
+    private List<RiskItem> ownedRisks = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "owner")
+    private List<ActionItem> ownedActions = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "assigneeUser")
+    private List<ActionAssignee> actionAssignments = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "requester")
+    private List<ChangeRequest> requestedChangeRequests = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "approver")
+    private List<ChangeRequest> approvedChangeRequests = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "member")
+    private List<DepartmentHoliday> holidays = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "owner")
+    private List<CrmLead> ownedCrmLeads = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "owner")
+    private List<CrmOpportunity> ownedCrmOpportunities = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "user")
+    private List<CrmActivity> crmActivities = new ArrayList<>();
 
     public Boolean getEmailNotificationsEnabled() {
         return emailNotificationsEnabled;
@@ -161,6 +227,9 @@ public class AppUser {
     public void setDepartmentCode(String departmentCode) {
         this.departmentCode = departmentCode;
     }
+
+    public Department getDepartment() { return department; }
+    public void setDepartment(Department department) { this.department = department; }
 
     public String getJobTitle() {
         return jobTitle;
@@ -263,4 +332,29 @@ public class AppUser {
     public String getUsername() {
         return email;
     }
+
+    public List<Department> getManagedDepartments() { return managedDepartments; }
+    public void setManagedDepartments(List<Department> managedDepartments) { this.managedDepartments = managedDepartments; }
+    public List<ProjectTask> getAssignedTasks() { return assignedTasks; }
+    public void setAssignedTasks(List<ProjectTask> assignedTasks) { this.assignedTasks = assignedTasks; }
+    public List<TaskResourceAssignment> getTaskResourceAssignments() { return taskResourceAssignments; }
+    public void setTaskResourceAssignments(List<TaskResourceAssignment> taskResourceAssignments) { this.taskResourceAssignments = taskResourceAssignments; }
+    public List<RiskItem> getOwnedRisks() { return ownedRisks; }
+    public void setOwnedRisks(List<RiskItem> ownedRisks) { this.ownedRisks = ownedRisks; }
+    public List<ActionItem> getOwnedActions() { return ownedActions; }
+    public void setOwnedActions(List<ActionItem> ownedActions) { this.ownedActions = ownedActions; }
+    public List<ActionAssignee> getActionAssignments() { return actionAssignments; }
+    public void setActionAssignments(List<ActionAssignee> actionAssignments) { this.actionAssignments = actionAssignments; }
+    public List<ChangeRequest> getRequestedChangeRequests() { return requestedChangeRequests; }
+    public void setRequestedChangeRequests(List<ChangeRequest> requestedChangeRequests) { this.requestedChangeRequests = requestedChangeRequests; }
+    public List<ChangeRequest> getApprovedChangeRequests() { return approvedChangeRequests; }
+    public void setApprovedChangeRequests(List<ChangeRequest> approvedChangeRequests) { this.approvedChangeRequests = approvedChangeRequests; }
+    public List<DepartmentHoliday> getHolidays() { return holidays; }
+    public void setHolidays(List<DepartmentHoliday> holidays) { this.holidays = holidays; }
+    public List<CrmLead> getOwnedCrmLeads() { return ownedCrmLeads; }
+    public void setOwnedCrmLeads(List<CrmLead> ownedCrmLeads) { this.ownedCrmLeads = ownedCrmLeads; }
+    public List<CrmOpportunity> getOwnedCrmOpportunities() { return ownedCrmOpportunities; }
+    public void setOwnedCrmOpportunities(List<CrmOpportunity> ownedCrmOpportunities) { this.ownedCrmOpportunities = ownedCrmOpportunities; }
+    public List<CrmActivity> getCrmActivities() { return crmActivities; }
+    public void setCrmActivities(List<CrmActivity> crmActivities) { this.crmActivities = crmActivities; }
 }

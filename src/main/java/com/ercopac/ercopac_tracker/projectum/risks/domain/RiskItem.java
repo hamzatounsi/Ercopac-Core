@@ -1,13 +1,17 @@
 package com.ercopac.ercopac_tracker.projectum.risks.domain;
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionItem;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.ResourceType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.*;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "risk_items")
@@ -67,6 +71,10 @@ public class RiskItem {
     @Column(length = 1000)
     private String notes;
 
+    @JsonIgnore
+    @OneToMany(mappedBy = "risk")
+    private List<ActionItem> actionItems = new ArrayList<>();
+
     public RiskItem() {}
     public ResourceType getResourceType() { return resourceType; }
     public void setResourceType(ResourceType resourceType) { this.resourceType = resourceType; }
@@ -121,4 +129,6 @@ public class RiskItem {
 
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public List<ActionItem> getActionItems() { return actionItems; }
+    public void setActionItems(List<ActionItem> actionItems) { this.actionItems = actionItems; }
 }

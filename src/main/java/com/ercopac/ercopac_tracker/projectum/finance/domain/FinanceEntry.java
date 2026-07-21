@@ -3,6 +3,8 @@ package com.ercopac.ercopac_tracker.projectum.finance.domain;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceWbsRowType;
+import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
+import com.ercopac.ercopac_tracker.user.AppUser;
 
 import jakarta.persistence.*;
 
@@ -19,6 +21,10 @@ public class FinanceEntry {
     @Column(name = "owner_name")
     private String ownerName;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private AppUser owner;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "organisation_id", nullable = false)
     private Organisation organisation;
@@ -26,6 +32,10 @@ public class FinanceEntry {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_task_id")
+    private ProjectTask projectTask;
 
     @Column(nullable = false, length = 100)
     private String wbsCode;
@@ -111,6 +121,9 @@ public class FinanceEntry {
         this.ownerName = ownerName;
     }
 
+    public AppUser getOwner() { return owner; }
+    public void setOwner(AppUser owner) { this.owner = owner; }
+
     public Organisation getOrganisation() {
         return organisation;
     }
@@ -126,6 +139,9 @@ public class FinanceEntry {
     public void setProject(Project project) {
         this.project = project;
     }
+
+    public ProjectTask getProjectTask() { return projectTask; }
+    public void setProjectTask(ProjectTask projectTask) { this.projectTask = projectTask; }
 
     public String getWbsCode() {
         return wbsCode;

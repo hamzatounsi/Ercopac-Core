@@ -8,6 +8,8 @@ import java.util.Optional;
 
 public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
+    long countByOrganisation_Id(Long organisationId);
+
     Optional<Department> findByCodeAndOrganisation_Id(String code, Long organisationId);
 
     Optional<Department> findByIdAndOrganisation_Id(Long id, Long organisationId);
@@ -15,4 +17,20 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
     List<Department> findByOrganisation_IdOrderByCodeAsc(Long organisationId);
 
     boolean existsByCodeAndOrganisation_Id(String code, Long organisationId);
+
+    boolean existsByOrganisation_IdAndCodeIgnoreCase(Long organisationId, String code);
+
+    boolean existsByOrganisation_IdAndLabelIgnoreCase(Long organisationId, String label);
+
+    boolean existsByOrganisation_IdAndCodeIgnoreCaseAndIdNot(
+            Long organisationId,
+            String code,
+            Long id
+    );
+
+    boolean existsByOrganisation_IdAndLabelIgnoreCaseAndIdNot(
+            Long organisationId,
+            String label,
+            Long id
+    );
 }

@@ -45,13 +45,16 @@ public class FinanceService {
 
     public FinanceService(FinanceEntryRepository financeEntryRepository,
                           ProjectRepository projectRepository,
-                          SecurityUtils securityUtils) {
+                          SecurityUtils securityUtils,
+                          ProjectTaskRepository projectTaskRepository,
+                          FinanceSettingsRepository financeSettingsRepository,
+                          FinanceHourlyRateRepository hourlyRateRepository) {
         this.financeEntryRepository = financeEntryRepository;
         this.projectRepository = projectRepository;
         this.securityUtils = securityUtils;
-        this.projectTaskRepository = null;
-        this.financeSettingsRepository = null;
-        this.hourlyRateRepository = null;
+        this.projectTaskRepository = projectTaskRepository;
+        this.financeSettingsRepository = financeSettingsRepository;
+        this.hourlyRateRepository = hourlyRateRepository;
     }
 
     @Transactional(readOnly = true)

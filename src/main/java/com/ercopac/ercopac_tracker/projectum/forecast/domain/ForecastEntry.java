@@ -1,6 +1,7 @@
 package com.ercopac.ercopac_tracker.projectum.forecast.domain;
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projectum.finance.domain.FinanceEntry;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import jakarta.persistence.*;
 
@@ -28,6 +29,10 @@ public class ForecastEntry {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "finance_entry_id")
+    private FinanceEntry financeEntry;
 
     @Column(name = "wbs_code", nullable = false, length = 100)
     private String wbsCode;
@@ -60,6 +65,9 @@ public class ForecastEntry {
     public void setProject(Project project) {
         this.project = project;
     }
+
+    public FinanceEntry getFinanceEntry() { return financeEntry; }
+    public void setFinanceEntry(FinanceEntry financeEntry) { this.financeEntry = financeEntry; }
 
     public String getWbsCode() {
         return wbsCode;

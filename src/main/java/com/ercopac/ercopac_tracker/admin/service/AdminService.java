@@ -12,6 +12,8 @@ import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ercopac.ercopac_tracker.user.Role;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 
 import java.util.List;
@@ -81,10 +83,16 @@ public class AdminService {
         AdminLicenceType licenceType = parseLicenceType(request.licenceType());
 
         AppUser user = userRepository.findByIdAndOrganisation_Id(request.userId(), organisationId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found in current organisation"));
+                .orElseThrow(() -> notFound("User not found in current organisation"));
 
         Organisation organisation = organisationRepository.findById(organisationId)
-                .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
+                .orElseThrow(() -> notFound("Organisation not found"));
+
+        Role targetRole = mapLicenceToRole(licenceType.name());
+        protectRequiredAdmin(user, targetRole, organisationId);
+        if (user.isActive() && user.getRole() != targetRole) {
+            enforceRoleLimit(organisation, targetRole);
+        }
 
         AdminLicenceAssignment assignment = licenceRepository
                 .findByOrganisation_IdAndUser_Id(organisationId, request.userId())
@@ -94,7 +102,7 @@ public class AdminService {
             assignment.setUser(user);
             assignment.setLicenceType(licenceType);
 
-            user.setRole(mapLicenceToRole(licenceType.name()));
+            user.setRole(targetRole);
             userRepository.save(user);
 
             return toLicenceDto(licenceRepository.save(assignment));
@@ -107,7 +115,18 @@ public class AdminService {
             throw new IllegalArgumentException("User ID is required");
         }
 
+        AppUser user = userRepository.findByIdAndOrganisation_Id(userId, organisationId)
+                .orElseThrow(() -> notFound("User not found in current organisation"));
+        protectRequiredAdmin(user, Role.EMPLOYEE, organisationId);
+
+        Organisation organisation = getOrganisation(organisationId);
+        if (user.isActive() && user.getRole() != Role.EMPLOYEE) {
+            enforceRoleLimit(organisation, Role.EMPLOYEE);
+        }
+
         licenceRepository.deleteByOrganisation_IdAndUser_Id(organisationId, userId);
+        user.setRole(Role.EMPLOYEE);
+        userRepository.save(user);
     }
 
     // ================= CATEGORIES =================
@@ -129,7 +148,7 @@ public class AdminService {
         String code = normalizeUpper(request.code());
 
         if (categoryRepository.existsByOrganisation_IdAndCodeIgnoreCase(organisationId, code)) {
-            throw new IllegalArgumentException("Category code already exists");
+            throw conflict("Category code already exists");
         }
 
         ProjectCategory category = new ProjectCategory();
@@ -144,12 +163,12 @@ public class AdminService {
         validateNameAndCode(request.name(), request.code());
 
         ProjectCategory category = categoryRepository.findByIdAndOrganisation_Id(id, organisationId)
-                .orElseThrow(() -> new IllegalArgumentException("Category not found"));
+                .orElseThrow(() -> notFound("Category not found"));
 
         String newCode = normalizeUpper(request.code());
         if (!category.getCode().equalsIgnoreCase(newCode)
                 && categoryRepository.existsByOrganisation_IdAndCodeIgnoreCase(organisationId, newCode)) {
-            throw new IllegalArgumentException("Category code already exists");
+            throw conflict("Category code already exists");
         }
 
         applyCategoryRequest(category, request);
@@ -161,7 +180,7 @@ public class AdminService {
         Long organisationId = requireOrganisationId();
 
         ProjectCategory category = categoryRepository.findByIdAndOrganisation_Id(id, organisationId)
-                .orElseThrow(() -> new IllegalArgumentException("Category not found"));
+                .orElseThrow(() -> notFound("Category not found"));
 
         categoryRepository.delete(category);
     }
@@ -185,7 +204,7 @@ public class AdminService {
         String code = normalizeUpper(request.code());
 
         if (typeRepository.existsByOrganisation_IdAndCodeIgnoreCase(organisationId, code)) {
-            throw new IllegalArgumentException("Project type code already exists");
+            throw conflict("Project type code already exists");
         }
 
         ProjectType type = new ProjectType();
@@ -200,12 +219,12 @@ public class AdminService {
         validateNameAndCode(request.name(), request.code());
 
         ProjectType type = typeRepository.findByIdAndOrganisation_Id(id, organisationId)
-                .orElseThrow(() -> new IllegalArgumentException("Project type not found"));
+                .orElseThrow(() -> notFound("Project type not found"));
 
         String newCode = normalizeUpper(request.code());
         if (!type.getCode().equalsIgnoreCase(newCode)
                 && typeRepository.existsByOrganisation_IdAndCodeIgnoreCase(organisationId, newCode)) {
-            throw new IllegalArgumentException("Project type code already exists");
+            throw conflict("Project type code already exists");
         }
 
         applyTypeRequest(type, request);
@@ -217,7 +236,7 @@ public class AdminService {
         Long organisationId = requireOrganisationId();
 
         ProjectType type = typeRepository.findByIdAndOrganisation_Id(id, organisationId)
-                .orElseThrow(() -> new IllegalArgumentException("Project type not found"));
+                .orElseThrow(() -> notFound("Project type not found"));
 
         typeRepository.delete(type);
     }
@@ -242,7 +261,7 @@ public class AdminService {
         String code = normalizeUpper(request.customerCode());
 
         if (customerRepository.existsByOrganisation_IdAndCustomerCodeIgnoreCase(organisationId, code)) {
-            throw new IllegalArgumentException("Customer code already exists");
+            throw conflict("Customer code already exists");
         }
 
         Customer customer = new Customer();
@@ -258,12 +277,12 @@ public class AdminService {
         validateCustomerRequest(request);
 
         Customer customer = customerRepository.findByIdAndOrganisation_Id(id, organisationId)
-                .orElseThrow(() -> new IllegalArgumentException("Customer not found"));
+                .orElseThrow(() -> notFound("Customer not found"));
 
         String newCode = normalizeUpper(request.customerCode());
         if (!customer.getCustomerCode().equalsIgnoreCase(newCode)
                 && customerRepository.existsByOrganisation_IdAndCustomerCodeIgnoreCase(organisationId, newCode)) {
-            throw new IllegalArgumentException("Customer code already exists");
+            throw conflict("Customer code already exists");
         }
 
         applyCustomerRequest(customer, request);
@@ -275,12 +294,46 @@ public class AdminService {
         Long organisationId = requireOrganisationId();
 
         Customer customer = customerRepository.findByIdAndOrganisation_Id(id, organisationId)
-                .orElseThrow(() -> new IllegalArgumentException("Customer not found"));
+                .orElseThrow(() -> notFound("Customer not found"));
 
         customerRepository.delete(customer);
     }
 
     // ================= HELPERS =================
+
+    private void protectRequiredAdmin(AppUser user, Role targetRole, Long organisationId) {
+        if (user.getRole() != Role.ORG_ADMIN || targetRole == Role.ORG_ADMIN || !user.isActive()) {
+            return;
+        }
+        if (user.getId().equals(securityUtils.getCurrentUserId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "You cannot remove your own Organisation Admin role during an active session."
+            );
+        }
+        if (userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisationId, Role.ORG_ADMIN) <= 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "At least one active Organisation Admin is required."
+            );
+        }
+    }
+
+    private void enforceRoleLimit(Organisation organisation, Role role) {
+        int limit = switch (role) {
+            case ORG_ADMIN -> organisation.getOrgAdminLicenceLimit();
+            case GENERAL_MANAGER -> organisation.getGeneralManagerLicenceLimit();
+            case DEPARTMENT_MANAGER -> organisation.getDepartmentManagerLicenceLimit();
+            case EMPLOYEE -> organisation.getEmployeeLicenceLimit();
+            case PLATFORM_OWNER -> 0;
+        };
+        if (userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role) >= limit) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "No active licence is available for role " + role.name() + "."
+            );
+        }
+    }
 
     private AdminLicenceAssignmentDto toLicenceDto(AdminLicenceAssignment assignment) {
         AppUser user = assignment.getUser();
@@ -412,7 +465,7 @@ public class AdminService {
 
     private Organisation getOrganisation(Long organisationId) {
         return organisationRepository.findById(organisationId)
-                .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
+                .orElseThrow(() -> notFound("Organisation not found"));
     }
 
     private Long requireOrganisationId() {
@@ -446,5 +499,13 @@ public class AdminService {
             throw new IllegalArgumentException(message);
         }
         return normalized;
+    }
+
+    private ResponseStatusException conflict(String message) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, message);
+    }
+
+    private ResponseStatusException notFound(String message) {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, message);
     }
 }
