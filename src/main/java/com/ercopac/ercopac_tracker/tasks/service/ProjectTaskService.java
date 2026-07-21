@@ -69,9 +69,9 @@ public class ProjectTaskService {
     // ══════════════════════════════════════════════════════════════
     // UPDATE
     // ══════════════════════════════════════════════════════════════
-    public ProjectScheduleTaskResponse updateTask(Long taskId, UpdateProjectTaskRequest request) {
-        ProjectTask task = projectTaskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+    public ProjectScheduleTaskResponse updateTask(Long projectId, Long taskId, UpdateProjectTaskRequest request) {
+        Project project = getAccessibleProject(projectId);
+        ProjectTask task = getProjectTask(projectId, taskId, project);
 
         ProjectTask oldTask = copyForHistory(task);
 
@@ -154,8 +154,6 @@ public class ProjectTaskService {
         resolveDatesAndDuration(task, request);
         normalizeMilestone(task);
 
-        Long projectId = task.getProjectId();
-
         historyService.logTaskUpdate(
                 oldTask, task,
                 getOrganisationIdFromSecurityContext(),
@@ -184,6 +182,12 @@ public class ProjectTaskService {
         }
 
         return mapToResponse(finalTask);
+    }
+
+    public ProjectScheduleTaskResponse updateTask(Long taskId, UpdateProjectTaskRequest request) {
+        ProjectTask task = projectTaskRepository.findById(taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        return updateTask(task.getProjectId(), taskId, request);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -220,8 +224,12 @@ public class ProjectTaskService {
     // ══════════════════════════════════════════════════════════════
     public ProjectScheduleTaskResponse createTaskBelow(Long projectId, Long afterTaskId,
                                                         CreateTaskRequest request) {
+        Project project = getAccessibleProject(projectId);
         ProjectTask anchor = projectTaskRepository.findById(afterTaskId)
                 .orElseThrow(() -> new IllegalArgumentException("Anchor task not found: " + afterTaskId));
+        if (!projectId.equals(anchor.getProjectId()) || !project.getOrganisation().getId().equals(anchor.getOrganisationId())) {
+            throw new IllegalArgumentException("Anchor task does not belong to the project");
+        }
 
         List<ProjectTask> allTasks = projectTaskRepository
                 .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
@@ -277,12 +285,55 @@ public class ProjectTaskService {
     // ══════════════════════════════════════════════════════════════
     // COPY BELOW
     // ══════════════════════════════════════════════════════════════
+    public ProjectScheduleTaskResponse createTask(Long projectId, CreateTaskRequest request) {
+        Project project = getAccessibleProject(projectId);
+        Long organisationId = project.getOrganisation().getId();
+
+        List<ProjectTask> allTasks = projectTaskRepository.findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
+        int nextDisplayOrder = allTasks.stream()
+                .map(ProjectTask::getDisplayOrder)
+                .filter(Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(0) + 1;
+
+        ProjectTask task = new ProjectTask();
+        task.setProjectId(projectId);
+        task.setOrganisationId(organisationId);
+        task.setName(request.getName() != null && !request.getName().isBlank() ? request.getName() : "New Task");
+        task.setDescription(request.getDescription());
+        task.setTaskType("ACTIVITY");
+        task.setPlannedStart(request.getPlannedStart());
+        task.setPlannedEnd(request.getPlannedEnd() != null ? request.getPlannedEnd() : request.getPlannedStart());
+        task.setBaselineStart(request.getPlannedStart());
+        task.setBaselineEnd(request.getPlannedEnd() != null ? request.getPlannedEnd() : request.getPlannedStart());
+        task.setDurationDays(request.getDurationDays() != null ? request.getDurationDays() : 1);
+        task.setPercentComplete(request.getPercentComplete() != null ? request.getPercentComplete() : 0);
+        task.setPriority(request.getPriority() != null ? request.getPriority() : 500);
+        task.setScheduleMode(request.getScheduleMode() != null ? request.getScheduleMode() : "AUTO");
+        task.setStatus("NOT_STARTED");
+        task.setActive(request.getActive() != null ? request.getActive() : true);
+        task.setDisplayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : nextDisplayOrder);
+        task.setOutlineLevel(1);
+        task.setCustomerMilestone(false);
+
+        normalizeMilestone(task);
+        ProjectTask saved = projectTaskRepository.save(task);
+
+        rebuildStructureFromParentId(projectId);
+        rollupSummaries(projectId);
+
+        return mapToResponse(projectTaskRepository.findById(saved.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Task not found after insert: " + saved.getId())));
+    }
+
     public ProjectScheduleTaskResponse copyTaskBelow(Long projectId, Long sourceTaskId) {
+        Project project = getAccessibleProject(projectId);
         List<ProjectTask> allTasks = projectTaskRepository
                 .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
 
         ProjectTask source = allTasks.stream()
                 .filter(t -> sourceTaskId.equals(t.getId()))
+                .filter(t -> project.getOrganisation().getId().equals(t.getOrganisationId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + sourceTaskId));
 
@@ -372,11 +423,10 @@ public class ProjectTaskService {
     // ══════════════════════════════════════════════════════════════
     // DELETE
     // ══════════════════════════════════════════════════════════════
-    public void deleteTask(Long taskId) {
-        ProjectTask task = projectTaskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+    public void deleteTask(Long projectId, Long taskId) {
+        Project project = getAccessibleProject(projectId);
+        ProjectTask task = getProjectTask(projectId, taskId, project);
 
-        Long projectId = task.getProjectId();
         List<ProjectTask> allTasks = projectTaskRepository
                 .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
 
@@ -395,10 +445,17 @@ public class ProjectTaskService {
         rollupSummaries(projectId);
     }
 
+    public void deleteTask(Long taskId) {
+        ProjectTask task = projectTaskRepository.findById(taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        deleteTask(task.getProjectId(), taskId);
+    }
+
     // ══════════════════════════════════════════════════════════════
     // RESOURCE USERS
     // ══════════════════════════════════════════════════════════════
     public List<ResourceUserDto> getResourceUsersForProject(Long projectId) {
+        Project project = getAccessibleProject(projectId);
         List<ProjectTask> tasks = projectTaskRepository
                 .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
 
@@ -414,6 +471,7 @@ public class ProjectTaskService {
                     .orElse(null);
         }
 
+        orgId = project.getOrganisation().getId();
         if (orgId == null) return List.of();
         return userRepository.findByOrganisation_IdOrderByFullNameAsc(orgId)
                 .stream()
@@ -425,6 +483,20 @@ public class ProjectTaskService {
                         u.getColor() != null ? u.getColor() : "#3b82f6"
                 ))
                 .collect(Collectors.toList());
+    }
+
+    public List<ProjectScheduleTaskResponse> getMyAssignedTasks() {
+        Long userId = securityUtils.getCurrentUserId();
+        Long organisationId = securityUtils.getCurrentOrganisationId();
+
+        return projectTaskRepository.findByAssignedUser_IdAndOrganisationId(userId, organisationId)
+                .stream()
+                .sorted(Comparator
+                        .comparing(ProjectTask::getPlannedStart, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(ProjectTask::getDisplayOrder, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(ProjectTask::getId))
+                .map(this::mapToResponse)
+                .toList();
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -731,8 +803,7 @@ public class ProjectTaskService {
 
         if (importedTasks == null || importedTasks.isEmpty()) return List.of();
 
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+        Project project = getAccessibleProject(projectId);
         Long organisationId = project.getOrganisation() != null
                 ? project.getOrganisation().getId() : null;
         if (organisationId == null) throw new IllegalStateException("Project has no organisation");
@@ -795,6 +866,26 @@ public class ProjectTaskService {
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
+    }
+
+    private Project getAccessibleProject(Long projectId) {
+        if (securityUtils.isPlatformUser()) {
+            return projectRepository.findById(projectId)
+                    .filter(project -> project.getOrganisation() != null && project.getOrganisation().getId() != null)
+                    .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+        }
+
+        Long orgId = securityUtils.getCurrentOrganisationId();
+        return projectRepository.findByIdAndOrganisationId(projectId, orgId)
+                .filter(project -> project.getOrganisation() != null && project.getOrganisation().getId() != null)
+                .orElseThrow(() -> new IllegalArgumentException("Project not accessible"));
+    }
+
+    private ProjectTask getProjectTask(Long projectId, Long taskId, Project project) {
+        return projectTaskRepository.findById(taskId)
+                .filter(task -> projectId.equals(task.getProjectId()))
+                .filter(task -> project.getOrganisation().getId().equals(task.getOrganisationId()))
+                .orElseThrow(() -> new IllegalArgumentException("Task not accessible in project"));
     }
 
     private Integer calculateImportedDuration(ProjectTask task) {

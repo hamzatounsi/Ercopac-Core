@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
+import java.util.Optional;
  
 public interface CrmLeadRepository extends JpaRepository<CrmLead, Long> {
  
@@ -16,6 +17,8 @@ public interface CrmLeadRepository extends JpaRepository<CrmLead, Long> {
  
     List<CrmLead> findByOrganisation_IdAndConvertedFalseAndActiveTrueOrderByCreatedAtDesc(
             Long orgId);
+
+    Optional<CrmLead> findByIdAndOrganisation_Id(Long id, Long orgId);
  
     // Search by name or company
     @Query("SELECT l FROM CrmLead l WHERE l.organisation.id = :orgId " +

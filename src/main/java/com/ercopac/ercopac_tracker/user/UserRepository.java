@@ -16,9 +16,17 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
 
     Optional<AppUser> findByEmail(String email);
 
+    Optional<AppUser> findByEmailIgnoreCase(String email);
+
     boolean existsByEmail(String email);
 
+    boolean existsByEmailIgnoreCase(String email);
+
     long countByOrganisation_Id(Long organisationId);
+
+    long countByOrganisation_IdAndActiveTrue(Long organisationId);
+
+    long countByOrganisation_IdAndRole(Long organisationId, Role role);
 
     long countByRole(Role role);
 
@@ -26,7 +34,11 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
 
     boolean existsByOrganisation_IdAndEmployeeCode(Long organisationId, String employeeCode);
 
+    boolean existsByOrganisation_IdAndEmployeeCodeIgnoreCase(Long organisationId, String employeeCode);
+
     Optional<AppUser> findByOrganisation_IdAndEmployeeCode(Long organisationId, String employeeCode);
+
+    Optional<AppUser> findByOrganisation_IdAndEmployeeCodeIgnoreCase(Long organisationId, String employeeCode);
 
     List<AppUser> findByOrganisation_IdAndRoleOrderByFullNameAsc(Long organisationId, Role role);
 
@@ -44,6 +56,59 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     List<AppUser> findByOrganisation_IdAndActiveTrueOrderByFullNameAsc(Long organisationId);
 
     int countByOrganisation_IdAndRoleAndActiveTrue(Long organisationId, Role role);
+
+    long countByOrganisation_IdAndDepartment_Id(Long organisationId, Long departmentId);
+
+    long countByOrganisation_IdAndDepartmentCode(Long organisationId, String departmentCode);
+
+    @Query("""
+        select count(u)
+        from AppUser u
+        where u.organisation.id = :organisationId
+          and (
+                u.department.id = :departmentId or
+                (u.department is null and u.departmentCode = :departmentCode)
+              )
+    """)
+    long countOrganisationUsersInDepartment(
+            @Param("organisationId") Long organisationId,
+            @Param("departmentId") Long departmentId,
+            @Param("departmentCode") String departmentCode
+    );
+
+    @Query("""
+        select count(u)
+        from AppUser u
+        where u.organisation.id = :organisationId
+          and u.active = true
+          and u.department is null
+          and (u.departmentCode is null or trim(u.departmentCode) = '')
+    """)
+    long countActiveUsersWithoutDepartment(@Param("organisationId") Long organisationId);
+
+    @Query("""
+        select u
+        from AppUser u
+        left join u.department d
+        where u.organisation.id = :organisationId
+          and (
+                :searchPattern is null or
+                lower(coalesce(u.fullName, '')) like :searchPattern or
+                lower(coalesce(u.email, '')) like :searchPattern or
+                lower(coalesce(u.employeeCode, '')) like :searchPattern
+              )
+          and (:departmentId is null or d.id = :departmentId)
+          and (:role is null or u.role = :role)
+          and (:active is null or u.active = :active)
+    """)
+    Page<AppUser> searchOrganisationUsers(
+            @Param("organisationId") Long organisationId,
+            @Param("searchPattern") String searchPattern,
+            @Param("departmentId") Long departmentId,
+            @Param("role") Role role,
+            @Param("active") Boolean active,
+            Pageable pageable
+    );
 
     @Query("""
         select u

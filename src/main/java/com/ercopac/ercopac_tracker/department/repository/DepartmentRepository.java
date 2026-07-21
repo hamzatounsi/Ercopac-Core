@@ -8,6 +8,8 @@ import java.util.Optional;
 
 public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
+    long countByOrganisation_Id(Long organisationId);
+
     Optional<Department> findByCodeAndOrganisation_Id(String code, Long organisationId);
 
     Optional<Department> findByIdAndOrganisation_Id(Long id, Long organisationId);

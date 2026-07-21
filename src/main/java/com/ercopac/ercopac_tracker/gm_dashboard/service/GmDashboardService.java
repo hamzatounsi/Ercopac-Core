@@ -50,6 +50,9 @@ public class GmDashboardService {
                     dto.setPlannedEnd(p.getPlannedEnd());
                     dto.setProjectBudget(p.getProjectBudget());
                     dto.setEstimatedCost(p.getEstimatedCost());
+                    // Progress is a persisted project value. Do not derive it from
+                    // health colours or incomplete task data in the client.
+                    dto.setProgressPercent(p.getProgress());
                     dto.setArchived(p.getArchived());
                     dto.setTimeHealth(computeTimeHealth(p.getPlannedEnd(), today).name());
                     dto.setApplicationType(

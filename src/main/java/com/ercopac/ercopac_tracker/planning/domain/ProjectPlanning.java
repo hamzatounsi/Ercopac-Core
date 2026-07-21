@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.planning.domain;
 
+import com.ercopac.ercopac_tracker.projects.domain.Project;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 
@@ -11,8 +12,12 @@ public class ProjectPlanning {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(name = "project_id", nullable = false, unique = true)
     private Long projectId;
+
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "project_id", nullable = false, insertable = false, updatable = false)
+    private Project project;
 
     private LocalDate expectedStart;
     private LocalDate expectedEnd;
@@ -43,6 +48,9 @@ public class ProjectPlanning {
     public void setProjectId(Long projectId) {
         this.projectId = projectId;
     }
+
+    public Project getProject() { return project; }
+    public void setProject(Project project) { this.project = project; }
 
     public LocalDate getExpectedStart() {
         return expectedStart;

@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.projectum.actions.domain;
 
+import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
@@ -19,6 +20,10 @@ public class ActionComment {
     @Column(nullable = false, length = 120)
     private String author;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "author_user_id")
+    private AppUser authorUser;
+
     @Column(nullable = false, length = 2000)
     private String text;
 
@@ -34,6 +39,8 @@ public class ActionComment {
 
     public String getAuthor() { return author; }
     public void setAuthor(String author) { this.author = author; }
+    public AppUser getAuthorUser() { return authorUser; }
+    public void setAuthorUser(AppUser authorUser) { this.authorUser = authorUser; }
 
     public String getText() { return text; }
     public void setText(String text) { this.text = text; }

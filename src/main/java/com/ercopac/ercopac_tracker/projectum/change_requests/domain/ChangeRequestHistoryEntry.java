@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.projectum.change_requests.domain;
 
+import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
@@ -22,6 +23,10 @@ public class ChangeRequestHistoryEntry {
     @Column(length = 120)
     private String performedBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "performed_by_user_id")
+    private AppUser performedByUser;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -37,6 +42,8 @@ public class ChangeRequestHistoryEntry {
 
     public String getPerformedBy() { return performedBy; }
     public void setPerformedBy(String performedBy) { this.performedBy = performedBy; }
+    public AppUser getPerformedByUser() { return performedByUser; }
+    public void setPerformedByUser(AppUser performedByUser) { this.performedByUser = performedByUser; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

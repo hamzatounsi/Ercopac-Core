@@ -1,11 +1,15 @@
 package com.ercopac.ercopac_tracker.tasks.service;
 
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
+import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskResourceAssignment;
 import com.ercopac.ercopac_tracker.tasks.dto.ResourceUserDto;
 import com.ercopac.ercopac_tracker.tasks.dto.TaskResourceAssignmentDto;
+import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository;
+import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.springframework.stereotype.Service;
 
@@ -17,18 +21,29 @@ public class TaskResourceAssignmentService {
     private final TaskResourceAssignmentRepository repository;
     private final UserRepository                   userRepository;
     private final ProjectRepository                projectRepository;
+    private final ProjectTaskRepository            projectTaskRepository;
+    private final ResourceTypeRepository           resourceTypeRepository;
+    private final SecurityUtils                    securityUtils;
 
     public TaskResourceAssignmentService(
             TaskResourceAssignmentRepository repository,
             UserRepository userRepository,
-            ProjectRepository projectRepository
+            ProjectRepository projectRepository,
+            ProjectTaskRepository projectTaskRepository,
+            ResourceTypeRepository resourceTypeRepository,
+            SecurityUtils securityUtils
     ) {
         this.repository        = repository;
         this.userRepository    = userRepository;
         this.projectRepository = projectRepository;
+        this.projectTaskRepository = projectTaskRepository;
+        this.resourceTypeRepository = resourceTypeRepository;
+        this.securityUtils = securityUtils;
     }
 
     public List<TaskResourceAssignmentDto> getTaskResources(Long projectId, Long taskId) {
+        Project project = getAccessibleProject(projectId);
+        validateTaskBelongsToProject(projectId, taskId, project);
         return repository.findByProjectIdAndTaskIdOrderByIdAsc(projectId, taskId)
                 .stream()
                 .map(this::toDto)
@@ -40,7 +55,7 @@ public class TaskResourceAssignmentService {
         TaskResourceAssignment entity = new TaskResourceAssignment();
         entity.setProjectId(projectId);
         entity.setTaskId(taskId);
-        apply(entity, dto);
+        apply(entity, dto, getAccessibleProject(projectId), taskId);
         return toDto(repository.save(entity));
     }
 
@@ -55,7 +70,9 @@ public class TaskResourceAssignmentService {
             throw new IllegalArgumentException(
                     "Resource assignment does not belong to the given project/task.");
 
-        apply(entity, dto);
+        Project project = getAccessibleProject(projectId);
+        validateTaskBelongsToProject(projectId, taskId, project);
+        apply(entity, dto, project, taskId);
         return toDto(repository.save(entity));
     }
 
@@ -67,14 +84,14 @@ public class TaskResourceAssignmentService {
         if (!entity.getProjectId().equals(projectId) || !entity.getTaskId().equals(taskId))
             throw new IllegalArgumentException(
                     "Resource assignment does not belong to the given project/task.");
+        validateTaskBelongsToProject(projectId, taskId, getAccessibleProject(projectId));
 
         repository.delete(entity);
     }
 
     public List<ResourceUserDto> getUsersByResourceType(Long projectId, String resourceType) {
-        Long orgId = projectRepository.findById(projectId)
-                .map(p -> p.getOrganisation() != null ? p.getOrganisation().getId() : null)
-                .orElse(null);
+        Project project = getAccessibleProject(projectId);
+        Long orgId = project.getOrganisation() != null ? project.getOrganisation().getId() : null;
 
         if (orgId == null) return List.of();
 
@@ -92,7 +109,8 @@ public class TaskResourceAssignmentService {
                 .toList();
     }
 
-    private void apply(TaskResourceAssignment entity, TaskResourceAssignmentDto dto) {
+    private void apply(TaskResourceAssignment entity, TaskResourceAssignmentDto dto, Project project, Long taskId) {
+        validateTaskBelongsToProject(project.getId(), taskId, project);
         entity.setResourceType(dto.getResourceType());
         entity.setAssignmentName(dto.getAssignmentName());
         entity.setQuantity(dto.getQuantity() == null ? 1 : dto.getQuantity());
@@ -100,14 +118,39 @@ public class TaskResourceAssignmentService {
         entity.setCost(dto.getCost());
 
         if (dto.getAssignedUserId() != null) {
-        userRepository.findById(dto.getAssignedUserId())
+        userRepository.findByIdAndOrganisation_Id(dto.getAssignedUserId(), project.getOrganisation().getId())
                 .orElseThrow(() -> new IllegalArgumentException(
-                        "Assigned user not found: " + dto.getAssignedUserId()));
+                        "Assigned user not found in project organisation: " + dto.getAssignedUserId()));
 
         entity.setAssignedUserId(dto.getAssignedUserId());
         } else {
         entity.setAssignedUserId(null);
         }
+
+        if (dto.getResourceType() != null && !dto.getResourceType().isBlank()) {
+            resourceTypeRepository.findByCodeAndOrganisation_Id(dto.getResourceType(), project.getOrganisation().getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Resource type not found in project organisation"));
+        }
+    }
+
+    private Project getAccessibleProject(Long projectId) {
+        if (securityUtils.isPlatformUser()) {
+            return projectRepository.findById(projectId)
+                    .filter(project -> project.getOrganisation() != null && project.getOrganisation().getId() != null)
+                    .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+        }
+
+        Long orgId = securityUtils.getCurrentOrganisationId();
+        return projectRepository.findByIdAndOrganisationId(projectId, orgId)
+                .filter(project -> project.getOrganisation() != null && project.getOrganisation().getId() != null)
+                .orElseThrow(() -> new IllegalArgumentException("Project not accessible"));
+    }
+
+    private void validateTaskBelongsToProject(Long projectId, Long taskId, Project project) {
+        projectTaskRepository.findById(taskId)
+                .filter(task -> projectId.equals(task.getProjectId()))
+                .filter(task -> project.getOrganisation().getId().equals(task.getOrganisationId()))
+                .orElseThrow(() -> new IllegalArgumentException("Task not accessible in project"));
     }
 
     private TaskResourceAssignmentDto toDto(TaskResourceAssignment entity) {

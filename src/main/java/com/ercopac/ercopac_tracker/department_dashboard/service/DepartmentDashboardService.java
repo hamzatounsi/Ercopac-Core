@@ -52,6 +52,12 @@ public class DepartmentDashboardService {
 
     public List<DepartmentManagerDto> getManagers() {
         Long currentOrgId = getCurrentOrganisationIdOrThrow();
+        AppUser currentUser = getCurrentUserOrThrow();
+
+        // A department manager has no selector and must never discover peers.
+        if (currentUser.getRole() == Role.DEPARTMENT_MANAGER) {
+            return List.of(toManagerDto(currentUser));
+        }
 
         return userRepository.findByOrganisation_IdAndRoleOrderByFullNameAsc(
                         currentOrgId,
@@ -644,58 +650,38 @@ public class DepartmentDashboardService {
    private List<ProjectTask> loadDepartmentTasks(Long organisationId,
                                               String departmentCode,
                                               List<Long> memberIds) {
-    Set<Long> memberIdSet = new HashSet<>(memberIds);
+    Map<Long, ProjectTask> resultById = new LinkedHashMap<>();
 
-    List<ProjectTask> allTasks = projectTaskRepository.findAll()
-            .stream()
-            .filter(ProjectTask::getActive)
-            .filter(task -> {
-                if (task.getAssignedUser() != null
-                        && task.getAssignedUser().getOrganisation() != null
-                        && !Objects.equals(task.getAssignedUser().getOrganisation().getId(), organisationId)) {
-                    return false;
-                }
-                return true;
-            })
-            .toList();
+    if (memberIds != null && !memberIds.isEmpty()) {
+        projectTaskRepository.findByAssignedUser_IdInAndOrganisationId(memberIds, organisationId)
+                .stream()
+                .filter(ProjectTask::getActive)
+                .forEach(task -> resultById.put(task.getId(), task));
 
-    List<ProjectTask> result = new ArrayList<>();
+        List<Long> assignmentTaskIds = taskResourceAssignmentRepository.findByAssignedUserIdInOrderByIdAsc(memberIds)
+                .stream()
+                .map(TaskResourceAssignment::getTaskId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
 
-    for (ProjectTask task : allTasks) {
-        boolean include = false;
-
-        if (task.getAssignedUser() != null && memberIdSet.contains(task.getAssignedUser().getId())) {
-            include = true;
-        }
-
-        if (!include && departmentCode != null && departmentCode.equals(task.getDepartmentCode())) {
-            include = true;
-        }
-
-        if (!include && task.getProjectId() != null && task.getId() != null) {
-            List<TaskResourceAssignment> assignments =
-                    taskResourceAssignmentRepository.findByProjectIdAndTaskIdOrderByIdAsc(task.getProjectId(), task.getId());
-
-            include = assignments.stream()
-                .anyMatch(a -> {
-                    Long assignedUserId = null;
-
-                    if (a.getAssignedUser() != null) {
-                        assignedUserId = a.getAssignedUser().getId();
-                    } else if (a.getAssignedUserId() != null) {
-                        assignedUserId = a.getAssignedUserId();
-                    }
-
-                    return assignedUserId != null && memberIdSet.contains(assignedUserId);
-                });
-        }
-
-        if (include) {
-            result.add(task);
+        if (!assignmentTaskIds.isEmpty()) {
+            projectTaskRepository.findAllById(assignmentTaskIds)
+                    .stream()
+                    .filter(ProjectTask::getActive)
+                    .filter(task -> Objects.equals(task.getOrganisationId(), organisationId))
+                    .forEach(task -> resultById.put(task.getId(), task));
         }
     }
 
-    return result.stream()
+    if (departmentCode != null && !departmentCode.isBlank()) {
+        projectTaskRepository.findByDepartmentCodeAndOrganisationIdOrderByDisplayOrderAscIdAsc(departmentCode, organisationId)
+                .stream()
+                .filter(ProjectTask::getActive)
+                .forEach(task -> resultById.put(task.getId(), task));
+    }
+
+    return resultById.values().stream()
             .sorted(Comparator
                     .comparing(ProjectTask::getProjectId, Comparator.nullsLast(Long::compareTo))
                     .thenComparing(ProjectTask::getDisplayOrder, Comparator.nullsLast(Integer::compareTo))
@@ -773,6 +759,11 @@ public class DepartmentDashboardService {
         int safeSpan = span <= 0 ? ("day".equals(timelineView) ? 28 : 52) : span;
 
         Long currentOrgId = getCurrentOrganisationIdOrThrow();
+        AppUser currentUser = getCurrentUserOrThrow();
+        if (currentUser.getRole() == Role.DEPARTMENT_MANAGER
+                && !Objects.equals(currentUser.getDepartmentCode(), departmentCode)) {
+            throw new AccessDeniedException("Department managers can access only their own department.");
+        }
 
         List<DepartmentMemberDto> realMembers = userRepository
                 .findByOrganisation_IdAndDepartmentCodeOrderByFullNameAsc(currentOrgId, departmentCode)

@@ -2,8 +2,17 @@ package com.ercopac.ercopac_tracker.user;
 
 import com.ercopac.ercopac_tracker.department.domain.Department;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionAssignee;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionItem;
+import com.ercopac.ercopac_tracker.projectum.change_requests.domain.ChangeRequest;
+import com.ercopac.ercopac_tracker.projectum.risks.domain.RiskItem;
+import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
+import com.ercopac.ercopac_tracker.tasks.domain.TaskResourceAssignment;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "users")
@@ -41,6 +50,10 @@ public class AppUser {
     // ── KEPT for backward compat ────────────────────────────────
     @Column(name = "department_code", length = 30)
     private String departmentCode;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
 
     @Column(name = "job_title", length = 80)
     private String jobTitle;

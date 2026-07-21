@@ -1,5 +1,7 @@
 package com.ercopac.ercopac_tracker.planning.domain;
 
+import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projects.domain.Project;
 import jakarta.persistence.*;
 
 import java.time.Instant;
@@ -12,11 +14,19 @@ public class ProjectBaseline {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "organisation_id", nullable = false)
     private Long organisationId;
 
-    @Column(nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "organisation_id", nullable = false, insertable = false, updatable = false)
+    private Organisation organisation;
+
+    @Column(name = "project_id", nullable = false)
     private Long projectId;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "project_id", nullable = false, insertable = false, updatable = false)
+    private Project project;
 
     @Column(nullable = false, length = 150)
     private String name;
@@ -46,6 +56,9 @@ public class ProjectBaseline {
         this.organisationId = organisationId;
     }
 
+    public Organisation getOrganisation() { return organisation; }
+    public void setOrganisation(Organisation organisation) { this.organisation = organisation; }
+
     public Long getProjectId() {
         return projectId;
     }
@@ -53,6 +66,9 @@ public class ProjectBaseline {
     public void setProjectId(Long projectId) {
         this.projectId = projectId;
     }
+
+    public Project getProject() { return project; }
+    public void setProject(Project project) { this.project = project; }
 
     public String getName() {
         return name;

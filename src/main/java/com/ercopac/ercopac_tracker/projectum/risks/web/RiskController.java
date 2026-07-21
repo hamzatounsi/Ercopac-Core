@@ -37,13 +37,13 @@ public class RiskController {
     }
 
     @GetMapping("/resource-types")
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize(RISKS_READ)
     public ResponseEntity<List<ResourceTypeDto>> getResourceTypes(@PathVariable Long projectId) {
         return ResponseEntity.ok(riskService.getResourceTypes(projectId));
     }
 
     @GetMapping("/users-by-resource-type")
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize(RISKS_READ)
     public ResponseEntity<List<ResourceUserDto>> getUsersByResourceType(
             @PathVariable Long projectId,
             @RequestParam Long resourceTypeId) {
@@ -51,7 +51,7 @@ public class RiskController {
     }
 
     @GetMapping("/wbs-codes")
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','ORG_ADMIN','ROLE_ORG_ADMIN','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize(RISKS_READ)
     public ResponseEntity<List<String>> getWbsCodes(@PathVariable Long projectId) {
         return ResponseEntity.ok(riskService.getWbsCodes(projectId));
     }

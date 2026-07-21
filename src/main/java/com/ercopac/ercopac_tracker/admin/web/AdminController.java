@@ -2,6 +2,7 @@ package com.ercopac.ercopac_tracker.admin.web;
 
 import com.ercopac.ercopac_tracker.admin.dto.*;
 import com.ercopac.ercopac_tracker.admin.service.AdminService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,7 +11,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin")
 @org.springframework.security.access.prepost.PreAuthorize(
-    "hasAnyAuthority('ROLE_PLATFORM_OWNER','ROLE_PLATFORM_ADMIN','ROLE_ORG_ADMIN')"
+    "hasAnyAuthority('PLATFORM_OWNER','ROLE_PLATFORM_OWNER','ORG_ADMIN','ROLE_ORG_ADMIN')"
 )
 public class AdminController {
 
@@ -29,7 +30,7 @@ public class AdminController {
 
     @PostMapping("/licences")
     public ResponseEntity<AdminLicenceAssignmentDto> assignLicence(
-            @RequestBody AssignLicenceRequest request
+            @Valid @RequestBody AssignLicenceRequest request
     ) {
         return ResponseEntity.ok(adminService.assignLicence(request));
     }
@@ -49,7 +50,7 @@ public class AdminController {
 
     @PostMapping("/categories")
     public ResponseEntity<ProjectCategoryDto> createCategory(
-            @RequestBody SaveProjectCategoryRequest request
+            @Valid @RequestBody SaveProjectCategoryRequest request
     ) {
         return ResponseEntity.ok(adminService.createCategory(request));
     }
@@ -57,7 +58,7 @@ public class AdminController {
     @PutMapping("/categories/{id}")
     public ResponseEntity<ProjectCategoryDto> updateCategory(
             @PathVariable Long id,
-            @RequestBody SaveProjectCategoryRequest request
+            @Valid @RequestBody SaveProjectCategoryRequest request
     ) {
         return ResponseEntity.ok(adminService.updateCategory(id, request));
     }
@@ -77,7 +78,7 @@ public class AdminController {
 
     @PostMapping("/types")
     public ResponseEntity<ProjectTypeDto> createType(
-            @RequestBody SaveProjectTypeRequest request
+            @Valid @RequestBody SaveProjectTypeRequest request
     ) {
         return ResponseEntity.ok(adminService.createType(request));
     }
@@ -85,7 +86,7 @@ public class AdminController {
     @PutMapping("/types/{id}")
     public ResponseEntity<ProjectTypeDto> updateType(
             @PathVariable Long id,
-            @RequestBody SaveProjectTypeRequest request
+            @Valid @RequestBody SaveProjectTypeRequest request
     ) {
         return ResponseEntity.ok(adminService.updateType(id, request));
     }
@@ -105,7 +106,7 @@ public class AdminController {
 
     @PostMapping("/customers")
     public ResponseEntity<CustomerDto> createCustomer(
-            @RequestBody SaveCustomerRequest request
+            @Valid @RequestBody SaveCustomerRequest request
     ) {
         return ResponseEntity.ok(adminService.createCustomer(request));
     }
@@ -113,7 +114,7 @@ public class AdminController {
     @PutMapping("/customers/{id}")
     public ResponseEntity<CustomerDto> updateCustomer(
             @PathVariable Long id,
-            @RequestBody SaveCustomerRequest request
+            @Valid @RequestBody SaveCustomerRequest request
     ) {
         return ResponseEntity.ok(adminService.updateCustomer(id, request));
     }
