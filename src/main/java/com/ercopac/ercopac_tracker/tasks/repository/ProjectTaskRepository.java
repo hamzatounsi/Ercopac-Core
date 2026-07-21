@@ -2,6 +2,9 @@ package com.ercopac.ercopac_tracker.tasks.repository;
 
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -28,8 +31,16 @@ public interface ProjectTaskRepository extends JpaRepository<ProjectTask, Long> 
     );
     void deleteByProjectId(Long projectId);
     void flush();
-    List<ProjectTask> findByProjectIdAndOrganisationIdOrderByDisplayOrderAscIdAsc(
-            Long projectId,
-            Long organisationId
-    );
+    @Query(value = """
+    	    UPDATE project_tasks pt
+    	    SET duration_days = (
+    	        SELECT COALESCE(SUM(c.duration_days), 0)
+    	        FROM project_tasks c
+    	        WHERE c.parent_id = pt.id
+    	    )
+    	    WHERE pt.project_id = :projectId
+    	    AND pt.task_type = 'SUMMARY'
+    	    """, nativeQuery = true)
+    	@Modifying
+    	void updateSummaryDurations(@Param("projectId") Long projectId);
 }

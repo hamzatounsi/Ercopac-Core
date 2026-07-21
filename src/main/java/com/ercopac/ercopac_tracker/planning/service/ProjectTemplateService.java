@@ -125,7 +125,7 @@ public class ProjectTemplateService {
         kickoff.setActive(true);
         kickoff.setDisplayOrder(1);
         kickoff.setDepartmentCode("PM");
-        kickoff.setResourceType("PM");
+        kickoff.setResourceTypeCode("PM");
         kickoff = projectTaskRepository.save(kickoff);
         createdTaskIds.put("KICKOFF", kickoff.getId());
 
@@ -146,7 +146,7 @@ public class ProjectTemplateService {
         engineering.setActive(true);
         engineering.setDisplayOrder(2);
         engineering.setDepartmentCode("ME");
-        engineering.setResourceType("ME");
+        engineering.setResourceTypeCode("ME");
         engineering = projectTaskRepository.save(engineering);
         createdTaskIds.put("ENGINEERING", engineering.getId());
 
@@ -167,7 +167,7 @@ public class ProjectTemplateService {
         procurement.setActive(true);
         procurement.setDisplayOrder(3);
         procurement.setDepartmentCode("PRC");
-        procurement.setResourceType("PRC");
+        procurement.setResourceTypeCode("PRC");
         procurement = projectTaskRepository.save(procurement);
         createdTaskIds.put("PROCUREMENT", procurement.getId());
 
@@ -188,7 +188,7 @@ public class ProjectTemplateService {
         delivery.setActive(true);
         delivery.setDisplayOrder(4);
         delivery.setDepartmentCode("PM");
-        delivery.setResourceType("PM");
+        delivery.setResourceTypeCode("PM");
         delivery = projectTaskRepository.save(delivery);
         createdTaskIds.put("DELIVERY", delivery.getId());
 

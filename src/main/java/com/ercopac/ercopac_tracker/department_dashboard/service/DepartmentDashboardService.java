@@ -269,7 +269,7 @@ public class DepartmentDashboardService {
                         end,
                         safeProgress(task.getPercentComplete()),
                         task.getDepartmentCode(),
-                        task.getResourceType(),
+                        task.getResourceTypeCode(),
                         false,
                         false,
                         null,
@@ -277,7 +277,7 @@ public class DepartmentDashboardService {
                 ));
             }
         } else {
-            String resourceType = task.getResourceType();
+            String resourceType = task.getResourceTypeCode();
 
             if ((resourceType == null || resourceType.isBlank()) && !assignments.isEmpty()) {
                 resourceType = assignments.stream()
@@ -419,7 +419,7 @@ public class DepartmentDashboardService {
                 continue;
             }
 
-            String resourceType = task.getResourceType() != null ? task.getResourceType() : "UNKNOWN";
+            String resourceType = task.getResourceTypeCode() != null ? task.getResourceTypeCode() : "UNKNOWN";
             Integer taskHours = task.getPlannedHours() != null ? task.getPlannedHours().intValue() : 0;
 
             List<TaskResourceAssignment> assignments = Collections.emptyList();
@@ -464,7 +464,7 @@ public class DepartmentDashboardService {
 
         for (DepartmentTimelineColumnDto col : timelineColumns) {
             Set<String> resourceTypes = tasks.stream()
-                    .map(ProjectTask::getResourceType)
+                    .map(ProjectTask::getResourceTypeCode)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toCollection(LinkedHashSet::new));
 
@@ -499,8 +499,7 @@ public class DepartmentDashboardService {
                         "GENERAL"
                 )),
                 safeString(firstNonNull(
-                        readProperty(user, "resourceType"),
-                        readProperty(user, "restype"),
+                		user.getResourceType() != null ? user.getResourceType().getCode() : "GENERAL",
                         readProperty(user, "role")
                 )),
                 safeString(readProperty(user, "role"))
@@ -519,7 +518,7 @@ public class DepartmentDashboardService {
                 safeString(firstNonNull(readProperty(user, "employeeCode"), readProperty(user, "code"))),
                 safeString(readProperty(user, "email")),
                 safeString(firstNonNull(readProperty(user, "departmentCode"), readProperty(user, "department"), "GENERAL")),
-                safeString(firstNonNull(readProperty(user, "resourceType"), readProperty(user, "restype"), "GENERAL")),
+                user.getResourceType() != null ? user.getResourceType().getCode() : "GENERAL",
                 safeString(readProperty(user, "role")),
                 safeString(readProperty(user, "seniority")),
                 safeBoolean(firstNonNull(readProperty(user, "internalUser"), Boolean.TRUE)),
