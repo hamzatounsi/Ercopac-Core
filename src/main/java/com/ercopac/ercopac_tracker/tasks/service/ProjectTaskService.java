@@ -4,6 +4,7 @@ import com.ercopac.ercopac_tracker.department.dto.DepartmentDto;
 import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
+import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskDependency;
 import com.ercopac.ercopac_tracker.tasks.dto.CreateTaskRequest;
@@ -42,7 +43,7 @@ public class ProjectTaskService {
     private final TaskConsoleService               taskConsoleService;
     private final ResourceTypeRepository           resourceTypeRepository;
     private final DepartmentRepository             departmentRepository;
-
+    private final SecurityUtils securityUtils;
     public ProjectTaskService(
             ProjectTaskRepository projectTaskRepository,
             ProjectRepository projectRepository,
@@ -53,7 +54,7 @@ public class ProjectTaskService {
             ProjectTaskHistoryService historyService,
             TaskConsoleService taskConsoleService,
             ResourceTypeRepository resourceTypeRepository,
-            DepartmentRepository departmentRepository) {
+            DepartmentRepository departmentRepository ,SecurityUtils securityUtils) {   // ← added
         this.projectTaskRepository            = projectTaskRepository;
         this.projectRepository                = projectRepository;
         this.userRepository                   = userRepository;
@@ -64,6 +65,7 @@ public class ProjectTaskService {
         this.taskConsoleService               = taskConsoleService;
         this.resourceTypeRepository           = resourceTypeRepository;
         this.departmentRepository             = departmentRepository;
+        this.securityUtils                    = securityUtils;  
     }
 
     // ══════════════════════════════════════════════════════════════

@@ -38,7 +38,7 @@ public class ProjectAiContextService {
         Project project = projectRepository.findByIdAndOrganisationId(projectId, organisationId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
-        var tasks = taskRepository.findByProjectIdAndOrganisationIdOrderByDisplayOrderAscIdAsc(projectId, organisationId);
+        var tasks = taskRepository.findByDepartment_IdAndOrganisationIdOrderByDisplayOrderAscIdAsc(projectId, organisationId);
         var finance = financeRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(projectId, organisationId);
         var risks = riskRepository.findAllByProjectIdAndOrganisation_IdOrderByIdAsc(projectId, organisationId);
         var actions = actionRepository.findAllByProjectIdAndOrganisationIdOrderByIdAsc(projectId, organisationId);
