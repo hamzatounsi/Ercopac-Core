@@ -141,11 +141,7 @@ public class TaskConsoleService {
                         task.getProjectId(),
                         task.getId()
                 )
-                .orElse(null);
-
-        if (config == null) {
-            return;
-        }
+                .orElseGet(() -> createDefaultConfig(organisationId, task.getProjectId(), task.getId()));
 
         int oldValue = oldPercent != null ? oldPercent : 0;
         int newValue = newPercent != null ? newPercent : 0;
@@ -188,35 +184,32 @@ public class TaskConsoleService {
 
         logRepository.save(log);
 
-        createEmailNotificationIfNeeded(task, config, organisationId, message, severity);
+        createAppNotification(task, config, organisationId, message, severity);
     }
 
-    private void createEmailNotificationIfNeeded(
+    /**
+     * Creates a real row in the `notifications` table (read by the header bell)
+     * regardless of the configured channel (APP_ALERT, EMAIL, or BOTH).
+     * The email itself is never actually sent from here (no sendAsync/sendNow
+     * call), so this is safe: it only records the notification for in-app display.
+     */
+    private void createAppNotification(
             ProjectTask task,
             TaskConsoleConfig config,
             Long organisationId,
             String message,
             String severity
     ) {
-        if (!"EMAIL".equalsIgnoreCase(config.getChannel())
-                && !"BOTH".equalsIgnoreCase(config.getChannel())) {
-            return;
-        }
-
         if (task.getAssignedUser() == null) {
             return;
         }
 
-        if (task.getAssignedUser().getEmail() == null
-                || task.getAssignedUser().getEmail().isBlank()) {
-            return;
-        }
+        String rawChannel = config.getChannel() == null ? "APP_ALERT" : config.getChannel().toUpperCase();
+        NotificationChannel channel = "EMAIL".equals(rawChannel)
+                ? NotificationChannel.EMAIL
+                : NotificationChannel.APP_ALERT;
 
-        Boolean emailEnabled = task.getAssignedUser().getEmailNotificationsEnabled();
-
-        if (emailEnabled != null && !emailEnabled) {
-            return;
-        }
+        String recipientEmail = task.getAssignedUser().getEmail();
 
         String html = templateService.taskCheckpointTemplate(
                 task.getName(),
@@ -231,8 +224,8 @@ public class TaskConsoleService {
                         task.getProjectId(),
                         task.getId(),
                         task.getAssignedUser().getId(),
-                        task.getAssignedUser().getEmail(),
-                        NotificationChannel.EMAIL,
+                        recipientEmail,
+                        channel,
                         severity,
                         "Projectum Task Alert - " + task.getName(),
                         message,

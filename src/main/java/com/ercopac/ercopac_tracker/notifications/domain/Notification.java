@@ -1,46 +1,39 @@
 package com.ercopac.ercopac_tracker.notifications.domain;
-
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
-
 @Entity
 @Table(name = "notifications")
 public class Notification {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
     private Long organisationId;
     private Long projectId;
     private Long taskId;
     private Long recipientUserId;
-
     private String recipientEmail;
-
     @Enumerated(EnumType.STRING)
     private NotificationChannel channel;
-
     @Enumerated(EnumType.STRING)
     private NotificationStatus status;
-
     private String severity;
     private String subject;
-
     @Column(columnDefinition = "TEXT")
     private String message;
-
     @Column(columnDefinition = "TEXT")
     private String htmlBody;
-
     private int retryCount;
-
     @Column(columnDefinition = "TEXT")
     private String errorMessage;
-
     private LocalDateTime createdAt;
     private LocalDateTime sentAt;
     private LocalDateTime nextRetryAt;
+
+    @Column(nullable = false)
+    private boolean readByUser = false;
+
+    private String link;
+
     public Long getId() {
         return id;
     }
@@ -143,8 +136,16 @@ public class Notification {
     public void setNextRetryAt(LocalDateTime nextRetryAt) {
         this.nextRetryAt = nextRetryAt;
     }
-
-    // generate getters/setters
-
-    
+    public boolean isReadByUser() {
+        return readByUser;
+    }
+    public void setReadByUser(boolean readByUser) {
+        this.readByUser = readByUser;
+    }
+    public String getLink() {
+        return link;
+    }
+    public void setLink(String link) {
+        this.link = link;
+    }
 }
