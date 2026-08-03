@@ -1,0 +1,2 @@
+package com.ercopac.ercopac_tracker.ticketing.repository; import com.ercopac.ercopac_tracker.ticketing.domain.TicketMessage; import org.springframework.data.jpa.repository.JpaRepository; import java.util.*;
+public interface TicketMessageRepository extends JpaRepository<TicketMessage,Long> { List<TicketMessage> findByTicket_IdOrderByCreatedAtAsc(Long ticketId); List<TicketMessage> findByTicket_IdAndInternalNoteFalseOrderByCreatedAtAsc(Long ticketId); long countByTicket_IdAndCreatedAtAfterAndSender_IdNot(Long ticketId, java.time.Instant instant, Long userId); }

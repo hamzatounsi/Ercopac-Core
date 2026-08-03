@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import com.ercopac.ercopac_tracker.ticketing.service.TicketConflictException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -71,6 +72,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(errorBody(HttpStatus.CONFLICT, "The requested change conflicts with existing data."));
+    }
+
+    @ExceptionHandler(TicketConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleTicketConflict(TicketConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorBody(HttpStatus.CONFLICT, ex.getMessage()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

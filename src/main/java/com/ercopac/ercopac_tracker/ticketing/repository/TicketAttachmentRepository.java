@@ -1,0 +1,2 @@
+package com.ercopac.ercopac_tracker.ticketing.repository; import com.ercopac.ercopac_tracker.ticketing.domain.TicketAttachment; import org.springframework.data.jpa.repository.JpaRepository; import java.util.*;
+public interface TicketAttachmentRepository extends JpaRepository<TicketAttachment,Long> { List<TicketAttachment> findByTicket_IdOrderByUploadedAtAsc(Long ticketId); Optional<TicketAttachment> findByIdAndTicket_Id(Long id,Long ticketId); }

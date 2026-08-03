@@ -13,6 +13,7 @@ import java.util.Optional;
 public interface ProjectTaskRepository extends JpaRepository<ProjectTask, Long> {
 
     List<ProjectTask> findByProjectIdOrderByDisplayOrderAscIdAsc(Long projectId);
+    List<ProjectTask> findByProjectIdAndOrganisationIdOrderByDisplayOrderAscIdAsc(Long projectId, Long organisationId);
     List<ProjectTask> findByProjectId(Long projectId);
     long countByProjectId(Long projectId);
     Optional<ProjectTask> findByProjectIdAndWbsCode(Long projectId, String wbsCode);

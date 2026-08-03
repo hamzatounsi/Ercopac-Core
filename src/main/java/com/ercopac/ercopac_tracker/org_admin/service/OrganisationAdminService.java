@@ -42,7 +42,9 @@ public class OrganisationAdminService {
             Role.ORG_ADMIN,
             Role.GENERAL_MANAGER,
             Role.DEPARTMENT_MANAGER,
-            Role.EMPLOYEE
+            Role.EMPLOYEE,
+            Role.SALES_MANAGER,
+            Role.CLIENT
     );
 
     private static final Set<String> SESSION_TIMEOUTS = Set.of(
@@ -574,7 +576,8 @@ public class OrganisationAdminService {
             case GENERAL_MANAGER -> organisation.getGeneralManagerLicenceLimit();
             case DEPARTMENT_MANAGER -> organisation.getDepartmentManagerLicenceLimit();
             case EMPLOYEE -> organisation.getEmployeeLicenceLimit();
-            case PLATFORM_OWNER -> 0;
+            case PLATFORM_OWNER, PLATFORM_ADMIN -> 0;
+            case SALES_MANAGER, CLIENT -> Integer.MAX_VALUE;
         };
 
         if (userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role) >= limit) {
@@ -693,6 +696,9 @@ public class OrganisationAdminService {
             case DEPARTMENT_MANAGER -> "Department Manager";
             case EMPLOYEE -> "Employee";
             case PLATFORM_OWNER -> "Platform Owner";
+            case PLATFORM_ADMIN -> "Platform Admin";
+            case SALES_MANAGER -> "Sales Manager";
+            case CLIENT -> "Client";
         };
     }
 
@@ -703,6 +709,9 @@ public class OrganisationAdminService {
             case DEPARTMENT_MANAGER -> "Manages delivery, resources, and workload for one department.";
             case EMPLOYEE -> "Works with personal assignments and tasks.";
             case PLATFORM_OWNER -> "Manages the SaaS platform.";
+            case PLATFORM_ADMIN -> "Administers platform operations.";
+            case SALES_MANAGER -> "Manages customer support tickets and client communication.";
+            case CLIENT -> "Submits and follows support tickets for their organisation.";
         };
     }
 

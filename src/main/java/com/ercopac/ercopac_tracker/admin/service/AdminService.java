@@ -325,7 +325,8 @@ public class AdminService {
             case GENERAL_MANAGER -> organisation.getGeneralManagerLicenceLimit();
             case DEPARTMENT_MANAGER -> organisation.getDepartmentManagerLicenceLimit();
             case EMPLOYEE -> organisation.getEmployeeLicenceLimit();
-            case PLATFORM_OWNER -> 0;
+            case PLATFORM_OWNER, PLATFORM_ADMIN -> 0;
+            case SALES_MANAGER, CLIENT -> Integer.MAX_VALUE;
         };
         if (userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role) >= limit) {
             throw new ResponseStatusException(
