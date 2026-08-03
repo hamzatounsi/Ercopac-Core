@@ -57,7 +57,7 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
 
     int countByOrganisation_IdAndRoleAndActiveTrue(Long organisationId, Role role);
 
-    long countByOrganisation_IdAndDepartment_Id(Long organisationId, Long departmentId);
+    long countByOrganisation_IdAndDepartment1_Id(Long organisationId, Long departmentId);
 
     long countByOrganisation_IdAndDepartmentCode(Long organisationId, String departmentCode);
 
@@ -66,8 +66,8 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
         from AppUser u
         where u.organisation.id = :organisationId
           and (
-                u.department.id = :departmentId or
-                (u.department is null and u.departmentCode = :departmentCode)
+                u.department1.id = :departmentId or
+                (u.department1 is null and u.departmentCode = :departmentCode)
               )
     """)
     long countOrganisationUsersInDepartment(
@@ -81,7 +81,7 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
         from AppUser u
         where u.organisation.id = :organisationId
           and u.active = true
-          and u.department is null
+          and u.department1 is null
           and (u.departmentCode is null or trim(u.departmentCode) = '')
     """)
     long countActiveUsersWithoutDepartment(@Param("organisationId") Long organisationId);
@@ -89,7 +89,7 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     @Query("""
         select u
         from AppUser u
-        left join u.department d
+        left join u.department1 d
         where u.organisation.id = :organisationId
           and (
                 :searchPattern is null or
@@ -188,5 +188,7 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findFirstByOrganisationIdAndRole(Long organisationId, Role role);
     List<AppUser> findByOrganisation_IdAndResourceType_IdAndActiveTrue(
     	    Long organisationId, Long resourceTypeId);
+ // Add this inside UserRepository.java
+    List<AppUser> findByOrganisation_IdAndDepartment1_IdOrderByFullNameAsc(Long organisationId, Long departmentId);
     
 }

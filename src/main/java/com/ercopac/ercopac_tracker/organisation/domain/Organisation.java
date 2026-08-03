@@ -142,10 +142,7 @@ public class Organisation {
     @OneToMany(mappedBy = "organisation")
     private List<Department> departments = new ArrayList<>();
 
-    @JsonIgnore
-    @OneToMany(mappedBy = "organisation")
-    private List<ProjectTask> projectTasks = new ArrayList<>();
-
+  
     @JsonIgnore
     @OneToMany(mappedBy = "organisation")
     private List<FinanceEntry> financeEntries = new ArrayList<>();
@@ -473,8 +470,7 @@ public class Organisation {
     public void setProjects(List<Project> projects) { this.projects = projects; }
     public List<Department> getDepartments() { return departments; }
     public void setDepartments(List<Department> departments) { this.departments = departments; }
-    public List<ProjectTask> getProjectTasks() { return projectTasks; }
-    public void setProjectTasks(List<ProjectTask> projectTasks) { this.projectTasks = projectTasks; }
+  
     public List<FinanceEntry> getFinanceEntries() { return financeEntries; }
     public void setFinanceEntries(List<FinanceEntry> financeEntries) { this.financeEntries = financeEntries; }
     public List<ForecastEntry> getForecastEntries() { return forecastEntries; }

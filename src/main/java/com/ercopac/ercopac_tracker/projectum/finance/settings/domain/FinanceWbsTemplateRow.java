@@ -1,8 +1,9 @@
 package com.ercopac.ercopac_tracker.projectum.finance.settings.domain;
 
+import com.ercopac.ercopac_tracker.department.domain.Department;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
-
 import java.math.BigDecimal;
 
 @Entity
@@ -33,77 +34,53 @@ public class FinanceWbsTemplateRow {
     @Column(nullable = false, length = 20)
     private FinanceWbsRowType type;
 
+    // ✅ NEW: Department (first dropdown)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
+
+    // ✅ NEW: Owner/User (second dropdown, filtered by department)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private AppUser owner;
+
     @Column(name = "owner_key", length = 100)
     private String ownerKey;
 
     @Column(name = "hour_rate", precision = 18, scale = 2)
     private BigDecimal hourRate;
 
-    public Long getId() {
-        return id;
-    }
-
-    public Organisation getOrganisation() {
-        return organisation;
-    }
-
-    public void setOrganisation(Organisation organisation) {
-        this.organisation = organisation;
-    }
-
-    public Integer getSortOrder() {
-        return sortOrder;
-    }
-
-    public void setSortOrder(Integer sortOrder) {
-        this.sortOrder = sortOrder;
-    }
-
-    public Integer getLevel() {
-        return level;
-    }
-
-    public void setLevel(Integer level) {
-        this.level = level;
-    }
-
-    public String getCodeTemplate() {
-        return codeTemplate;
-    }
-
-    public void setCodeTemplate(String codeTemplate) {
-        this.codeTemplate = codeTemplate;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public FinanceWbsRowType getType() {
-        return type;
-    }
-
-    public void setType(FinanceWbsRowType type) {
-        this.type = type;
-    }
-
-    public String getOwnerKey() {
-        return ownerKey;
-    }
-
-    public void setOwnerKey(String ownerKey) {
-        this.ownerKey = ownerKey;
-    }
-
-    public BigDecimal getHourRate() {
-        return hourRate;
-    }
-
-    public void setHourRate(BigDecimal hourRate) {
-        this.hourRate = hourRate;
-    }
+    // Getters and Setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    
+    public Organisation getOrganisation() { return organisation; }
+    public void setOrganisation(Organisation organisation) { this.organisation = organisation; }
+    
+    public Integer getSortOrder() { return sortOrder; }
+    public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
+    
+    public Integer getLevel() { return level; }
+    public void setLevel(Integer level) { this.level = level; }
+    
+    public String getCodeTemplate() { return codeTemplate; }
+    public void setCodeTemplate(String codeTemplate) { this.codeTemplate = codeTemplate; }
+    
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    
+    public FinanceWbsRowType getType() { return type; }
+    public void setType(FinanceWbsRowType type) { this.type = type; }
+    
+    public Department getDepartment() { return department; }
+    public void setDepartment(Department department) { this.department = department; }
+    
+    public AppUser getOwner() { return owner; }
+    public void setOwner(AppUser owner) { this.owner = owner; }
+    
+    public String getOwnerKey() { return ownerKey; }
+    public void setOwnerKey(String ownerKey) { this.ownerKey = ownerKey; }
+    
+    public BigDecimal getHourRate() { return hourRate; }
+    public void setHourRate(BigDecimal hourRate) { this.hourRate = hourRate; }
 }

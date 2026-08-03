@@ -5,9 +5,7 @@ import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceWbsRowType;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.user.AppUser;
-
 import jakarta.persistence.*;
-
 import java.math.BigDecimal;
 
 @Entity
@@ -61,6 +59,14 @@ public class FinanceEntry {
     @Column(precision = 18, scale = 2)
     private BigDecimal forecast = BigDecimal.ZERO;
 
+    // ✅ NEW: Cost Reserve (CR) from ERP
+    @Column(name = "cost_reserve", precision = 18, scale = 2)
+    private BigDecimal costReserve = BigDecimal.ZERO;
+
+    // ✅ NEW: Updated Budget from ERP
+    @Column(name = "updated_budget", precision = 18, scale = 2)
+    private BigDecimal updatedBudget = BigDecimal.ZERO;
+
     @Column(name = "owner_key", length = 100)
     private String ownerKey;
 
@@ -74,55 +80,34 @@ public class FinanceEntry {
     @Column(name = "is_summary", nullable = false)
     private Boolean isSummary = false;
 
-    public String getOwnerKey() {
-        return ownerKey;
-    }
-
-    public void setOwnerKey(String ownerKey) {
-        this.ownerKey = ownerKey;
-    }
-
-    public FinanceWbsRowType getRowType() {
-        return rowType;
-    }
-
-    public void setRowType(FinanceWbsRowType rowType) {
-        this.rowType = rowType;
-    }
-
-    public BigDecimal getHourRate() {
-        return hourRate;
-    }
-
-    public void setHourRate(BigDecimal hourRate) {
-        this.hourRate = hourRate;
-    }
-
-    public Boolean getIsSummary() {
-        return isSummary;
-    }
-
-    public void setIsSummary(Boolean isSummary) {
-        this.isSummary = isSummary;
-    }
-
+    // Constructors
     public FinanceEntry() {
     }
 
+    // Getters and Setters
     public Long getId() {
         return id;
     }
 
+    public void setId(Long id) {
+        this.id = id;
+    }
+
     public String getOwnerName() {
-    return ownerName;
+        return ownerName;
     }
 
     public void setOwnerName(String ownerName) {
         this.ownerName = ownerName;
     }
 
-    public AppUser getOwner() { return owner; }
-    public void setOwner(AppUser owner) { this.owner = owner; }
+    public AppUser getOwner() {
+        return owner;
+    }
+
+    public void setOwner(AppUser owner) {
+        this.owner = owner;
+    }
 
     public Organisation getOrganisation() {
         return organisation;
@@ -140,8 +125,13 @@ public class FinanceEntry {
         this.project = project;
     }
 
-    public ProjectTask getProjectTask() { return projectTask; }
-    public void setProjectTask(ProjectTask projectTask) { this.projectTask = projectTask; }
+    public ProjectTask getProjectTask() {
+        return projectTask;
+    }
+
+    public void setProjectTask(ProjectTask projectTask) {
+        this.projectTask = projectTask;
+    }
 
     public String getWbsCode() {
         return wbsCode;
@@ -205,5 +195,53 @@ public class FinanceEntry {
 
     public void setForecast(BigDecimal forecast) {
         this.forecast = forecast;
+    }
+
+    public BigDecimal getCostReserve() {
+        return costReserve;
+    }
+
+    public void setCostReserve(BigDecimal costReserve) {
+        this.costReserve = costReserve;
+    }
+
+    public BigDecimal getUpdatedBudget() {
+        return updatedBudget;
+    }
+
+    public void setUpdatedBudget(BigDecimal updatedBudget) {
+        this.updatedBudget = updatedBudget;
+    }
+
+    public String getOwnerKey() {
+        return ownerKey;
+    }
+
+    public void setOwnerKey(String ownerKey) {
+        this.ownerKey = ownerKey;
+    }
+
+    public FinanceWbsRowType getRowType() {
+        return rowType;
+    }
+
+    public void setRowType(FinanceWbsRowType rowType) {
+        this.rowType = rowType;
+    }
+
+    public BigDecimal getHourRate() {
+        return hourRate;
+    }
+
+    public void setHourRate(BigDecimal hourRate) {
+        this.hourRate = hourRate;
+    }
+
+    public Boolean getIsSummary() {
+        return isSummary;
+    }
+
+    public void setIsSummary(Boolean isSummary) {
+        this.isSummary = isSummary;
     }
 }

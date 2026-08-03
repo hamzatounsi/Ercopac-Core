@@ -2,6 +2,7 @@ package com.ercopac.ercopac_tracker.tasks.domain;
 
 import com.ercopac.ercopac_tracker.user.ResourceType;
 import com.ercopac.ercopac_tracker.department.domain.Department;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionItem;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
