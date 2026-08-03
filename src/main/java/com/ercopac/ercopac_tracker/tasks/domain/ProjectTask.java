@@ -2,6 +2,8 @@ package com.ercopac.ercopac_tracker.tasks.domain;
 
 import com.ercopac.ercopac_tracker.user.ResourceType;
 import com.ercopac.ercopac_tracker.department.domain.Department;
+import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionItem;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -22,8 +24,24 @@ public class ProjectTask {
     @Column(name = "project_id", nullable = false)
     private Long projectId;
 
+    /**
+     * Read-only association for the Project aggregate. Scheduling continues to
+     * persist projectId directly to preserve its existing write contract.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id", insertable = false, updatable = false)
+    private Project project;
+
     @Column(name = "organisation_id", nullable = false)
     private Long organisationId;
+
+    /**
+     * Read-only association for the Organisation aggregate. The scalar tenant
+     * identifier remains the write model used by scheduling services.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organisation_id", insertable = false, updatable = false)
+    private Organisation organisation;
 
     @Column(name = "parent_id")
     private Long parentId;

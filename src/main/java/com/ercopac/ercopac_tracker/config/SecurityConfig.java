@@ -28,10 +28,14 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final CorsConfigurationSource corsConfigurationSource;
 
-    private static final String[] PLATFORM_ROLES = {"PLATFORM_OWNER", "ROLE_PLATFORM_OWNER"};
+    private static final String[] PLATFORM_ROLES = {
+            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
+            "PLATFORM_ADMIN", "ROLE_PLATFORM_ADMIN"
+    };
 
     private static final String[] ORG_ADMIN_ROLES = {
             "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
+            "PLATFORM_ADMIN", "ROLE_PLATFORM_ADMIN",
             "ORG_ADMIN", "ROLE_ORG_ADMIN"
     };
 
@@ -76,6 +80,7 @@ public class SecurityConfig {
 
                         .requestMatchers(
                                 "/api/auth/**",
+                                "/ws/tickets/**",
                                 "/api/health",
                                 "/error"
                         ).permitAll()
