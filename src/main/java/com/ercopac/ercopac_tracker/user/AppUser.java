@@ -2,8 +2,17 @@ package com.ercopac.ercopac_tracker.user;
 
 import com.ercopac.ercopac_tracker.department.domain.Department;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionAssignee;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionItem;
+import com.ercopac.ercopac_tracker.projectum.change_requests.domain.ChangeRequest;
+import com.ercopac.ercopac_tracker.projectum.risks.domain.RiskItem;
+import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
+import com.ercopac.ercopac_tracker.tasks.domain.TaskResourceAssignment;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "users")
@@ -36,11 +45,13 @@ public class AppUser {
     // ── PROPER FK to Department ─────────────────────────────────
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id")
-    private Department department;
+    private Department department1;
 
     // ── KEPT for backward compat ────────────────────────────────
     @Column(name = "department_code", length = 30)
     private String departmentCode;
+
+   
 
     @Column(name = "job_title", length = 80)
     private String jobTitle;
@@ -113,15 +124,15 @@ public class AppUser {
     public void setEmployeeCode(String employeeCode) { this.employeeCode = employeeCode; }
 
     // Department FK — keeps departmentCode string in sync
-    public Department getDepartment() { return department; }
+    public Department getDepartment() { return department1; }
     public void setDepartment(Department department) {
-        this.department = department;
+        this.department1 = department;
         this.departmentCode = department != null ? department.getCode() : null;
     }
 
     // departmentCode string — derived from FK
     public String getDepartmentCode() {
-        if (department != null) return department.getCode();
+        if (department1 != null) return department1.getCode();
         return departmentCode;
     }
     public void setDepartmentCode(String departmentCode) { this.departmentCode = departmentCode; }

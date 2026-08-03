@@ -19,6 +19,13 @@ public class UpsertProjectRequest {
     private BigDecimal estimatedCost;
     private String projectManagerName;
     private String programManagerName;
+    private String applicationType;
+    public String getApplicationType() {
+        return applicationType;
+    }
+    public void setApplicationType(String applicationType) {
+        this.applicationType = applicationType;
+    }
     public String getCode() {
         return code;
     }

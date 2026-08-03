@@ -202,6 +202,13 @@ public class RiskService {
     }
 
     private void applyEditableFields(RiskItem item, UpsertRiskItemRequest request) {
+        Long organisationId = item.getProject() != null && item.getProject().getOrganisation() != null
+                ? item.getProject().getOrganisation().getId()
+                : null;
+        if (organisationId == null) {
+            throw new IllegalStateException("Risk project has no organisation");
+        }
+
         item.setRiskType(normalizeRiskType(request.getRiskType()));
         item.setState(normalizeState(request.getState()));
         item.setDescription(request.getDescription());
@@ -209,16 +216,20 @@ public class RiskService {
         item.setDueDate(request.getDueDate());
         item.setMitigation(request.getMitigation());
         if (request.getResourceTypeId() != null) {
-            resourceTypeRepository.findById(request.getResourceTypeId())
-                .ifPresent(item::setResourceType);
+            ResourceType resourceType = resourceTypeRepository
+                .findByIdAndOrganisation_Id(request.getResourceTypeId(), organisationId)
+                .orElseThrow(() -> new IllegalArgumentException("Resource type not found in project organisation"));
+            item.setResourceType(resourceType);
         } else {
             item.setResourceType(null);
         }
 
      // OwnerUser → find by ID
      if (request.getOwnerUserId() != null) {
-         userRepository.findById(request.getOwnerUserId())
-             .ifPresent(item::setOwnerUser);
+         AppUser ownerUser = userRepository
+             .findByIdAndOrganisation_Id(request.getOwnerUserId(), organisationId)
+             .orElseThrow(() -> new IllegalArgumentException("Risk owner not found in project organisation"));
+         item.setOwnerUser(ownerUser);
      } else {
          item.setOwnerUser(null);
      }
@@ -301,18 +312,7 @@ public class RiskService {
         }
 
      // CHANGE the RV calculation:
-        int rv;
-        try {
-            int impactNum = Integer.parseInt(item.getImpact() != null ? item.getImpact().trim() : "1");
-            int prob = item.getProbability() == null ? 10 : item.getProbability();
-            rv = impactNum * prob;
-        } catch (NumberFormatException e) {
-            rv = item.getProbability() == null ? 10 : item.getProbability();
-        }
-
-        dto.setRiskValue(rv);
-        dto.setRiskLevel(mapRiskLevel(rv));
-
+        int rv = calculateRiskValue(item.getImpact(), item.getProbability());
         dto.setRiskValue(rv);
         dto.setRiskLevel(mapRiskLevel(rv));
         dto.setVarianceStatus(item.getVarianceStatus());
@@ -322,12 +322,34 @@ public class RiskService {
 
         return dto;
     }
+
+    private int calculateRiskValue(String impact, Integer probability) {
+        int impactScore;
+
+        try {
+            impactScore = Integer.parseInt(impact == null ? "1" : impact.trim());
+        } catch (NumberFormatException e) {
+            impactScore = 1;
+        }
+
+        impactScore = Math.max(1, Math.min(5, impactScore));
+
+        int probabilityPercent = probability == null ? 10 : probability;
+        probabilityPercent = Math.max(10, Math.min(100, probabilityPercent));
+
+        int probabilityScore = (int) Math.ceil(probabilityPercent / 20.0);
+        probabilityScore = Math.max(1, Math.min(5, probabilityScore));
+
+        return impactScore * probabilityScore;
+    }
+
     private String mapRiskLevel(int rv) {
-        if (rv >= 400) return "crit";
-        if (rv >= 200) return "hi";
-        if (rv >= 100) return "med";
+        if (rv >= 17) return "crit";
+        if (rv >= 10) return "hi";
+        if (rv >= 5) return "med";
         return "low";
     }
+
     private Project getAccessibleProject(Long projectId) {
         if (securityUtils.isPlatformUser()) {
             return projectRepository.findById(projectId)

@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.tasks.domain;
 
+import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
 
@@ -16,8 +17,16 @@ public class TaskResourceAssignment {
     @Column(name = "project_id", nullable = false)
     private Long projectId;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "project_id", nullable = false, insertable = false, updatable = false)
+    private Project project;
+
     @Column(name = "task_id", nullable = false)
     private Long taskId;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "task_id", nullable = false, insertable = false, updatable = false)
+    private ProjectTask task;
 
     @Column(name = "assigned_user_id")
     private Long assignedUserId;
@@ -48,9 +57,13 @@ public class TaskResourceAssignment {
 
     public Long getProjectId() { return projectId; }
     public void setProjectId(Long projectId) { this.projectId = projectId; }
+    public Project getProject() { return project; }
+    public void setProject(Project project) { this.project = project; }
 
     public Long getTaskId() { return taskId; }
     public void setTaskId(Long taskId) { this.taskId = taskId; }
+    public ProjectTask getTask() { return task; }
+    public void setTask(ProjectTask task) { this.task = task; }
 
     public AppUser getAssignedUser() { return assignedUser; }
     public void setAssignedUser(AppUser assignedUser) { this.assignedUser = assignedUser; }

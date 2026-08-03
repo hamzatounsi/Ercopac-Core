@@ -185,6 +185,15 @@ public class PlatformOrganisationService {
         if (request.plan != null && !request.plan.isBlank()) {
             organisation.setPlan(request.plan.trim().toUpperCase());
         }
+        if (request.status != null && !request.status.isBlank()) {
+            try {
+                organisation.setStatus(
+                    OrganisationStatus.valueOf(request.status.trim().toUpperCase())
+                );
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("Invalid organisation status: " + request.status);
+            }
+        }
         if (request.billingEmail != null) {
         organisation.setBillingEmail(request.billingEmail.trim());
         }

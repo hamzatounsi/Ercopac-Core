@@ -1,7 +1,12 @@
 package com.ercopac.ercopac_tracker.projectum.actions.domain;
 
+import com.ercopac.ercopac_tracker.department.domain.Department;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projectum.change_requests.domain.ChangeRequest;
+import com.ercopac.ercopac_tracker.projectum.risks.domain.RiskItem;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
+import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
+import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
 
 import java.time.LocalDate;
@@ -36,6 +41,10 @@ public class ActionItem {
     @Column(length = 30)
     private String departmentCode;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
+
     @Column(nullable = false, length = 20)
     private String priority; // high | medium | low
 
@@ -47,6 +56,22 @@ public class ActionItem {
 
     private LocalDate insertedDate;
     private LocalDate dueDate;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private AppUser owner;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "risk_id")
+    private RiskItem risk;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "change_request_id")
+    private ChangeRequest changeRequest;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_task_id")
+    private ProjectTask projectTask;
 
     @OneToMany(mappedBy = "actionItem", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ActionAssignee> assignees = new ArrayList<>();
@@ -79,6 +104,8 @@ public class ActionItem {
 
     public String getDepartmentCode() { return departmentCode; }
     public void setDepartmentCode(String departmentCode) { this.departmentCode = departmentCode; }
+    public Department getDepartment() { return department; }
+    public void setDepartment(Department department) { this.department = department; }
 
     public String getPriority() { return priority; }
     public void setPriority(String priority) { this.priority = priority; }
@@ -94,6 +121,15 @@ public class ActionItem {
 
     public LocalDate getDueDate() { return dueDate; }
     public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
+
+    public AppUser getOwner() { return owner; }
+    public void setOwner(AppUser owner) { this.owner = owner; }
+    public RiskItem getRisk() { return risk; }
+    public void setRisk(RiskItem risk) { this.risk = risk; }
+    public ChangeRequest getChangeRequest() { return changeRequest; }
+    public void setChangeRequest(ChangeRequest changeRequest) { this.changeRequest = changeRequest; }
+    public ProjectTask getProjectTask() { return projectTask; }
+    public void setProjectTask(ProjectTask projectTask) { this.projectTask = projectTask; }
 
     public List<ActionAssignee> getAssignees() { return assignees; }
     public void setAssignees(List<ActionAssignee> assignees) { this.assignees = assignees; }

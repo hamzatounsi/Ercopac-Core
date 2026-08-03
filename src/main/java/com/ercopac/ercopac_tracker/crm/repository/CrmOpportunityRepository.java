@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
  
 public interface CrmOpportunityRepository extends JpaRepository<CrmOpportunity, Long> {
  
@@ -16,6 +17,8 @@ public interface CrmOpportunityRepository extends JpaRepository<CrmOpportunity, 
  
     List<CrmOpportunity> findByOrganisation_IdAndOwner_IdOrderByCreatedAtDesc(
             Long orgId, Long ownerId);
+
+    Optional<CrmOpportunity> findByIdAndOrganisation_Id(Long id, Long orgId);
  
     // Closing this month
     List<CrmOpportunity> findByOrganisation_IdAndClosingDateBetweenOrderByClosingDateAsc(
@@ -43,4 +46,9 @@ public interface CrmOpportunityRepository extends JpaRepository<CrmOpportunity, 
            "AND o.won = false AND o.lost = false " +
            "ORDER BY o.stage.displayOrder ASC")
     List<CrmOpportunity> findOpenByOrgGroupedByStage(@Param("orgId") Long orgId);
+
+    @Query("SELECT o.stage.id, COUNT(o) FROM CrmOpportunity o " +
+           "WHERE o.organisation.id = :orgId AND o.stage IS NOT NULL " +
+           "GROUP BY o.stage.id")
+    List<Object[]> countByStage(@Param("orgId") Long orgId);
 }

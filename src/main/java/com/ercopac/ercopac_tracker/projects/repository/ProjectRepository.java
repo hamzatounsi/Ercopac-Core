@@ -1,6 +1,8 @@
 package com.ercopac.ercopac_tracker.projects.repository;
 
 import com.ercopac.ercopac_tracker.projects.domain.Project;
+import com.ercopac.ercopac_tracker.projects.domain.ProjectApplicationType;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -25,5 +27,16 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     long countByOrganisationIdAndProjectType(Long organisationId, String projectType);
 
     long countByOrganisationIdAndCustomer(Long organisationId, String customer);
+
+    List<Project> findAllByOrganisationIdAndApplicationType(
+        Long organisationId,
+        ProjectApplicationType applicationType
+    );
+
+    Optional<Project> findByIdAndOrganisationIdAndApplicationType(
+        Long id,
+        Long organisationId,
+        ProjectApplicationType applicationType
+    );
     
 }

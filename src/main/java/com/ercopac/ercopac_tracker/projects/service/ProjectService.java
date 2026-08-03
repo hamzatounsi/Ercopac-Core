@@ -5,6 +5,7 @@ import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.planning.domain.ProjectPlanning;
 import com.ercopac.ercopac_tracker.planning.repository.ProjectPlanningRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
+import com.ercopac.ercopac_tracker.projects.domain.ProjectApplicationType;
 import com.ercopac.ercopac_tracker.projects.dto.ProjectDetailsResponse;
 import com.ercopac.ercopac_tracker.projects.dto.UpsertProjectRequest;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
@@ -142,6 +143,13 @@ public class ProjectService {
         project.setProgramManagerName(request.getProgramManagerName());
         project.setSalesManagerName(request.getSalesManagerName());
         project.setComment(request.getComment());
+        if (request.getApplicationType() != null && !request.getApplicationType().isBlank()) {
+            project.setApplicationType(
+                ProjectApplicationType.valueOf(request.getApplicationType().toUpperCase())
+            );
+        } else if (project.getApplicationType() == null) {
+            project.setApplicationType(ProjectApplicationType.PROJECTUM);
+        }
     }
 
     private ProjectDashboardRowDto toDashboardDto(Project p) {
@@ -164,6 +172,9 @@ public class ProjectService {
         dto.setProjectBudget(p.getProjectBudget());
         dto.setEstimatedCost(p.getEstimatedCost());
         dto.setArchived(Boolean.TRUE.equals(p.getArchived()));
+        dto.setApplicationType(
+            p.getApplicationType() != null ? p.getApplicationType().name() : "PROJECTUM"
+        );
         return dto;
     }
 }

@@ -16,6 +16,9 @@ public interface RiskItemRepository extends JpaRepository<RiskItem, Long> {
     
     List<RiskItem> findAllByOrganisation_IdAndStateInAndVarianceStatusOrderByIdAsc(
         Long organisationId, List<String> states, String varianceStatus);
+
+    List<RiskItem> findAllByOwnerUser_IdAndOrganisation_IdOrderByDueDateAscIdAsc(
+        Long ownerUserId, Long organisationId);
     
     boolean existsByProjectIdAndWbsCodeAndDescription(
         Long projectId, String wbsCode, String description);

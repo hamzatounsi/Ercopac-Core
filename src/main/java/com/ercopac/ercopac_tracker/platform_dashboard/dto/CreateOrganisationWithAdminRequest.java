@@ -5,6 +5,7 @@ public class CreateOrganisationWithAdminRequest {
     public String organisationCode;
     public String country;
     public String domain;
+    public String status;
     public String plan;
 
     public int userLimit;

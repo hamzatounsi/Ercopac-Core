@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.department.domain;
 
+import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
 import java.time.LocalDate;
@@ -14,6 +15,14 @@ public class DepartmentHoliday {
 
     @Column(name = "organisation_id", nullable = false)
     private Long organisationId;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "organisation_id", nullable = false, insertable = false, updatable = false)
+    private Organisation organisation;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "member_id", nullable = false)
@@ -30,6 +39,10 @@ public class DepartmentHoliday {
 
     @Column(name = "created_by")
     private Long createdBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", insertable = false, updatable = false)
+    private AppUser createdByUser;
 
     public DepartmentHoliday() {
     }
@@ -55,6 +68,11 @@ public class DepartmentHoliday {
     public void setOrganisationId(Long organisationId) {
         this.organisationId = organisationId;
     }
+
+    public Organisation getOrganisation() { return organisation; }
+    public void setOrganisation(Organisation organisation) { this.organisation = organisation; }
+    public Department getDepartment() { return department; }
+    public void setDepartment(Department department) { this.department = department; }
 
     public AppUser getMember() {
         return member;
@@ -96,8 +114,10 @@ public class DepartmentHoliday {
         this.createdBy = createdBy;
     }
 
-    public Object setMemberId(Long memberId) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'setMemberId'");
+    public AppUser getCreatedByUser() { return createdByUser; }
+    public void setCreatedByUser(AppUser createdByUser) { this.createdByUser = createdByUser; }
+
+    public Long getMemberId() {
+        return member == null ? null : member.getId();
     }
 }

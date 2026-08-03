@@ -6,38 +6,47 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.context.ApplicationContext;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.ercopac.ercopac_tracker.organisation.domain.OrganisationStatus;
+import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.user.Role;
+import com.ercopac.ercopac_tracker.user.UserRepository;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final ApplicationContext applicationContext;
+    private final UserRepository userRepository;
 
-    public JwtAuthFilter(JwtService jwtService, ApplicationContext applicationContext) {
+    public JwtAuthFilter(JwtService jwtService, UserRepository userRepository) {
         this.jwtService = jwtService;
-        this.applicationContext = applicationContext;
+        this.userRepository = userRepository;
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
 
+        if (path.equals("/api/auth/password-reset/pending")
+                || path.matches("/api/auth/password-reset/\\d+/(approve|reject)")) {
+            return false;
+        }
+
         return "OPTIONS".equalsIgnoreCase(request.getMethod())
-                || path.startsWith("/api/auth/")
                 || path.equals("/api/auth/login")
+                || path.equals("/api/auth/password-reset/request")
+                || path.equals("/api/auth/password-reset/reset")
                 || path.equals("/api/health")
                 || path.equals("/error");
     }
@@ -65,22 +74,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
 
             if (SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetailsService userDetailsService =
-                        applicationContext.getBean(UserDetailsService.class);
+                AppUser user = userRepository.findByEmail1(username)
+                        .orElse(null);
 
-                UserDetails user = userDetailsService.loadUserByUsername(username);
-
-                String role = jwtService.extractRole(token);
-                if (role == null || role.isBlank()) {
-                    sendUnauthorized(response, "JWT role is missing");
+                if (!isCurrentAccountStateValid(token, user)) {
+                    sendUnauthorized(response, "Authentication is no longer valid");
                     return;
                 }
 
-                String cleanRole = role.startsWith("ROLE_") ? role.substring(5) : role;
+                String cleanRole = user.getRole().name();
+                Long organisationId = user.getOrganisation() == null
+                        ? null
+                        : user.getOrganisation().getId();
 
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(
-                                user,
+                                user.getEmail(),
                                 null,
                                 List.of(
                                         new SimpleGrantedAuthority(cleanRole),
@@ -89,8 +98,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         );
 
                 Map<String, Object> details = new HashMap<>();
-                details.put("userId", jwtService.extractUserId(token));
-                details.put("organisationId", jwtService.extractOrganisationId(token));
+                details.put("userId", user.getId());
+                details.put("organisationId", organisationId);
                 details.put("role", cleanRole);
 
                 authToken.setDetails(details);
@@ -108,13 +117,48 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
     }
 
+    private boolean isCurrentAccountStateValid(String token, AppUser user) {
+        if (user == null || !user.isActive() || user.getRole() == null) {
+            return false;
+        }
+
+        if (user.getRole() != Role.PLATFORM_OWNER && user.getOrganisation() == null) {
+            return false;
+        }
+
+        Long tokenUserId = jwtService.extractUserId(token);
+        String tokenRole = jwtService.extractRole(token);
+        Long tokenOrganisationId = jwtService.extractOrganisationId(token);
+        Long currentOrganisationId = user.getOrganisation() == null
+                ? null
+                : user.getOrganisation().getId();
+        String cleanTokenRole = tokenRole == null
+                ? null
+                : tokenRole.replaceFirst("^ROLE_", "");
+
+        if (!user.getId().equals(tokenUserId)
+                || !user.getRole().name().equals(cleanTokenRole)
+                || !java.util.Objects.equals(currentOrganisationId, tokenOrganisationId)) {
+            return false;
+        }
+
+        return user.getOrganisation() == null
+                || (user.getOrganisation().isActive()
+                && user.getOrganisation().getStatus() != OrganisationStatus.SUSPENDED);
+    }
+
     private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
         SecurityContextHolder.clearContext();
 
         if (!response.isCommitted()) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");
-            response.getWriter().write("{\"error\":\"" + message + "\"}");
+            response.setCharacterEncoding("UTF-8");
+            response.getWriter().write(
+                    "{\"timestamp\":\"" + Instant.now()
+                            + "\",\"status\":401,\"error\":\"Unauthorized\",\"message\":\""
+                            + message + "\"}"
+            );
             response.getWriter().flush();
         }
     }

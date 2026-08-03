@@ -33,8 +33,10 @@ public class GmDashboardController {
 
     @GetMapping("/projects")
     @PreAuthorize(PROJECTS_READ)
-    public List<ProjectDashboardRowDto> projects() {
-        return gmDashboardService.getProjects();
+    public List<ProjectDashboardRowDto> projects(
+            @RequestParam(required = false, defaultValue = "PROJECTUM") String applicationType
+    ) {
+        return gmDashboardService.getProjects(applicationType);
     }
 
     @GetMapping("/kpis/portfolio")

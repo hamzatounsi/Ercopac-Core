@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.projectum.actions.domain;
 
+import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
 
 @Entity
@@ -17,6 +18,10 @@ public class ActionAssignee {
     @Column(nullable = false, length = 120)
     private String assigneeName;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assignee_user_id")
+    private AppUser assigneeUser;
+
     public ActionAssignee() {}
 
     public Long getId() { return id; }
@@ -26,4 +31,6 @@ public class ActionAssignee {
 
     public String getAssigneeName() { return assigneeName; }
     public void setAssigneeName(String assigneeName) { this.assigneeName = assigneeName; }
+    public AppUser getAssigneeUser() { return assigneeUser; }
+    public void setAssigneeUser(AppUser assigneeUser) { this.assigneeUser = assigneeUser; }
 }

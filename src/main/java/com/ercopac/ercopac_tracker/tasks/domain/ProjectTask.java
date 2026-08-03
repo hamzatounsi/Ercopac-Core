@@ -2,10 +2,14 @@ package com.ercopac.ercopac_tracker.tasks.domain;
 
 import com.ercopac.ercopac_tracker.user.ResourceType;
 import com.ercopac.ercopac_tracker.department.domain.Department;
+import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionItem;
 import com.ercopac.ercopac_tracker.user.AppUser;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "project_tasks")
@@ -23,6 +27,15 @@ public class ProjectTask {
 
     @Column(name = "parent_id")
     private Long parentId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id", insertable = false, updatable = false)
+    private ProjectTask parent;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "parent")
+    @OrderBy("displayOrder ASC, id ASC")
+    private List<ProjectTask> children = new ArrayList<>();
 
     @Column(nullable = false, length = 200)
     private String name;
@@ -113,6 +126,22 @@ public class ProjectTask {
 
     @Column(name = "department_code", length = 30)
     private String departmentCode;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "task")
+    private List<TaskResourceAssignment> resourceAssignments = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "predecessorTask")
+    private List<TaskDependency> outgoingDependencies = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "successorTask")
+    private List<TaskDependency> incomingDependencies = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "projectTask")
+    private List<ActionItem> actionItems = new ArrayList<>();
 
     public ProjectTask() {}
 
