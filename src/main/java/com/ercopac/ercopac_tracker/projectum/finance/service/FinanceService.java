@@ -13,6 +13,8 @@ import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceSett
 import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceWbsRowType;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.repository.FinanceHourlyRateRepository;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.repository.FinanceSettingsRepository;
+import com.ercopac.ercopac_tracker.projectum.forecast.domain.ForecastEntry;
+import com.ercopac.ercopac_tracker.projectum.forecast.repository.ForecastEntryRepository; // ✅ NEW IMPORT
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
@@ -21,22 +23,21 @@ import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.math.RoundingMode;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors;
-
-
 import java.util.Map;
 import java.util.Objects;
-
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
 public class FinanceService {
 
     private final FinanceEntryRepository financeEntryRepository;
+    private final ForecastEntryRepository forecastEntryRepository; // ✅ NEW
     private final ProjectRepository projectRepository;
     private final SecurityUtils securityUtils;
     private final ProjectTaskRepository projectTaskRepository;
@@ -44,17 +45,37 @@ public class FinanceService {
     private final FinanceHourlyRateRepository hourlyRateRepository;
 
     public FinanceService(FinanceEntryRepository financeEntryRepository,
+                          ForecastEntryRepository forecastEntryRepository, // ✅ NEW
                           ProjectRepository projectRepository,
                           SecurityUtils securityUtils,
                           ProjectTaskRepository projectTaskRepository,
                           FinanceSettingsRepository financeSettingsRepository,
                           FinanceHourlyRateRepository hourlyRateRepository) {
         this.financeEntryRepository = financeEntryRepository;
+        this.forecastEntryRepository = forecastEntryRepository; // ✅ NEW
         this.projectRepository = projectRepository;
         this.securityUtils = securityUtils;
         this.projectTaskRepository = projectTaskRepository;
         this.financeSettingsRepository = financeSettingsRepository;
         this.hourlyRateRepository = hourlyRateRepository;
+    }
+
+    // ✅ NEW: Fetches all forecast totals for a project in ONE query to avoid performance issues
+    private Map<String, BigDecimal> getForecastTotalsByWbs(Long projectId) {
+        Long orgId = securityUtils.getCurrentOrganisationId();
+        List<ForecastEntry> entries;
+        
+        if (securityUtils.isPlatformUser()) {
+            entries = forecastEntryRepository.findAllByProjectIdOrderByWbsCodeAscPeriodKeyAsc(projectId);
+        } else {
+            entries = forecastEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAscPeriodKeyAsc(projectId, orgId);
+        }
+
+        Map<String, BigDecimal> totals = new HashMap<>();
+        for (ForecastEntry entry : entries) {
+            totals.merge(entry.getWbsCode(), nvl(entry.getAmount()), BigDecimal::add);
+        }
+        return totals;
     }
 
     @Transactional(readOnly = true)
@@ -66,11 +87,15 @@ public class FinanceService {
                 : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(
                         project.getId(), project.getOrganisation().getId());
 
-        return rows.stream().map(this::toDto).toList();
+        // ✅ Get all forecast totals at once
+        Map<String, BigDecimal> forecastTotals = getForecastTotalsByWbs(projectId);
+
+        return rows.stream().map(row -> toDto(row, forecastTotals)).toList();
     }
 
     @Transactional(readOnly = true)
     public FinanceSummaryDto getProjectFinanceSummary(Long projectId) {
+        // Automatically uses the updated forecast totals from getProjectFinance
         List<FinanceEntryDto> rows = getProjectFinance(projectId);
 
         BigDecimal sales = BigDecimal.ZERO;
@@ -114,8 +139,8 @@ public class FinanceService {
         
         apply(entry, request);
 
-
-        return toDto(financeEntryRepository.save(entry));
+        Map<String, BigDecimal> forecastTotals = getForecastTotalsByWbs(projectId);
+        return toDto(financeEntryRepository.save(entry), forecastTotals);
     }
 
     public FinanceEntryDto updateEntry(Long projectId, Long entryId, UpsertFinanceEntryRequest request) {
@@ -129,7 +154,9 @@ public class FinanceService {
                     .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
 
         apply(entry, request);
-        return toDto(financeEntryRepository.save(entry));
+        
+        Map<String, BigDecimal> forecastTotals = getForecastTotalsByWbs(projectId);
+        return toDto(financeEntryRepository.save(entry), forecastTotals);
     }
 
     public void deleteEntry(Long projectId, Long entryId) {
@@ -148,64 +175,78 @@ public class FinanceService {
         entry.setWbsCode(request.getWbsCode());
         entry.setDescription(request.getDescription());
         entry.setLevel(request.getLevel());
+        
         entry.setSales(nvl(request.getSales()));
         entry.setBudget(nvl(request.getBudget()));
         entry.setCommitment(nvl(request.getCommitment()));
         entry.setActualCost(nvl(request.getActualCost()));
         entry.setForecast(nvl(request.getForecast()));
+        
+        entry.setCostReserve(nvl(request.getCostReserve()));
+        entry.setUpdatedBudget(nvl(request.getUpdatedBudget()));
+        
         entry.setOwnerName(request.getOwnerName());
     }
 
-    private FinanceEntryDto toDto(FinanceEntry entry) {
-    FinanceEntryDto dto = new FinanceEntryDto();
+    // ✅ UPDATED: Now takes the forecast totals map
+    private FinanceEntryDto toDto(FinanceEntry entry, Map<String, BigDecimal> forecastTotals) {
+        FinanceEntryDto dto = new FinanceEntryDto();
 
-    dto.setId(entry.getId());
-    dto.setWbsCode(entry.getWbsCode());
-    dto.setDescription(entry.getDescription());
-    dto.setLevel(entry.getLevel());
+        dto.setId(entry.getId());
+        dto.setWbsCode(entry.getWbsCode());
+        dto.setDescription(entry.getDescription());
+        dto.setLevel(entry.getLevel());
 
-    // OWNER ✅
-    dto.setOwner(entry.getOwnerName() != null ? entry.getOwnerName() : "—");
+        dto.setOwner(entry.getOwnerName() != null ? entry.getOwnerName() : "—");
 
-    BigDecimal sales = nvl(entry.getSales());
-    BigDecimal budget = nvl(entry.getBudget());
-    BigDecimal commitment = nvl(entry.getCommitment());
-    BigDecimal actualCost = nvl(entry.getActualCost());
-    BigDecimal forecast = nvl(entry.getForecast());
+        BigDecimal sales = nvl(entry.getSales());
+        BigDecimal budget = nvl(entry.getBudget());
+        BigDecimal commitment = nvl(entry.getCommitment());
+        BigDecimal actualCost = nvl(entry.getActualCost());
+        
+        // ✅ AUTOMATICALLY GET FORECAST FROM FORECAST PAGE
+        BigDecimal forecast = forecastTotals.getOrDefault(entry.getWbsCode(), BigDecimal.ZERO);
+        
+        // Optional: If you want to keep the old finance_entries.forecast as a fallback when the grid is empty, 
+        // uncomment the line below:
+        // if (forecast.compareTo(BigDecimal.ZERO) == 0) forecast = nvl(entry.getForecast());
 
-    dto.setSales(sales);
-    dto.setBudget(budget);
-    dto.setCommitment(commitment);
-    dto.setActualCost(actualCost);
-    dto.setForecast(forecast);
+        BigDecimal costReserve = nvl(entry.getCostReserve());
+        BigDecimal updatedBudget = nvl(entry.getUpdatedBudget());
 
-    BigDecimal eac = actualCost.add(forecast);
-    BigDecimal variance = budget.subtract(eac);
+        dto.setSales(sales);
+        dto.setBudget(budget);
+        dto.setCommitment(commitment);
+        dto.setActualCost(actualCost);
+        dto.setForecast(forecast);
+        dto.setCostReserve(costReserve);
+        dto.setUpdatedBudget(updatedBudget);
 
-    dto.setEac(eac);
-    dto.setVariance(variance);
+        BigDecimal eac = actualCost.add(forecast);
+        BigDecimal variance = budget.subtract(eac);
 
-    // CPI (temporary)
-    if (eac.compareTo(BigDecimal.ZERO) > 0) {
-        dto.setCpi(
-            budget.divide(eac, 4, RoundingMode.HALF_UP).doubleValue()
-        );
-    } else {
-        dto.setCpi(null);
-    }
+        dto.setEac(eac);
+        dto.setVariance(variance);
 
-    // % AC
-    if (budget.compareTo(BigDecimal.ZERO) > 0) {
-        dto.setPercentAc(
-            actualCost.divide(budget, 4, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100))
-                .doubleValue()
-        );
-    } else {
-        dto.setPercentAc(0.0);
-    }
+        // CPI
+        if (eac.compareTo(BigDecimal.ZERO) > 0) {
+            dto.setCpi(budget.divide(eac, 4, RoundingMode.HALF_UP).doubleValue());
+        } else {
+            dto.setCpi(null);
+        }
 
-    return dto;
+        // % AC
+        if (budget.compareTo(BigDecimal.ZERO) > 0) {
+            dto.setPercentAc(
+                actualCost.divide(budget, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .doubleValue()
+            );
+        } else {
+            dto.setPercentAc(0.0);
+        }
+
+        return dto;
     }
 
     private Project getAccessibleProject(Long projectId) {
@@ -244,199 +285,199 @@ public class FinanceService {
 
     @Transactional(readOnly = true)
     public FinanceEntryDetailDto getEntryDetail(Long projectId, Long entryId) {
-    Project project = getAccessibleProject(projectId);
+        Project project = getAccessibleProject(projectId);
 
-    FinanceEntry entry = securityUtils.isPlatformUser()
-            ? financeEntryRepository.findByIdAndProjectId(entryId, projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"))
-            : financeEntryRepository.findByIdAndProjectIdAndOrganisationId(
-                entryId, projectId, project.getOrganisation().getId())
-                .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
+        FinanceEntry entry = securityUtils.isPlatformUser()
+                ? financeEntryRepository.findByIdAndProjectId(entryId, projectId)
+                    .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"))
+                : financeEntryRepository.findByIdAndProjectIdAndOrganisationId(
+                    entryId, projectId, project.getOrganisation().getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
 
-    FinanceEntryDto rowDto = toDto(entry);
+        // ✅ UPDATED: Pass the forecast totals map
+        Map<String, BigDecimal> forecastTotals = getForecastTotalsByWbs(projectId);
+        FinanceEntryDto rowDto = toDto(entry, forecastTotals);
 
-    BigDecimal budget = nvl(entry.getBudget());
-    BigDecimal commitment = nvl(entry.getCommitment());
-    BigDecimal actualCost = nvl(entry.getActualCost());
-    BigDecimal forecast = nvl(entry.getForecast());
-    BigDecimal eac = actualCost.add(forecast);
-    BigDecimal sales = nvl(entry.getSales());
+        BigDecimal budget = nvl(entry.getBudget());
+        BigDecimal commitment = nvl(entry.getCommitment());
+        BigDecimal actualCost = nvl(entry.getActualCost());
+        BigDecimal forecast = nvl(rowDto.getForecast());
+        BigDecimal eac = actualCost.add(forecast);
+        BigDecimal sales = nvl(entry.getSales());
 
-    FinanceEntryDetailDto dto = new FinanceEntryDetailDto();
-    dto.setRow(rowDto);
+        FinanceEntryDetailDto dto = new FinanceEntryDetailDto();
+        dto.setRow(rowDto);
 
-    dto.setPercentCommitment(percent(commitment, budget));
-    dto.setPercentForecast(percent(forecast, budget));
-    dto.setPercentEac(percent(eac, budget));
+        dto.setPercentCommitment(percent(commitment, budget));
+        dto.setPercentForecast(percent(forecast, budget));
+        dto.setPercentEac(percent(eac, budget));
 
-    if (sales.compareTo(BigDecimal.ZERO) > 0) {
-        dto.setMarginPercent(
-            sales.subtract(eac)
-                .divide(sales, 4, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100))
-        );
-    }
+        if (sales.compareTo(BigDecimal.ZERO) > 0) {
+            dto.setMarginPercent(
+                sales.subtract(eac)
+                    .divide(sales, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+            );
+        }
 
-    String prefix = entry.getWbsCode() + ".";
-    List<FinanceEntry> childEntities = securityUtils.isPlatformUser()
-            ? financeEntryRepository.findAllByProjectIdAndWbsCodeStartingWithOrderByWbsCodeAsc(projectId, prefix)
-            : financeEntryRepository.findAllByProjectIdAndOrganisationIdAndWbsCodeStartingWithOrderByWbsCodeAsc(
-                projectId, project.getOrganisation().getId(), prefix);
+        String prefix = entry.getWbsCode() + ".";
+        List<FinanceEntry> childEntities = securityUtils.isPlatformUser()
+                ? financeEntryRepository.findAllByProjectIdAndWbsCodeStartingWithOrderByWbsCodeAsc(projectId, prefix)
+                : financeEntryRepository.findAllByProjectIdAndOrganisationIdAndWbsCodeStartingWithOrderByWbsCodeAsc(
+                    projectId, project.getOrganisation().getId(), prefix);
 
-    List<FinanceEntryDto> directChildren = childEntities.stream()
-            .filter(e -> e.getLevel() != null && entry.getLevel() != null && e.getLevel() == entry.getLevel() + 1)
-            .map(this::toDto)
-            .toList();
+        List<FinanceEntryDto> directChildren = childEntities.stream()
+                .filter(e -> e.getLevel() != null && entry.getLevel() != null && e.getLevel() == entry.getLevel() + 1)
+                .map(e -> toDto(e, forecastTotals)) // ✅ UPDATED
+                .toList();
 
-    dto.setChildren(directChildren);
+        dto.setChildren(directChildren);
 
-    return dto;
+        return dto;
     }
 
     private Double percent(BigDecimal numerator, BigDecimal denominator) {
-    if (denominator == null || denominator.compareTo(BigDecimal.ZERO) <= 0) {
-        return 0.0;
-    }
-    return numerator.divide(denominator, 4, RoundingMode.HALF_UP)
-            .multiply(BigDecimal.valueOf(100))
-            .doubleValue();
+        if (denominator == null || denominator.compareTo(BigDecimal.ZERO) <= 0) {
+            return 0.0;
+        }
+        return numerator.divide(denominator, 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .doubleValue();
     }
 
     @Transactional(readOnly = true)
-public FinanceCostBreakdownDto getCostBreakdown(Long projectId) {
-    List<FinanceEntryDto> rows = getProjectFinance(projectId);
+    public FinanceCostBreakdownDto getCostBreakdown(Long projectId) {
+        List<FinanceEntryDto> rows = getProjectFinance(projectId);
 
-    BigDecimal budget = BigDecimal.ZERO;
-    BigDecimal actualCost = BigDecimal.ZERO;
-    BigDecimal forecast = BigDecimal.ZERO;
+        BigDecimal budget = BigDecimal.ZERO;
+        BigDecimal actualCost = BigDecimal.ZERO;
+        BigDecimal forecast = BigDecimal.ZERO;
 
-    for (FinanceEntryDto row : rows) {
-        // ✅ only L1 to avoid double counting
-        if (row.getLevel() == null || row.getLevel() != 1) continue;
+        for (FinanceEntryDto row : rows) {
+            if (row.getLevel() == null || row.getLevel() != 1) continue;
 
-        budget = budget.add(nvl(row.getBudget()));
-        actualCost = actualCost.add(nvl(row.getActualCost()));
-        forecast = forecast.add(nvl(row.getForecast()));
-    }
+            budget = budget.add(nvl(row.getBudget()));
+            actualCost = actualCost.add(nvl(row.getActualCost()));
+            forecast = forecast.add(nvl(row.getForecast()));
+        }
 
-    BigDecimal remaining = budget.subtract(actualCost.add(forecast));
+        BigDecimal remaining = budget.subtract(actualCost.add(forecast));
 
-    FinanceCostBreakdownDto dto = new FinanceCostBreakdownDto();
-    dto.setActualCost(actualCost);
-    dto.setForecast(forecast);
-    dto.setRemainingBudget(remaining);
+        FinanceCostBreakdownDto dto = new FinanceCostBreakdownDto();
+        dto.setActualCost(actualCost);
+        dto.setForecast(forecast);
+        dto.setRemainingBudget(remaining);
 
-    return dto;
+        return dto;
     }
 
     @Transactional(readOnly = true)
     public FinanceProjectChartDto getProjectOverview(Long projectId) {
-    Project project = getAccessibleProject(projectId);
-    List<FinanceEntryDto> rows = getProjectFinance(projectId);
+        Project project = getAccessibleProject(projectId);
+        List<FinanceEntryDto> rows = getProjectFinance(projectId);
 
-    BigDecimal sales = BigDecimal.ZERO;
-    BigDecimal budget = BigDecimal.ZERO;
-    BigDecimal actualCost = BigDecimal.ZERO;
-    BigDecimal forecast = BigDecimal.ZERO;
+        BigDecimal sales = BigDecimal.ZERO;
+        BigDecimal budget = BigDecimal.ZERO;
+        BigDecimal actualCost = BigDecimal.ZERO;
+        BigDecimal forecast = BigDecimal.ZERO;
 
-    for (FinanceEntryDto row : rows) {
-        // ✅ only L1 rows
-        if (row.getLevel() == null || row.getLevel() != 1) continue;
+        for (FinanceEntryDto row : rows) {
+            if (row.getLevel() == null || row.getLevel() != 1) continue;
 
-        sales = sales.add(nvl(row.getSales()));
-        budget = budget.add(nvl(row.getBudget()));
-        actualCost = actualCost.add(nvl(row.getActualCost()));
-        forecast = forecast.add(nvl(row.getForecast()));
-    }
+            sales = sales.add(nvl(row.getSales()));
+            budget = budget.add(nvl(row.getBudget()));
+            actualCost = actualCost.add(nvl(row.getActualCost()));
+            forecast = forecast.add(nvl(row.getForecast()));
+        }
 
-    BigDecimal eac = actualCost.add(forecast);
-    BigDecimal variance = budget.subtract(eac);
+        BigDecimal eac = actualCost.add(forecast);
+        BigDecimal variance = budget.subtract(eac);
 
-    BigDecimal marginPercent = BigDecimal.ZERO;
-    if (sales.compareTo(BigDecimal.ZERO) > 0) {
-        marginPercent = sales.subtract(eac)
-                .divide(sales, 4, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100));
-    }
+        BigDecimal marginPercent = BigDecimal.ZERO;
+        if (sales.compareTo(BigDecimal.ZERO) > 0) {
+            marginPercent = sales.subtract(eac)
+                    .divide(sales, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
+        }
 
-    FinanceProjectChartDto dto = new FinanceProjectChartDto();
-    dto.setProjectId(project.getId());
-    dto.setProjectName(project.getName()); // adjust if needed
-    dto.setBudget(budget);
-    dto.setEac(eac);
-    dto.setSales(sales);
-    dto.setActualCost(actualCost);
-    dto.setForecast(forecast);
-    dto.setVariance(variance);
-    dto.setMarginPercent(marginPercent);
+        FinanceProjectChartDto dto = new FinanceProjectChartDto();
+        dto.setProjectId(project.getId());
+        dto.setProjectName(project.getName());
+        dto.setBudget(budget);
+        dto.setEac(eac);
+        dto.setSales(sales);
+        dto.setActualCost(actualCost);
+        dto.setForecast(forecast);
+        dto.setVariance(variance);
+        dto.setMarginPercent(marginPercent);
 
-    return dto;
+        return dto;
     }
 
     @Transactional
-public void recalculateLabourRowsFromTasks(Long projectId) {
-    Project project = getAccessibleProject(projectId);
+    public void recalculateLabourRowsFromTasks(Long projectId) {
+        Project project = getAccessibleProject(projectId);
 
-    List<FinanceEntry> financeRows = securityUtils.isPlatformUser()
-            ? financeEntryRepository.findAllByProjectIdOrderByWbsCodeAsc(projectId)
-            : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(
-                    projectId, project.getOrganisation().getId());
+        List<FinanceEntry> financeRows = securityUtils.isPlatformUser()
+                ? financeEntryRepository.findAllByProjectIdOrderByWbsCodeAsc(projectId)
+                : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(
+                        projectId, project.getOrganisation().getId());
 
-    List<ProjectTask> tasks = projectTaskRepository.findByProjectId(projectId);
+        List<ProjectTask> tasks = projectTaskRepository.findByProjectId(projectId);
 
-    Map<String, List<ProjectTask>> tasksByWbs = tasks.stream()
-            .filter(t -> t.getWbsCode() != null && !t.getWbsCode().isBlank())
-            .collect(Collectors.groupingBy(ProjectTask::getWbsCode));
+        Map<String, List<ProjectTask>> tasksByWbs = tasks.stream()
+                .filter(t -> t.getWbsCode() != null && !t.getWbsCode().isBlank())
+                .collect(Collectors.groupingBy(ProjectTask::getWbsCode));
 
-    BigDecimal defaultRate = financeSettingsRepository.findByOrganisationId(project.getOrganisation().getId())
-            .map(FinanceSettings::getDefaultHourlyRate)
-            .orElse(BigDecimal.valueOf(65));
+        BigDecimal defaultRate = financeSettingsRepository.findByOrganisationId(project.getOrganisation().getId())
+                .map(FinanceSettings::getDefaultHourlyRate)
+                .orElse(BigDecimal.valueOf(65));
 
-    Map<String, BigDecimal> rateByResourceType = hourlyRateRepository
-            .findAllByOrganisationIdOrderByResourceTypeAsc(project.getOrganisation().getId())
-            .stream()
-            .collect(Collectors.toMap(
-                    FinanceHourlyRate::getResourceType,
-                    FinanceHourlyRate::getHourlyRate,
-                    (a, b) -> a
-            ));
+        Map<String, BigDecimal> rateByResourceType = hourlyRateRepository
+                .findAllByOrganisationIdOrderByResourceTypeAsc(project.getOrganisation().getId())
+                .stream()
+                .collect(Collectors.toMap(
+                        FinanceHourlyRate::getResourceType,
+                        FinanceHourlyRate::getHourlyRate,
+                        (a, b) -> a
+                ));
 
-    for (FinanceEntry row : financeRows) {
-        if (row.getRowType() == FinanceWbsRowType.HOUR){
-            continue;
-        }
-
-        List<ProjectTask> matchingTasks = tasksByWbs.getOrDefault(row.getWbsCode(), List.of());
-
-        BigDecimal plannedCost = BigDecimal.ZERO;
-        BigDecimal actualCost = BigDecimal.ZERO;
-        BigDecimal forecastCost = BigDecimal.ZERO;
-
-        for (ProjectTask task : matchingTasks) {
-            BigDecimal taskRate = resolveTaskRate(task, row, rateByResourceType, defaultRate);
-
-            BigDecimal plannedHours = nvl(task.getPlannedHours());
-            BigDecimal actualHours = nvl(task.getActualHours());
-
-            plannedCost = plannedCost.add(plannedHours.multiply(taskRate));
-            actualCost = actualCost.add(actualHours.multiply(taskRate));
-
-            BigDecimal remainingHours = plannedHours.subtract(actualHours);
-            if (remainingHours.compareTo(BigDecimal.ZERO) < 0) {
-                remainingHours = BigDecimal.ZERO;
+        for (FinanceEntry row : financeRows) {
+            if (row.getRowType() == FinanceWbsRowType.HOUR) {
+                continue;
             }
 
-            forecastCost = forecastCost.add(remainingHours.multiply(taskRate));
+            List<ProjectTask> matchingTasks = tasksByWbs.getOrDefault(row.getWbsCode(), List.of());
+
+            BigDecimal plannedCost = BigDecimal.ZERO;
+            BigDecimal actualCost = BigDecimal.ZERO;
+            BigDecimal forecastCost = BigDecimal.ZERO;
+
+            for (ProjectTask task : matchingTasks) {
+                BigDecimal taskRate = resolveTaskRate(task, row, rateByResourceType, defaultRate);
+
+                BigDecimal plannedHours = nvl(task.getPlannedHours());
+                BigDecimal actualHours = nvl(task.getActualHours());
+
+                plannedCost = plannedCost.add(plannedHours.multiply(taskRate));
+                actualCost = actualCost.add(actualHours.multiply(taskRate));
+
+                BigDecimal remainingHours = plannedHours.subtract(actualHours);
+                if (remainingHours.compareTo(BigDecimal.ZERO) < 0) {
+                    remainingHours = BigDecimal.ZERO;
+                }
+
+                forecastCost = forecastCost.add(remainingHours.multiply(taskRate));
+            }
+
+            row.setBudget(plannedCost);
+            row.setActualCost(actualCost);
+            row.setForecast(forecastCost);
+
+            financeEntryRepository.save(row);
         }
 
-        row.setBudget(plannedCost);
-        row.setActualCost(actualCost);
-        row.setForecast(forecastCost);
-
-        financeEntryRepository.save(row);
-    }
-
-    recomputeSummaryRows(projectId, project.getOrganisation().getId());
+        recomputeSummaryRows(projectId, project.getOrganisation().getId());
     }
 
     private BigDecimal resolveTaskRate(
@@ -471,40 +512,40 @@ public void recalculateLabourRowsFromTasks(Long projectId) {
     }
 
     private void recomputeSummaryRows(Long projectId, Long organisationId) {
-    List<FinanceEntry> rows = securityUtils.isPlatformUser()
-            ? financeEntryRepository.findAllByProjectIdOrderByWbsCodeAsc(projectId)
-            : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(projectId, organisationId);
+        List<FinanceEntry> rows = securityUtils.isPlatformUser()
+                ? financeEntryRepository.findAllByProjectIdOrderByWbsCodeAsc(projectId)
+                : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(projectId, organisationId);
 
-    List<FinanceEntry> summaryRows = rows.stream()
-            .filter(r -> r.getRowType() == FinanceWbsRowType.SUMMARY)
-            .sorted((a, b) -> Integer.compare(
-                    b.getLevel() == null ? 0 : b.getLevel(),
-                    a.getLevel() == null ? 0 : a.getLevel()
-            ))
-            .toList();
-
-    for (FinanceEntry summary : summaryRows) {
-        String prefix = summary.getWbsCode() + ".";
-
-        List<FinanceEntry> children = rows.stream()
-                .filter(r -> !Objects.equals(r.getId(), summary.getId()))
-                .filter(r -> r.getWbsCode() != null && r.getWbsCode().startsWith(prefix))
-                .filter(r -> r.getLevel() != null && summary.getLevel() != null && r.getLevel() == summary.getLevel() + 1)
+        List<FinanceEntry> summaryRows = rows.stream()
+                .filter(r -> r.getRowType() == FinanceWbsRowType.SUMMARY)
+                .sorted((a, b) -> Integer.compare(
+                        b.getLevel() == null ? 0 : b.getLevel(),
+                        a.getLevel() == null ? 0 : a.getLevel()
+                ))
                 .toList();
 
-        BigDecimal sales = children.stream().map(FinanceEntry::getSales).map(this::nvl).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal budget = children.stream().map(FinanceEntry::getBudget).map(this::nvl).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal commitment = children.stream().map(FinanceEntry::getCommitment).map(this::nvl).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal actualCost = children.stream().map(FinanceEntry::getActualCost).map(this::nvl).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal forecast = children.stream().map(FinanceEntry::getForecast).map(this::nvl).reduce(BigDecimal.ZERO, BigDecimal::add);
+        for (FinanceEntry summary : summaryRows) {
+            String prefix = summary.getWbsCode() + ".";
 
-        summary.setSales(sales);
-        summary.setBudget(budget);
-        summary.setCommitment(commitment);
-        summary.setActualCost(actualCost);
-        summary.setForecast(forecast);
+            List<FinanceEntry> children = rows.stream()
+                    .filter(r -> !Objects.equals(r.getId(), summary.getId()))
+                    .filter(r -> r.getWbsCode() != null && r.getWbsCode().startsWith(prefix))
+                    .filter(r -> r.getLevel() != null && summary.getLevel() != null && r.getLevel() == summary.getLevel() + 1)
+                    .toList();
 
-        financeEntryRepository.save(summary);
-    }
+            BigDecimal sales = children.stream().map(FinanceEntry::getSales).map(this::nvl).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal budget = children.stream().map(FinanceEntry::getBudget).map(this::nvl).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal commitment = children.stream().map(FinanceEntry::getCommitment).map(this::nvl).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal actualCost = children.stream().map(FinanceEntry::getActualCost).map(this::nvl).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal forecast = children.stream().map(FinanceEntry::getForecast).map(this::nvl).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            summary.setSales(sales);
+            summary.setBudget(budget);
+            summary.setCommitment(commitment);
+            summary.setActualCost(actualCost);
+            summary.setForecast(forecast);
+
+            financeEntryRepository.save(summary);
+        }
     }
 }

@@ -188,5 +188,7 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findFirstByOrganisationIdAndRole(Long organisationId, Role role);
     List<AppUser> findByOrganisation_IdAndResourceType_IdAndActiveTrue(
     	    Long organisationId, Long resourceTypeId);
+ // Add this inside UserRepository.java
+    List<AppUser> findByOrganisation_IdAndDepartment1_IdOrderByFullNameAsc(Long organisationId, Long departmentId);
     
 }
