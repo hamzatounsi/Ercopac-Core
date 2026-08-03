@@ -4,6 +4,7 @@ import com.ercopac.ercopac_tracker.department.dto.DepartmentDto;
 import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
+import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskDependency;
 import com.ercopac.ercopac_tracker.tasks.dto.CreateTaskRequest;
@@ -43,8 +44,7 @@ public class ProjectTaskService {
     private final TaskConsoleService               taskConsoleService;
     private final ResourceTypeRepository           resourceTypeRepository;
     private final DepartmentRepository             departmentRepository;
-    private final SecurityUtils                     securityUtils;
-
+    private final SecurityUtils securityUtils;
     public ProjectTaskService(
             ProjectTaskRepository projectTaskRepository,
             ProjectRepository projectRepository,
@@ -67,7 +67,7 @@ public class ProjectTaskService {
         this.taskConsoleService               = taskConsoleService;
         this.resourceTypeRepository           = resourceTypeRepository;
         this.departmentRepository             = departmentRepository;
-        this.securityUtils                     = securityUtils;
+        this.securityUtils                    = securityUtils;  
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -155,7 +155,7 @@ public class ProjectTaskService {
             }
         }
 
-        resolveDatesAndDuration(task, request);
+        resolveDatesAndDuration(task, request, oldTask);
         normalizeMilestone(task);
 
         historyService.logTaskUpdate(
@@ -701,7 +701,14 @@ public class ProjectTaskService {
     // ══════════════════════════════════════════════════════════════
     // RESOLVE DATES & DURATION
     // ══════════════════════════════════════════════════════════════
-    private void resolveDatesAndDuration(ProjectTask task, UpdateProjectTaskRequest req) {
+    // FIX: bidirectional relationship between durationDays and actual dates.
+    //   - If the user changed Duration        → recompute actualEnd = actualStart + duration.
+    //   - If the user changed Actual Start/End → recompute durationDays = span(actualStart, actualEnd).
+    // We detect "which one the user actually changed" by comparing against
+    // oldTask (the entity snapshot taken before any request values were applied),
+    // not against `task`'s current values (which have already been overwritten
+    // with the request's values earlier in updateTask()).
+    private void resolveDatesAndDuration(ProjectTask task, UpdateProjectTaskRequest req, ProjectTask oldTask) {
         String type = (task.getTaskType() != null ? task.getTaskType() : "ACTIVITY").toUpperCase();
 
         if ("MILESTONE".equals(type)) {
@@ -716,12 +723,33 @@ public class ProjectTaskService {
 
         LocalDate plannedStart    = task.getPlannedStart();
         LocalDate baselineStart   = task.getBaselineStart();
+        Integer previousDuration  = oldTask.getDurationDays();
         Integer requestedDuration = req.getDurationDays();
+
+        LocalDate previousActualStart = oldTask.getActualStart();
+        LocalDate previousActualEnd   = oldTask.getActualEnd();
+        LocalDate newActualStart = task.getActualStart(); // already overwritten with request value
+        LocalDate newActualEnd   = task.getActualEnd();   // already overwritten with request value
+
+        boolean durationChanged = requestedDuration != null && requestedDuration > 0
+                && (previousDuration == null || !previousDuration.equals(requestedDuration));
+
+        boolean actualStartChanged = !Objects.equals(previousActualStart, newActualStart);
+        boolean actualEndChanged   = !Objects.equals(previousActualEnd, newActualEnd);
 
         if (requestedDuration != null && requestedDuration > 0) {
             task.setDurationDays(requestedDuration);
-            if (plannedStart != null)  task.setPlannedEnd(plannedStart.plusDays(requestedDuration - 1));
-            if (baselineStart != null) task.setBaselineEnd(baselineStart.plusDays(requestedDuration - 1));
+
+            if (durationChanged) {
+                // Duration → ActualEnd
+                if (newActualStart != null) {
+                    task.setActualEnd(newActualStart.plusDays(requestedDuration - 1));
+                }
+            } else if ((actualStartChanged || actualEndChanged) && newActualStart != null && newActualEnd != null) {
+                // Reverse: ActualStart/ActualEnd → Duration
+                long days = ChronoUnit.DAYS.between(newActualStart, newActualEnd) + 1;
+                task.setDurationDays((int) Math.max(1, days));
+            }
             return;
         }
 

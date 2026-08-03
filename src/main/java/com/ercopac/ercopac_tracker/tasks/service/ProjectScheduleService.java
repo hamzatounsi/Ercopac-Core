@@ -29,7 +29,8 @@ public class ProjectScheduleService {
         this.dependencyRepository = dependencyRepository;
     }
  
-    public List<ProjectScheduleTaskResponse> getProjectSchedule(Long projectId) {
+    public List<ProjectScheduleTaskResponse> getProjectSchedule(Long 
+    		projectId) {
         if (!projectRepository.existsById(projectId)) {
             throw new IllegalArgumentException("Project not found with id: " + projectId);
         }

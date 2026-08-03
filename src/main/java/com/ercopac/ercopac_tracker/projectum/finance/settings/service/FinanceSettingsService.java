@@ -1,5 +1,7 @@
 package com.ercopac.ercopac_tracker.projectum.finance.settings.service;
 
+import com.ercopac.ercopac_tracker.department.domain.Department;
+import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
 import com.ercopac.ercopac_tracker.projectum.finance.domain.FinanceEntry;
@@ -10,6 +12,9 @@ import com.ercopac.ercopac_tracker.projectum.finance.settings.repository.*;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
+import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.user.UserRepository;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +34,9 @@ public class FinanceSettingsService {
     private final ProjectRepository projectRepository;
     private final OrganisationRepository organisationRepository;
     private final SecurityUtils securityUtils;
+    
+    private final DepartmentRepository departmentRepository;
+    private final UserRepository userRepository;
 
     public FinanceSettingsService(
             FinanceSettingsRepository financeSettingsRepository,
@@ -38,7 +46,9 @@ public class FinanceSettingsService {
             FinanceEntryRepository financeEntryRepository,
             ProjectRepository projectRepository,
             OrganisationRepository organisationRepository,
-            SecurityUtils securityUtils
+            SecurityUtils securityUtils,
+            DepartmentRepository departmentRepository,
+            UserRepository userRepository
     ) {
         this.financeSettingsRepository = financeSettingsRepository;
         this.templateRowRepository = templateRowRepository;
@@ -48,6 +58,8 @@ public class FinanceSettingsService {
         this.projectRepository = projectRepository;
         this.organisationRepository = organisationRepository;
         this.securityUtils = securityUtils;
+        this.departmentRepository = departmentRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
@@ -115,7 +127,31 @@ public class FinanceSettingsService {
             row.setCodeTemplate(dto.getCodeTemplate());
             row.setDescription(dto.getDescription());
             row.setType(dto.getType());
-            row.setOwnerKey(blankToNull(dto.getOwnerKey()));
+            
+            if (dto.getDepartmentId() != null) {
+                Department dept = departmentRepository.findById(dto.getDepartmentId())
+                    .orElseThrow(() -> new IllegalArgumentException("Department not found with ID: " + dto.getDepartmentId()));
+                row.setDepartment(dept);
+            }
+            
+            if (dto.getOwnerId() != null) {
+                AppUser owner = userRepository.findById(dto.getOwnerId())
+                    .orElseThrow(() -> new IllegalArgumentException("Owner not found with ID: " + dto.getOwnerId()));
+                
+                if (row.getDepartment() != null && owner.getDepartment() != null) {
+                    if (!owner.getDepartment().getId().equals(row.getDepartment().getId())) {
+                        throw new IllegalArgumentException("Selected owner '" + owner.getFullName() + "' does not belong to the selected department.");
+                    }
+                } else if (row.getDepartment() == null) {
+                    throw new IllegalArgumentException("A department must be selected before assigning an owner.");
+                }
+                
+                row.setOwner(owner);
+                row.setOwnerKey(owner.getFullName());
+            } else {
+                row.setOwnerKey(blankToNull(dto.getOwnerKey()));
+            }
+            
             row.setHourRate(dto.getHourRate());
             templateRowRepository.save(row);
         }
@@ -162,10 +198,6 @@ public class FinanceSettingsService {
             throw new IllegalArgumentException("No finance WBS template configured");
         }
 
-        BigDecimal defaultRate = financeSettingsRepository.findByOrganisationId(orgId)
-                .map(FinanceSettings::getDefaultHourlyRate)
-                .orElse(BigDecimal.valueOf(65));
-
         int generatedRows = 0;
 
         for (Project project : projects) {
@@ -191,11 +223,10 @@ public class FinanceSettingsService {
                 entry.setWbsCode(finalWbsCode);
                 entry.setDescription(template.getDescription());
                 entry.setLevel(template.getLevel());
+                entry.setRowType(template.getType());
 
-                // For now keep display owner name only
                 entry.setOwnerName(resolveOwnerDisplay(template.getOwnerKey()));
 
-                // Preserve existing values when row already exists
                 if (isNew) {
                     entry.setSales(BigDecimal.ZERO);
                     entry.setBudget(BigDecimal.ZERO);
@@ -203,6 +234,7 @@ public class FinanceSettingsService {
                     entry.setActualCost(BigDecimal.ZERO);
                     entry.setForecast(BigDecimal.ZERO);
                 } else {
+                    // ✅ These now work because we added the single-argument nvl() method below
                     entry.setSales(nvl(entry.getSales()));
                     entry.setBudget(nvl(entry.getBudget()));
                     entry.setCommitment(nvl(entry.getCommitment()));
@@ -221,28 +253,61 @@ public class FinanceSettingsService {
         return result;
     }
 
-    private String buildProjectCode(Project project) {
-        if (project.getCode() != null && !project.getCode().isBlank()) {
-            return project.getCode();
+    public FinanceSettingsDto importWbsTemplate(ImportFinanceWbsTemplateRequest request) {
+        Long orgId = requireOrganisationId();
+
+        Organisation organisation = organisationRepository.findById(orgId)
+                .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
+
+        if (request.getRows() == null || request.getRows().isEmpty()) {
+            throw new IllegalArgumentException("Import file contains no WBS rows.");
         }
-        return String.valueOf(project.getId());
-    }
 
-    private Long requireOrganisationId() {
-        Long orgId = securityUtils.getCurrentOrganisationId();
-        if (orgId == null) {
-            throw new IllegalStateException("User has no organisation");
+        if (request.isReplaceExisting()) {
+            templateRowRepository.deleteAllByOrganisationId(orgId);
         }
-        return orgId;
+
+        int startSort = request.isReplaceExisting()
+                ? 0
+                : templateRowRepository.findAllByOrganisationIdOrderBySortOrderAscIdAsc(orgId).size();
+
+        int index = 1;
+
+        for (FinanceWbsTemplateRowDto dto : request.getRows()) {
+            if (dto.getCodeTemplate() == null || dto.getCodeTemplate().isBlank()) {
+                continue;
+            }
+
+            FinanceWbsTemplateRow row = new FinanceWbsTemplateRow();
+            row.setOrganisation(organisation);
+            row.setSortOrder(startSort + index);
+            row.setLevel(dto.getLevel() == null ? detectLevel(dto.getCodeTemplate()) : dto.getLevel());
+            row.setCodeTemplate(dto.getCodeTemplate().trim());
+            row.setDescription(blankToNull(dto.getDescription()));
+            
+            // ✅ STRICT BACKEND VALIDATION
+            if (dto.getType() == null) {
+                throw new IllegalArgumentException("Import failed: WBS row '" + dto.getCodeTemplate() + "' is missing the required TYPE. Must be SUMMARY, HOUR, EXPENSES, or COST.");
+            }
+            
+            // Optional: Validate it's one of the 4 allowed types (Enum handles this, but good for clarity)
+            try {
+                row.setType(dto.getType());
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Import failed: Invalid TYPE '" + dto.getType() + "' for row '" + dto.getCodeTemplate() + "'.");
+            }
+            
+            row.setOwnerKey(blankToNull(dto.getOwnerKey()));
+            row.setHourRate(dto.getHourRate());
+
+            templateRowRepository.save(row);
+            index++;
+        }
+
+        return getSettings();
     }
 
-    private BigDecimal nvl(BigDecimal value, BigDecimal fallback) {
-        return value == null ? fallback : value;
-    }
-
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
+    // ─── Helper Methods ──────────────────────────────────────────────────────
 
     private FinanceWbsTemplateRowDto toDto(FinanceWbsTemplateRow row) {
         FinanceWbsTemplateRowDto dto = new FinanceWbsTemplateRowDto();
@@ -252,6 +317,18 @@ public class FinanceSettingsService {
         dto.setCodeTemplate(row.getCodeTemplate());
         dto.setDescription(row.getDescription());
         dto.setType(row.getType());
+        
+        if (row.getDepartment() != null) {
+            dto.setDepartmentId(row.getDepartment().getId());
+            // ✅ FIXED: Removed the extra () from getLabel()
+            dto.setDepartmentName(row.getDepartment().getLabel());
+        }
+        
+        if (row.getOwner() != null) {
+            dto.setOwnerId(row.getOwner().getId());
+            dto.setOwnerName(row.getOwner().getFullName());
+        }
+        
         dto.setOwnerKey(row.getOwnerKey());
         dto.setHourRate(row.getHourRate());
         return dto;
@@ -276,87 +353,55 @@ public class FinanceSettingsService {
     }
 
     private String buildFinalWbsCode(String codeTemplate, String projectCode) {
-    if (codeTemplate == null || codeTemplate.isBlank()) {
-        throw new IllegalArgumentException("Template WBS code cannot be blank");
-    }
-    if (projectCode == null || projectCode.isBlank()) {
-        throw new IllegalArgumentException("Project code cannot be blank");
-    }
-
-    return codeTemplate.replace("xxx25", projectCode.trim());
+        if (codeTemplate == null || codeTemplate.isBlank()) {
+            throw new IllegalArgumentException("Template WBS code cannot be blank");
+        }
+        if (projectCode == null || projectCode.isBlank()) {
+            throw new IllegalArgumentException("Project code cannot be blank");
+        }
+        return codeTemplate.replace("xxx25", projectCode.trim());
     }
 
     private String resolveOwnerDisplay(String ownerKey) {
         if (ownerKey == null || ownerKey.isBlank()) {
             return "—";
         }
-
         return ownerKey;
     }
 
+    // ✅ ADDED: Single-argument nvl method to fix the compilation error
     private BigDecimal nvl(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
     }
 
-    public FinanceSettingsDto importWbsTemplate(ImportFinanceWbsTemplateRequest request) {
-    Long orgId = requireOrganisationId();
-
-    Organisation organisation = organisationRepository.findById(orgId)
-            .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
-
-    if (request.getRows() == null || request.getRows().isEmpty()) {
-        throw new IllegalArgumentException("Import file contains no WBS rows");
+    // Kept the two-argument version
+    private BigDecimal nvl(BigDecimal value, BigDecimal fallback) {
+        return value == null ? fallback : value;
     }
 
-    if (request.isReplaceExisting()) {
-        templateRowRepository.deleteAllByOrganisationId(orgId);
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
-    int startSort = request.isReplaceExisting()
-            ? 0
-            : templateRowRepository.findAllByOrganisationIdOrderBySortOrderAscIdAsc(orgId).size();
-
-    int index = 1;
-
-    for (FinanceWbsTemplateRowDto dto : request.getRows()) {
-        if (dto.getCodeTemplate() == null || dto.getCodeTemplate().isBlank()) {
-            continue;
+    private Long requireOrganisationId() {
+        Long orgId = securityUtils.getCurrentOrganisationId();
+        if (orgId == null) {
+            throw new IllegalStateException("User has no organisation");
         }
-
-        FinanceWbsTemplateRow row = new FinanceWbsTemplateRow();
-        row.setOrganisation(organisation);
-        row.setSortOrder(startSort + index);
-        row.setLevel(dto.getLevel() == null ? detectLevel(dto.getCodeTemplate()) : dto.getLevel());
-        row.setCodeTemplate(dto.getCodeTemplate().trim());
-        row.setDescription(blankToNull(dto.getDescription()));
-        row.setType(dto.getType() == null ? FinanceWbsRowType.COST : dto.getType());
-        row.setOwnerKey(blankToNull(dto.getOwnerKey()));
-        row.setHourRate(dto.getHourRate());
-
-        templateRowRepository.save(row);
-        index++;
+        return orgId;
     }
 
-    return getSettings();
-}
-
-private int detectLevel(String code) {
-    if (code == null || code.isBlank()) {
+    private int detectLevel(String code) {
+        if (code == null || code.isBlank()) {
+            return 1;
+        }
+        String cleaned = code.trim();
+        if (cleaned.contains(".")) {
+            return Math.max(1, cleaned.split("\\.").length);
+        }
+        if (cleaned.contains("-")) {
+            return Math.max(1, cleaned.split("-").length - 1);
+        }
         return 1;
     }
-
-    String cleaned = code.trim();
-
-    if (cleaned.contains(".")) {
-        return Math.max(1, cleaned.split("\\.").length);
-    }
-
-    if (cleaned.contains("-")) {
-        return Math.max(1, cleaned.split("-").length - 1);
-    }
-
-    return 1;
-}
-
-    
 }

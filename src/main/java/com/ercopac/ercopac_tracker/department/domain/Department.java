@@ -37,7 +37,7 @@ public class Department {
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @JsonIgnore
-    @OneToMany(mappedBy = "department")
+    @OneToMany(mappedBy = "department1")
     private List<AppUser> members = new ArrayList<>();
 
     @JsonIgnore
