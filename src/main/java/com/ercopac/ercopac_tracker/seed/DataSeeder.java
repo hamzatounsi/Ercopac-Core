@@ -62,6 +62,59 @@ public class DataSeeder implements CommandLineRunner {
         Department deptDesign = new Department("DES", "Design", org);
         departmentRepository.save(deptDesign);
 
+        AppUser platformOwner = seedUser(
+                "hamza@projectum.com",
+                "Hamza Tounsi",
+                "Hamza123!",
+                Role.PLATFORM_OWNER,
+                null,
+                "Executive"
+        );
+
+        AppUser orgAdmin = seedUser(
+                "admin@pharmastore.com",
+                "Organisation Admin",
+                "admin123!",
+                Role.ORG_ADMIN,
+                org,
+                "Administration"
+        );
+
+        AppUser gm = seedUser(
+                "gm@pharmastore.com",
+                "Michael Weber",
+                "Hamza1",
+                Role.GENERAL_MANAGER,
+                org,
+                "Management"
+        );
+
+        AppUser dm = seedUser(
+                "dm@pharmastore.com",
+                "Sarah Engineering",
+                "Hamza123!",
+                Role.DEPARTMENT_MANAGER,
+                org,
+                "Engineering"
+        );
+
+        AppUser employee1 = seedUser(
+                "emp23!loyee1@pharmastore.com",
+                "John Developer",
+                "Hamza123!",
+                Role.EMPLOYEE,
+                org,
+                "Engineering"
+        );
+
+        AppUser employee2 = seedUser(
+                "employee2@pharmastore.com",
+                "Emma Planner",
+                "Hamza123!",
+                Role.EMPLOYEE,
+                org,
+                "Planning"
+        );
         Department deptEng = new Department("ENG", "Engineering", org);
         departmentRepository.save(deptEng);
 
