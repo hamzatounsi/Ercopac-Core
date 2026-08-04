@@ -51,7 +51,9 @@ public class AppUser {
     @Column(name = "department_code", length = 30)
     private String departmentCode;
 
-   
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
 
     @Column(name = "job_title", length = 80)
     private String jobTitle;

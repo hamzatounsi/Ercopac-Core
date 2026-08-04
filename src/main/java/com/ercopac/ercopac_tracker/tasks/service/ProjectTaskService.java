@@ -55,8 +55,7 @@ public class ProjectTaskService {
             ProjectTaskHistoryService historyService,
             TaskConsoleService taskConsoleService,
             ResourceTypeRepository resourceTypeRepository,
-            DepartmentRepository departmentRepository,
-            SecurityUtils securityUtils) {
+            DepartmentRepository departmentRepository ,SecurityUtils securityUtils) {   // ← added
         this.projectTaskRepository            = projectTaskRepository;
         this.projectRepository                = projectRepository;
         this.userRepository                   = userRepository;
@@ -67,7 +66,7 @@ public class ProjectTaskService {
         this.taskConsoleService               = taskConsoleService;
         this.resourceTypeRepository           = resourceTypeRepository;
         this.departmentRepository             = departmentRepository;
-        this.securityUtils                    = securityUtils;  
+        this.securityUtils                     = securityUtils;
     }
 
     // ══════════════════════════════════════════════════════════════
