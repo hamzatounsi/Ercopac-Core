@@ -5,6 +5,9 @@ import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.organisation.domain.OrganisationStatus;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
+import com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule;
+import com.ercopac.ercopac_tracker.platform_permissions.domain.RolePermission;
+import com.ercopac.ercopac_tracker.platform_permissions.repository.RolePermissionRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
@@ -13,15 +16,18 @@ import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
 public class DataSeeder implements CommandLineRunner {
 
     private final OrganisationRepository organisationRepository;
@@ -29,6 +35,7 @@ public class DataSeeder implements CommandLineRunner {
     private final ProjectRepository projectRepository;
     private final ProjectTaskRepository projectTaskRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RolePermissionRepository rolePermissionRepository;
     
     // ✅ ADDED: Department Repository
     private final DepartmentRepository departmentRepository;
@@ -62,59 +69,6 @@ public class DataSeeder implements CommandLineRunner {
         Department deptDesign = new Department("DES", "Design", org);
         departmentRepository.save(deptDesign);
 
-        AppUser platformOwner = seedUser(
-                "hamza@projectum.com",
-                "Hamza Tounsi",
-                "Hamza123!",
-                Role.PLATFORM_OWNER,
-                null,
-                "Executive"
-        );
-
-        AppUser orgAdmin = seedUser(
-                "admin@pharmastore.com",
-                "Organisation Admin",
-                "admin123!",
-                Role.ORG_ADMIN,
-                org,
-                "Administration"
-        );
-
-        AppUser gm = seedUser(
-                "gm@pharmastore.com",
-                "Michael Weber",
-                "Hamza1",
-                Role.GENERAL_MANAGER,
-                org,
-                "Management"
-        );
-
-        AppUser dm = seedUser(
-                "dm@pharmastore.com",
-                "Sarah Engineering",
-                "Hamza123!",
-                Role.DEPARTMENT_MANAGER,
-                org,
-                "Engineering"
-        );
-
-        AppUser employee1 = seedUser(
-                "emp23!loyee1@pharmastore.com",
-                "John Developer",
-                "Hamza123!",
-                Role.EMPLOYEE,
-                org,
-                "Engineering"
-        );
-
-        AppUser employee2 = seedUser(
-                "employee2@pharmastore.com",
-                "Emma Planner",
-                "Hamza123!",
-                Role.EMPLOYEE,
-                org,
-                "Planning"
-        );
         Department deptEng = new Department("ENG", "Engineering", org);
         departmentRepository.save(deptEng);
 
@@ -125,13 +79,15 @@ public class DataSeeder implements CommandLineRunner {
         AppUser orgAdmin = seedUser("admin@pharmastore.com", "Organisation Admin", "Hamza123!", Role.ORG_ADMIN, org, "Administration", null);
         
         // ✅ Link GM to Design Department
-        AppUser gm = seedUser("gm@pharmastore.com", "Michael Weber", "Hamza1", Role.GENERAL_MANAGER, org, "Management", deptDesign);
+        AppUser gm = seedUser("gm@pharmastore.com", "Michael Weber", "Hamza123!", Role.GENERAL_MANAGER, org, "Management", deptDesign);
         
         // ✅ Link DM to Engineering Department
         AppUser dm = seedUser("dm@pharmastore.com", "Sarah Engineering", "Hamza123!", Role.DEPARTMENT_MANAGER, org, "Engineering", deptEng);
         
         AppUser employee1 = seedUser("employee1@pharmastore.com", "John Developer", "Hamza123!", Role.EMPLOYEE, org, "Engineering", deptEng);
         AppUser employee2 = seedUser("employee2@pharmastore.com", "Emma Planner", "Hamza123!", Role.EMPLOYEE, org, "Planning", null);
+
+        seedGeneralManagerPermissions(org);
 
         // =========================================================
         // 4. PROJECT 1
@@ -189,11 +145,41 @@ public class DataSeeder implements CommandLineRunner {
         user.setHoursPerDay(8);
         user.setOrganisation(organisation);
         
-        // Note: If your AppUser entity has a 'department1' field, you can uncomment the next line:
-        // user.setDepartment1(department); 
-        
-        // ✅ FIXED: Removed the typo "user each"
+        user.setDepartment(department);
         return userRepository.save(user);
+    }
+
+    private void seedGeneralManagerPermissions(Organisation organisation) {
+        List<PermissionModule> modules = List.of(
+                PermissionModule.GM_DASHBOARD,
+                PermissionModule.CRM,
+                PermissionModule.PROJECTS,
+                PermissionModule.PLANNING,
+                PermissionModule.TASKS,
+                PermissionModule.FINANCE,
+                PermissionModule.FORECAST,
+                PermissionModule.RISKS,
+                PermissionModule.CHANGE_REQUESTS,
+                PermissionModule.ACTIONS,
+                PermissionModule.RESOURCES,
+                PermissionModule.SUPPLIERS
+        );
+
+        for (PermissionModule module : modules) {
+            if (rolePermissionRepository
+                    .findByOrganisation_IdAndRoleAndModule(organisation.getId(), Role.GENERAL_MANAGER, module)
+                    .isPresent()) {
+                continue;
+            }
+
+            RolePermission permission = new RolePermission();
+            permission.setOrganisation(organisation);
+            permission.setRole(Role.GENERAL_MANAGER);
+            permission.setModule(module);
+            permission.setCanRead(true);
+            permission.setCanWrite(true);
+            rolePermissionRepository.save(permission);
+        }
     }
 
     private ProjectTask createTask(Project project, Organisation organisation, String wbs, String name, int outlineLevel, ProjectTask parent, LocalDate start, LocalDate end, int progress, String status, AppUser assignedUser) {

@@ -1,13 +1,9 @@
 package com.ercopac.ercopac_tracker.tasks.domain;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-@Getter
-@Setter
 @Entity
 @Table(name = "project_task_history")
 public class ProjectTaskHistory {
@@ -44,4 +40,26 @@ public class ProjectTaskHistory {
             changedAt = LocalDateTime.now();
         }
     }
+
+    public Long getId() { return id; }
+    public Long getOrganisationId() { return organisationId; }
+    public void setOrganisationId(Long organisationId) { this.organisationId = organisationId; }
+    public Long getProjectId() { return projectId; }
+    public void setProjectId(Long projectId) { this.projectId = projectId; }
+    public Long getTaskId() { return taskId; }
+    public void setTaskId(Long taskId) { this.taskId = taskId; }
+    public String getTaskName() { return taskName; }
+    public void setTaskName(String taskName) { this.taskName = taskName; }
+    public String getFieldName() { return fieldName; }
+    public void setFieldName(String fieldName) { this.fieldName = fieldName; }
+    public String getOldValue() { return oldValue; }
+    public void setOldValue(String oldValue) { this.oldValue = oldValue; }
+    public String getNewValue() { return newValue; }
+    public void setNewValue(String newValue) { this.newValue = newValue; }
+    public Long getChangedByUserId() { return changedByUserId; }
+    public void setChangedByUserId(Long changedByUserId) { this.changedByUserId = changedByUserId; }
+    public String getChangedByName() { return changedByName; }
+    public void setChangedByName(String changedByName) { this.changedByName = changedByName; }
+    public LocalDateTime getChangedAt() { return changedAt; }
+    public void setChangedAt(LocalDateTime changedAt) { this.changedAt = changedAt; }
 }
