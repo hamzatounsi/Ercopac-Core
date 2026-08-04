@@ -12,7 +12,7 @@ public class ForecastRowDto {
     private BigDecimal actualCost;
     private BigDecimal totalForecast;
     private List<ForecastGridCellDto> periods = new ArrayList<>();
-
+    private String rowType; 
     public ForecastRowDto() {
     }
 
@@ -23,7 +23,13 @@ public class ForecastRowDto {
     public void setWbsCode(String wbsCode) {
         this.wbsCode = wbsCode;
     }
+    public String getRowType() {
+        return rowType;
+    }
 
+    public void setRowType(String rowType) {
+        this.rowType = rowType;
+    }
     public String getDescription() {
         return description;
     }

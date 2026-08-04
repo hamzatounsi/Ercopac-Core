@@ -66,6 +66,8 @@ public class ForecastService {
             dto.setDescription(row.getDescription());
             dto.setLevel(row.getLevel());
             dto.setBudget(nvl(row.getBudget()));
+            dto.setRowType(row.getRowType() != null ? row.getRowType().name() : "COST");
+            
             dto.setActualCost(nvl(row.getActualCost()));
 
             Map<String, BigDecimal> rowMap = fcMap.getOrDefault(row.getWbsCode(), Collections.emptyMap());

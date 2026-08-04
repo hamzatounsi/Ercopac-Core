@@ -86,6 +86,16 @@ public class FinanceController {
             @PathVariable Long projectId,
             @RequestBody List<UpsertFinanceEntryRequest> rows
     ) {
+        System.out.println("✅ Backend received " + rows.size() + " rows for project " + projectId);
+        
+        // Print the first row to verify
+        if (!rows.isEmpty()) {
+            UpsertFinanceEntryRequest firstRow = rows.get(0);
+            System.out.println("✅ First row WBS: " + firstRow.getWbsCode());
+            System.out.println("✅ First row Budget: " + firstRow.getBudget());
+            System.out.println("✅ First row Actual: " + firstRow.getActualCost());
+        }
+
         financeService.importEntries(projectId, rows);
         return ResponseEntity.ok().build();
     }

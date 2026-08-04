@@ -11,7 +11,6 @@ import com.ercopac.ercopac_tracker.projectum.change_requests.domain.ChangeReques
 import com.ercopac.ercopac_tracker.projectum.finance.domain.FinanceEntry;
 import com.ercopac.ercopac_tracker.projectum.forecast.domain.ForecastEntry;
 import com.ercopac.ercopac_tracker.projectum.risks.domain.RiskItem;
-import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
@@ -140,10 +139,6 @@ public class Project {
 
     @Column(length = 1000)
     private String comment;
-
-    @JsonIgnore
-    @OneToMany(mappedBy = "project")
-    private List<ProjectTask> tasks = new ArrayList<>();
 
     @JsonIgnore
     @OneToOne(mappedBy = "project")
@@ -324,8 +319,6 @@ public class Project {
         this.comment = comment;
     }
 
-    public List<ProjectTask> getTasks() { return tasks; }
-    public void setTasks(List<ProjectTask> tasks) { this.tasks = tasks; }
     public ProjectPlanning getPlanning() { return planning; }
     public void setPlanning(ProjectPlanning planning) { this.planning = planning; }
     public List<ProjectCalendar> getCalendars() { return calendars; }

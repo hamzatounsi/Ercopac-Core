@@ -12,5 +12,7 @@ public record NotificationDto(
         String subject,
         String message,
         LocalDateTime createdAt,
-        LocalDateTime sentAt
+        LocalDateTime sentAt,
+        boolean readByUser,
+        String link
 ) {}

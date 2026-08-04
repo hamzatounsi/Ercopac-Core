@@ -21,5 +21,5 @@ public interface ForecastEntryRepository extends JpaRepository<ForecastEntry, Lo
     );
 
     boolean existsByProjectIdAndWbsCodeAndPeriodKey(Long projectId, String wbsCode, String periodKey);
-
+    List<ForecastEntry> findAllByProjectIdAndWbsCode(Long projectId, String wbsCode);
 }
