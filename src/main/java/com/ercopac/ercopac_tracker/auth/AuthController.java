@@ -95,6 +95,16 @@ public class AuthController {
         }
 
         if (resetApproved) {
+            String resetToken = passwordResetRequestRepository
+                    .findFirstByUser_EmailAndStatusOrderByApprovedAtDesc(
+                            user.getEmail(),
+                            PasswordResetStatus.APPROVED
+                    )
+                    .filter(request -> request.getTokenExpiresAt() != null
+                            && request.getTokenExpiresAt().isAfter(java.time.LocalDateTime.now()))
+                    .map(request -> request.getToken())
+                    .orElse(null);
+
             loginAttemptService.recordSuccess(username, ipAddress);
             return new LoginResponse(
                     null,
@@ -106,7 +116,7 @@ public class AuthController {
                     null,
                     true,
                     "APPROVED",
-                    null,
+                    resetToken,
                     "Password reset approved. Please set a new password."
             );
         }
