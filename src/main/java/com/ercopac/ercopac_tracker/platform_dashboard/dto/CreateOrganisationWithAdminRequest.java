@@ -11,9 +11,11 @@ public class CreateOrganisationWithAdminRequest {
     public int userLimit;
 
     public int orgAdminLicenceLimit;
-    public int generalManagerLicenceLimit;
+    public int projectManagerLicenceLimit;
     public int departmentManagerLicenceLimit;
     public int employeeLicenceLimit;
+    public int salesManagerLicenceLimit;
+    public int clientLicenceLimit;
 
     public double monthlyRevenue;
     public int healthScore;

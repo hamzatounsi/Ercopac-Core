@@ -1,8 +1,8 @@
 -- Additive extension for the live local ERCOPAC demo database.
 BEGIN;
 
-INSERT INTO organisations (name, code, country, domain, status, plan, user_limit, org_admin_licence_limit, general_manager_licence_limit, department_manager_licence_limit, employee_licence_limit, monthly_revenue, health_score, created_at, max_failed_logins, password_min_length, flag_at_risk, flag_payment_overdue, flag_upsell_opportunity, flag_vip_priority, flag_pilot_features, flag_under_review, active)
-VALUES ('Aurora Process Solutions SAS', 'AURORA', 'France', 'aurora-process.example', 'SUSPENDED', 'PROFESSIONAL', 20, 1, 1, 3, 15, 0.00, 41, CURRENT_TIMESTAMP - INTERVAL '80 days', 5, 12, true, true, false, false, false, true, false);
+INSERT INTO organisations (name, code, country, domain, status, plan, user_limit, org_admin_licence_limit, general_manager_licence_limit, department_manager_licence_limit, employee_licence_limit, sales_manager_licence_limit, client_licence_limit, monthly_revenue, health_score, created_at, max_failed_logins, password_min_length, flag_at_risk, flag_payment_overdue, flag_upsell_opportunity, flag_vip_priority, flag_pilot_features, flag_under_review, active)
+VALUES ('Aurora Process Solutions SAS', 'AURORA', 'France', 'aurora-process.example', 'SUSPENDED', 'PROFESSIONAL', 20, 1, 1, 3, 15, 2, 5, 0.00, 41, CURRENT_TIMESTAMP - INTERVAL '80 days', 5, 12, true, true, false, false, false, true, false);
 
 INSERT INTO users (full_name, email, password_hash, role, organisation_id, employee_code, department_code, job_title, seniority, hours_per_day, days_per_week, workdays, internal_user, default_rate, rate_type, currency, active)
 VALUES ('Claire Dubois', 'claire.dubois@aurora-process.example', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ORG_ADMIN', (SELECT id FROM organisations WHERE code = 'AURORA'), 'AU-ADM-001', 'ADMIN', 'Organisation Administrator', 'SENIOR', 8, 5, 'MON-FRI', true, 90.00, 'HOURLY', 'EUR', false);

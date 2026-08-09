@@ -18,13 +18,13 @@ public class RiskGlobalController {
     }
 
     @GetMapping("/pending-approvals")
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize("hasAnyAuthority('PROJECT_MANAGER','ROLE_PROJECT_MANAGER','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
     public ResponseEntity<List<RiskItemDto>> getAllPendingApprovals() {
         return ResponseEntity.ok(riskService.getAllPendingApprovalsForOrg());
     }
 
     @GetMapping("/pending-approvals/count")
-    @PreAuthorize("hasAnyAuthority('GENERAL_MANAGER','ROLE_GENERAL_MANAGER','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
+    @PreAuthorize("hasAnyAuthority('PROJECT_MANAGER','ROLE_PROJECT_MANAGER','PLATFORM_OWNER','ROLE_PLATFORM_OWNER')")
     public ResponseEntity<Long> getPendingApprovalsCount() {
         return ResponseEntity.ok((long) riskService.getAllPendingApprovalsForOrg().size());
     }

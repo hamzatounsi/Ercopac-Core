@@ -15,6 +15,8 @@ import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
+import com.ercopac.ercopac_tracker.user.ResourceType;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -40,7 +42,7 @@ public class OrganisationAdminService {
 
     private static final List<Role> ASSIGNABLE_ROLES = List.of(
             Role.ORG_ADMIN,
-            Role.GENERAL_MANAGER,
+            Role.PROJECT_MANAGER,
             Role.DEPARTMENT_MANAGER,
             Role.EMPLOYEE,
             Role.SALES_MANAGER,
@@ -80,6 +82,7 @@ public class OrganisationAdminService {
     private final OrganisationRepository organisationRepository;
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
+    private final ResourceTypeRepository resourceTypeRepository;
     private final ProjectTaskRepository taskRepository;
     private final PasswordResetRequestRepository passwordResetRepository;
     private final RolePermissionRepository permissionRepository;
@@ -90,6 +93,7 @@ public class OrganisationAdminService {
             OrganisationRepository organisationRepository,
             UserRepository userRepository,
             DepartmentRepository departmentRepository,
+            ResourceTypeRepository resourceTypeRepository,
             ProjectTaskRepository taskRepository,
             PasswordResetRequestRepository passwordResetRepository,
             RolePermissionRepository permissionRepository,
@@ -99,6 +103,7 @@ public class OrganisationAdminService {
         this.organisationRepository = organisationRepository;
         this.userRepository = userRepository;
         this.departmentRepository = departmentRepository;
+        this.resourceTypeRepository = resourceTypeRepository;
         this.taskRepository = taskRepository;
         this.passwordResetRepository = passwordResetRepository;
         this.permissionRepository = permissionRepository;
@@ -263,10 +268,11 @@ public class OrganisationAdminService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(role);
         user.setOrganisation(organisation);
+        user.setInternalUser(role.requiresResourceProfile());
         user.setEmployeeCode(normalizeUpper(request.employeeCode()));
         user.setJobTitle(normalize(request.jobTitle()));
         user.setActive(active);
-        assignDepartment(user, request.departmentId(), organisationId);
+        applyResourceProfile(user, role, request.departmentId(), request.resourceTypeId(), organisationId);
 
         return toUserSummary(userRepository.save(user));
     }
@@ -305,10 +311,11 @@ public class OrganisationAdminService {
         user.setFullName(request.fullName().trim());
         user.setEmail(email);
         user.setRole(targetRole);
+        user.setInternalUser(targetRole.requiresResourceProfile());
         user.setEmployeeCode(normalizeUpper(request.employeeCode()));
         user.setJobTitle(normalize(request.jobTitle()));
         user.setActive(targetActive);
-        assignDepartment(user, request.departmentId(), organisationId);
+        applyResourceProfile(user, targetRole, request.departmentId(), request.resourceTypeId(), organisationId);
 
         return toUserSummary(userRepository.save(user));
     }
@@ -464,16 +471,35 @@ public class OrganisationAdminService {
                 });
     }
 
-    private void assignDepartment(AppUser user, Long departmentId, Long organisationId) {
-        if (departmentId == null) {
+    private void applyResourceProfile(
+            AppUser user,
+            Role role,
+            Long departmentId,
+            Long resourceTypeId,
+            Long organisationId
+    ) {
+        if (!role.requiresResourceProfile()) {
             user.setDepartment(null);
             user.setDepartmentCode(null);
+            user.setResourceType(null);
             return;
         }
 
+        if (departmentId == null) {
+            throw new IllegalArgumentException("Department is required for " + roleLabel(role) + ".");
+        }
         Department department = findDepartment(departmentId, organisationId);
+        if (resourceTypeId == null) {
+            throw new IllegalArgumentException("Resource type is required for " + roleLabel(role) + ".");
+        }
+        ResourceType resourceType = resourceTypeRepository.findByIdAndOrganisation_Id(resourceTypeId, organisationId)
+                .orElseThrow(() -> notFound("Resource type not found."));
+        if (!resourceType.isActive() || !resourceType.isAssignable()) {
+            throw new IllegalArgumentException("Resource type is not available for assignment.");
+        }
         user.setDepartment(department);
         user.setDepartmentCode(department.getCode());
+        user.setResourceType(resourceType);
     }
 
     private void assignManager(Department department, Long managerId, Long organisationId) {
@@ -573,11 +599,12 @@ public class OrganisationAdminService {
     private void enforceRoleCapacity(Organisation organisation, Role role) {
         int limit = switch (role) {
             case ORG_ADMIN -> organisation.getOrgAdminLicenceLimit();
-            case GENERAL_MANAGER -> organisation.getGeneralManagerLicenceLimit();
+            case PROJECT_MANAGER -> organisation.getProjectManagerLicenceLimit();
             case DEPARTMENT_MANAGER -> organisation.getDepartmentManagerLicenceLimit();
             case EMPLOYEE -> organisation.getEmployeeLicenceLimit();
-            case PLATFORM_OWNER, PLATFORM_ADMIN -> 0;
-            case SALES_MANAGER, CLIENT -> Integer.MAX_VALUE;
+            case PLATFORM_OWNER -> 0;
+            case SALES_MANAGER -> organisation.getSalesManagerLicenceLimit();
+            case CLIENT -> organisation.getClientLicenceLimit();
         };
 
         if (userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role) >= limit) {
@@ -634,9 +661,11 @@ public class OrganisationAdminService {
                 organisation.getPlan(),
                 organisation.getUserLimit(),
                 organisation.getOrgAdminLicenceLimit(),
-                organisation.getGeneralManagerLicenceLimit(),
+                organisation.getProjectManagerLicenceLimit(),
                 organisation.getDepartmentManagerLicenceLimit(),
                 organisation.getEmployeeLicenceLimit(),
+                organisation.getSalesManagerLicenceLimit(),
+                organisation.getClientLicenceLimit(),
                 organisation.getCreatedAt()
         );
     }
@@ -651,6 +680,7 @@ public class OrganisationAdminService {
 
     private OrgAdminDtos.UserSummary toUserSummary(AppUser user) {
         Department department = user.getDepartment();
+        ResourceType resourceType = user.getResourceType();
         return new OrgAdminDtos.UserSummary(
                 user.getId(),
                 user.getFullName(),
@@ -659,6 +689,9 @@ public class OrganisationAdminService {
                 department == null ? null : department.getId(),
                 department == null ? user.getDepartmentCode() : department.getCode(),
                 department == null ? user.getDepartmentCode() : department.getLabel(),
+                resourceType == null ? null : resourceType.getId(),
+                resourceType == null ? null : resourceType.getCode(),
+                resourceType == null ? null : resourceType.getLabel(),
                 user.getEmployeeCode(),
                 user.getJobTitle(),
                 user.isActive()
@@ -692,11 +725,10 @@ public class OrganisationAdminService {
     private String roleLabel(Role role) {
         return switch (role) {
             case ORG_ADMIN -> "Organisation Admin";
-            case GENERAL_MANAGER -> "General Manager";
+            case PROJECT_MANAGER -> "Project Manager";
             case DEPARTMENT_MANAGER -> "Department Manager";
             case EMPLOYEE -> "Employee";
             case PLATFORM_OWNER -> "Platform Owner";
-            case PLATFORM_ADMIN -> "Platform Admin";
             case SALES_MANAGER -> "Sales Manager";
             case CLIENT -> "Client";
         };
@@ -705,11 +737,10 @@ public class OrganisationAdminService {
     private String roleDescription(Role role) {
         return switch (role) {
             case ORG_ADMIN -> "Manages this organisation's profile, users, departments, and security configuration.";
-            case GENERAL_MANAGER -> "Manages the organisation portfolio and operational project data.";
+            case PROJECT_MANAGER -> "Manages the organisation portfolio and operational project data.";
             case DEPARTMENT_MANAGER -> "Manages delivery, resources, and workload for one department.";
             case EMPLOYEE -> "Works with personal assignments and tasks.";
             case PLATFORM_OWNER -> "Manages the SaaS platform.";
-            case PLATFORM_ADMIN -> "Administers platform operations.";
             case SALES_MANAGER -> "Manages customer support tickets and client communication.";
             case CLIENT -> "Submits and follows support tickets for their organisation.";
         };

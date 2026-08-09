@@ -23,6 +23,12 @@ public class ResourceConfigController {
     private static final String RESOURCES_WRITE =
             "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).RESOURCES)";
 
+    private static final String ORG_ADMIN_OR_RESOURCES_READ =
+            "hasAnyAuthority('ORG_ADMIN','ROLE_ORG_ADMIN') or " + RESOURCES_READ;
+
+    private static final String ORG_ADMIN_OR_RESOURCES_WRITE =
+            "hasAnyAuthority('ORG_ADMIN','ROLE_ORG_ADMIN') or " + RESOURCES_WRITE;
+
     private final ResourceConfigService service;
     
     // ✅ NEW: Injected dependencies for the new endpoint
@@ -40,20 +46,20 @@ public class ResourceConfigController {
     }
 
     @GetMapping("/departments")
-    @PreAuthorize(RESOURCES_READ)
+    @PreAuthorize(ORG_ADMIN_OR_RESOURCES_READ)
     public List<DepartmentDto> getDepartments() {
         return service.getDepartments();
     }
 
     @PostMapping("/departments")
-    @PreAuthorize(RESOURCES_WRITE)
+    @PreAuthorize(ORG_ADMIN_OR_RESOURCES_WRITE)
     public DepartmentDto createDepartment(@RequestBody SaveDepartmentRequest request) {
         return service.createDepartment(request);
     }
 
     // ✅ NEW: Endpoint to fetch users for a specific department (for the cascading dropdown)
     @GetMapping("/departments/{departmentId}/users")
-    @PreAuthorize(RESOURCES_READ)
+    @PreAuthorize(ORG_ADMIN_OR_RESOURCES_READ)
     public List<UserSummaryDto> getUsersByDepartment(@PathVariable Long departmentId) {
         Long orgId = securityUtils.getCurrentOrganisationId();
         if (orgId == null) {
@@ -73,19 +79,19 @@ public class ResourceConfigController {
     }
 
     @GetMapping("/resource-types")
-    @PreAuthorize(RESOURCES_READ)
+    @PreAuthorize(ORG_ADMIN_OR_RESOURCES_READ)
     public List<ResourceTypeConfigDto> getResourceTypes() {
         return service.getResourceTypes();
     }
 
     @PostMapping("/resource-types")
-    @PreAuthorize(RESOURCES_WRITE)
+    @PreAuthorize(ORG_ADMIN_OR_RESOURCES_WRITE)
     public ResourceTypeConfigDto createResourceType(@RequestBody SaveResourceTypeRequest request) {
         return service.createResourceType(request);
     }
 
     @PutMapping("/resource-types/{id}")
-    @PreAuthorize(RESOURCES_WRITE)
+    @PreAuthorize(ORG_ADMIN_OR_RESOURCES_WRITE)
     public ResourceTypeConfigDto updateResourceType(
             @PathVariable Long id,
             @RequestBody SaveResourceTypeRequest request
@@ -94,7 +100,7 @@ public class ResourceConfigController {
     }
 
     @DeleteMapping("/resource-types/{id}")
-    @PreAuthorize(RESOURCES_WRITE)
+    @PreAuthorize(ORG_ADMIN_OR_RESOURCES_WRITE)
     public void deleteResourceType(@PathVariable Long id) {
         service.deleteResourceType(id);
     }

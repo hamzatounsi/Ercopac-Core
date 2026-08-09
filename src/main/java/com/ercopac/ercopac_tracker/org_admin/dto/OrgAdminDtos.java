@@ -25,9 +25,11 @@ public final class OrgAdminDtos {
             String plan,
             int userLimit,
             int orgAdminLicenceLimit,
-            int generalManagerLicenceLimit,
+            int projectManagerLicenceLimit,
             int departmentManagerLicenceLimit,
             int employeeLicenceLimit,
+            int salesManagerLicenceLimit,
+            int clientLicenceLimit,
             LocalDateTime createdAt
     ) {
     }
@@ -86,6 +88,9 @@ public final class OrgAdminDtos {
             Long departmentId,
             String departmentCode,
             String departmentName,
+            Long resourceTypeId,
+            String resourceTypeCode,
+            String resourceTypeName,
             String employeeCode,
             String jobTitle,
             boolean active
@@ -108,6 +113,7 @@ public final class OrgAdminDtos {
 
             @NotBlank(message = "Role is required") String role,
             Long departmentId,
+            Long resourceTypeId,
 
             @Size(max = 40, message = "Employee code must not exceed 40 characters")
             String employeeCode,
@@ -130,6 +136,7 @@ public final class OrgAdminDtos {
 
             @NotBlank(message = "Role is required") String role,
             Long departmentId,
+            Long resourceTypeId,
 
             @Size(max = 40, message = "Employee code must not exceed 40 characters")
             String employeeCode,

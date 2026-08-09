@@ -11,6 +11,8 @@ import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
+import com.ercopac.ercopac_tracker.user.ResourceType;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
+import org.mockito.ArgumentCaptor;
 
 import java.util.Optional;
 
@@ -27,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class OrganisationAdminServiceTest {
@@ -35,6 +39,7 @@ class OrganisationAdminServiceTest {
     @Mock private OrganisationRepository organisationRepository;
     @Mock private UserRepository userRepository;
     @Mock private DepartmentRepository departmentRepository;
+    @Mock private ResourceTypeRepository resourceTypeRepository;
     @Mock private ProjectTaskRepository taskRepository;
     @Mock private PasswordResetRequestRepository passwordResetRepository;
     @Mock private RolePermissionRepository permissionRepository;
@@ -50,6 +55,7 @@ class OrganisationAdminServiceTest {
                 organisationRepository,
                 userRepository,
                 departmentRepository,
+                resourceTypeRepository,
                 taskRepository,
                 passwordResetRepository,
                 permissionRepository,
@@ -62,9 +68,11 @@ class OrganisationAdminServiceTest {
         organisation.setCode("TENANT1");
         organisation.setUserLimit(10);
         organisation.setOrgAdminLicenceLimit(2);
-        organisation.setGeneralManagerLicenceLimit(2);
+        organisation.setProjectManagerLicenceLimit(2);
         organisation.setDepartmentManagerLicenceLimit(5);
         organisation.setEmployeeLicenceLimit(10);
+        organisation.setSalesManagerLicenceLimit(5);
+        organisation.setClientLicenceLimit(5);
 
         when(securityUtils.getCurrentOrganisationId()).thenReturn(10L);
         lenient().when(organisationRepository.findById(10L)).thenReturn(Optional.of(organisation));
@@ -77,6 +85,7 @@ class OrganisationAdminServiceTest {
                 "elevated@example.com",
                 "temporary-password",
                 "PLATFORM_OWNER",
+                null,
                 null,
                 null,
                 null,
@@ -96,6 +105,7 @@ class OrganisationAdminServiceTest {
                 "Other Tenant User",
                 "other@example.com",
                 "EMPLOYEE",
+                null,
                 null,
                 null,
                 null,
@@ -138,12 +148,40 @@ class OrganisationAdminServiceTest {
                 88L,
                 null,
                 null,
+                null,
                 true
         );
 
         assertThatThrownBy(() -> service.createUser(request))
                 .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
                         assertThat(exception.getStatusCode().value()).isEqualTo(404));
+    }
+
+    @Test
+    void salesManagerAndClientCanBeCreatedOnlyWithinTheCurrentOrganisation() {
+        when(passwordEncoder.encode("temporary-password")).thenReturn("encoded-password");
+        when(userRepository.save(org.mockito.ArgumentMatchers.any(AppUser.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Department department = new Department("SALES", "Sales", organisation);
+        ReflectionTestUtils.setField(department, "id", 31L);
+        ResourceType resourceType = new ResourceType("SALES_REPRESENTATIVE", "Sales Representative", organisation);
+        ReflectionTestUtils.setField(resourceType, "id", 41L);
+        when(departmentRepository.findByIdAndOrganisation_Id(31L, 10L)).thenReturn(Optional.of(department));
+        when(resourceTypeRepository.findByIdAndOrganisation_Id(41L, 10L)).thenReturn(Optional.of(resourceType));
+
+        createOrganisationUser("sales@example.com", "SALES_MANAGER", 31L, 41L);
+        createOrganisationUser("client@example.com", "CLIENT");
+
+        ArgumentCaptor<AppUser> users = ArgumentCaptor.forClass(AppUser.class);
+        verify(userRepository, org.mockito.Mockito.times(2)).save(users.capture());
+
+        assertThat(users.getAllValues())
+                .extracting(AppUser::getRole, AppUser::getOrganisation, AppUser::isActive, AppUser::isInternalUser)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(Role.SALES_MANAGER, organisation, true, true),
+                        org.assertj.core.groups.Tuple.tuple(Role.CLIENT, organisation, true, false)
+                );
     }
 
     @Test
@@ -166,5 +204,23 @@ class OrganisationAdminServiceTest {
         user.setOrganisation(organisation);
         user.setActive(active);
         return user;
+    }
+
+    private void createOrganisationUser(String email, String role) {
+        createOrganisationUser(email, role, null, null);
+    }
+
+    private void createOrganisationUser(String email, String role, Long departmentId, Long resourceTypeId) {
+        service.createUser(new OrgAdminDtos.CreateUserRequest(
+                "New " + role,
+                email,
+                "temporary-password",
+                role,
+                departmentId,
+                resourceTypeId,
+                null,
+                null,
+                true
+        ));
     }
 }

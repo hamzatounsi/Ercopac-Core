@@ -55,14 +55,20 @@ public class Organisation {
     @Column(nullable = false)
     private int orgAdminLicenceLimit = 1;
 
-    @Column(nullable = false)
-    private int generalManagerLicenceLimit = 1;
+    @Column(name = "general_manager_licence_limit", nullable = false)
+    private int projectManagerLicenceLimit = 1;
 
     @Column(nullable = false)
     private int departmentManagerLicenceLimit = 2;
 
     @Column(nullable = false)
     private int employeeLicenceLimit = 10;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int salesManagerLicenceLimit = 0;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int clientLicenceLimit = 0;
 
     @Column(nullable = false)
     private double monthlyRevenue = 0;
@@ -264,12 +270,12 @@ public class Organisation {
         this.orgAdminLicenceLimit = orgAdminLicenceLimit;
     }
 
-    public int getGeneralManagerLicenceLimit() {
-        return generalManagerLicenceLimit;
+    public int getProjectManagerLicenceLimit() {
+        return projectManagerLicenceLimit;
     }
 
-    public void setGeneralManagerLicenceLimit(int generalManagerLicenceLimit) {
-        this.generalManagerLicenceLimit = generalManagerLicenceLimit;
+    public void setProjectManagerLicenceLimit(int projectManagerLicenceLimit) {
+        this.projectManagerLicenceLimit = projectManagerLicenceLimit;
     }
 
     public int getDepartmentManagerLicenceLimit() {
@@ -287,6 +293,12 @@ public class Organisation {
     public void setEmployeeLicenceLimit(int employeeLicenceLimit) {
         this.employeeLicenceLimit = employeeLicenceLimit;
     }
+
+    public int getSalesManagerLicenceLimit() { return salesManagerLicenceLimit; }
+    public void setSalesManagerLicenceLimit(int salesManagerLicenceLimit) { this.salesManagerLicenceLimit = salesManagerLicenceLimit; }
+
+    public int getClientLicenceLimit() { return clientLicenceLimit; }
+    public void setClientLicenceLimit(int clientLicenceLimit) { this.clientLicenceLimit = clientLicenceLimit; }
 
     public double getMonthlyRevenue() {
         return monthlyRevenue;

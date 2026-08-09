@@ -7,9 +7,8 @@ Spring `PasswordEncoder` when seeded.
 | Role | Email | Organisation | Department | Purpose |
 | --- | --- | --- | --- | --- |
 | PLATFORM_OWNER | owner@projectum.local | Platform | — | Cross-tenant platform visibility |
-| PLATFORM_ADMIN | platform.admin@projectum.local | Platform | — | Platform administration |
-| ORG_ADMIN | org.admin@projectum.local | ERCOPAC Demo | Operations | Organisation administration |
-| GENERAL_MANAGER | gm@projectum.local | ERCOPAC Demo | Operations | Portfolio, projects, capacity and GM dashboard |
+| ORG_ADMIN | org.admin@projectum.local | ERCOPAC Demo | — | Organisation administration |
+| PROJECT_MANAGER | gm@projectum.local | ERCOPAC Demo | Operations | Portfolio, projects, capacity and project dashboard |
 | DEPARTMENT_MANAGER | department.manager@projectum.local | ERCOPAC Demo | Engineering | Department timeline and workload |
 | EMPLOYEE | employee@projectum.local | ERCOPAC Demo | Engineering | Personal assigned tasks and availability |
 | SALES_MANAGER | sales.manager@projectum.local | ERCOPAC Demo | Sales | Ticket and CRM workflows |

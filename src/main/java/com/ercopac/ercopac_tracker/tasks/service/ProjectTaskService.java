@@ -736,10 +736,55 @@ public class ProjectTaskService {
         boolean actualStartChanged = !Objects.equals(previousActualStart, newActualStart);
         boolean actualEndChanged   = !Objects.equals(previousActualEnd, newActualEnd);
 
+        boolean baselineStartChanged = !Objects.equals(oldTask.getBaselineStart(), task.getBaselineStart());
+        boolean baselineEndChanged = !Objects.equals(oldTask.getBaselineEnd(), task.getBaselineEnd());
+        boolean plannedStartChanged = !Objects.equals(oldTask.getPlannedStart(), task.getPlannedStart());
+        boolean plannedEndChanged = !Objects.equals(oldTask.getPlannedEnd(), task.getPlannedEnd());
+
+        if ((baselineStartChanged || baselineEndChanged)
+                && task.getBaselineStart() != null && task.getBaselineEnd() != null) {
+            int duration = inclusiveDuration(task.getBaselineStart(), task.getBaselineEnd());
+            task.setDurationDays(duration);
+            task.setPlannedStart(task.getBaselineStart());
+            task.setPlannedEnd(task.getBaselineEnd());
+            if (newActualStart != null) task.setActualEnd(newActualStart.plusDays(duration - 1));
+            return;
+        }
+
+        if ((plannedStartChanged || plannedEndChanged)
+                && task.getPlannedStart() != null && task.getPlannedEnd() != null) {
+            int duration = inclusiveDuration(task.getPlannedStart(), task.getPlannedEnd());
+            task.setDurationDays(duration);
+            if (task.getBaselineStart() != null) {
+                task.setBaselineEnd(task.getBaselineStart().plusDays(duration - 1));
+                task.setPlannedStart(task.getBaselineStart());
+                task.setPlannedEnd(task.getBaselineEnd());
+            }
+            if (newActualStart != null) task.setActualEnd(newActualStart.plusDays(duration - 1));
+            return;
+        }
+
+        if ((actualStartChanged || actualEndChanged)
+                && newActualStart != null && newActualEnd != null) {
+            int duration = inclusiveDuration(newActualStart, newActualEnd);
+            task.setDurationDays(duration);
+            if (baselineStart != null) {
+                task.setBaselineEnd(baselineStart.plusDays(duration - 1));
+                task.setPlannedStart(baselineStart);
+                task.setPlannedEnd(task.getBaselineEnd());
+            }
+            return;
+        }
+
         if (requestedDuration != null && requestedDuration > 0) {
             task.setDurationDays(requestedDuration);
 
             if (durationChanged) {
+                if (baselineStart != null) {
+                    task.setBaselineEnd(baselineStart.plusDays(requestedDuration - 1));
+                    task.setPlannedStart(baselineStart);
+                    task.setPlannedEnd(task.getBaselineEnd());
+                }
                 // Duration → ActualEnd
                 if (newActualStart != null) {
                     task.setActualEnd(newActualStart.plusDays(requestedDuration - 1));
@@ -769,6 +814,10 @@ public class ProjectTaskService {
     // ══════════════════════════════════════════════════════════════
     // MAP TO RESPONSE
     // ══════════════════════════════════════════════════════════════
+    private int inclusiveDuration(LocalDate start, LocalDate end) {
+        return Math.max(1, (int) ChronoUnit.DAYS.between(start, end) + 1);
+    }
+
     public ProjectScheduleTaskResponse mapToResponse(ProjectTask task) {
         List<TaskDependency> deps = taskDependencyRepository
                 .findByProjectIdAndSuccessorTaskId(task.getProjectId(), task.getId());
@@ -940,6 +989,10 @@ public class ProjectTaskService {
     }
 
     private void validateDates(UpdateProjectTaskRequest req) {
+        if (!"MILESTONE".equalsIgnoreCase(req.getTaskType())
+                && !"SUMMARY".equalsIgnoreCase(req.getTaskType())
+                && req.getDurationDays() != null && req.getDurationDays() <= 0)
+            throw new IllegalArgumentException("Duration must be greater than zero for non-milestone tasks.");
         if (req.getPlannedStart() != null && req.getPlannedEnd() != null
                 && req.getPlannedEnd().isBefore(req.getPlannedStart()))
             throw new IllegalArgumentException("Planned end cannot be before planned start.");
