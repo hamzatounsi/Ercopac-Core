@@ -17,9 +17,9 @@ public class CorsConfig {
 
         config.setAllowedOrigins(List.of(
                 "http://localhost:4200",
-                "https://ercopac-ui.vercel.app",
-                "https://ercopac-ui-b1b6.vercel.app",
-                "https://ercopac-ui-b1b6-ejcrxi7pt-hamzatounsis-projects.vercel.app"
+                "http://localhost:8080",
+                "https://projectumall.com",
+                "https://www.projectumall.com"
         ));
 
         config.setAllowedMethods(List.of(
