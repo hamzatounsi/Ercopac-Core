@@ -2,6 +2,7 @@ package com.ercopac.ercopac_tracker.projects.web;
 
 import com.ercopac.ercopac_tracker.gm_dashboard.dto.ProjectDashboardRowDto;
 import com.ercopac.ercopac_tracker.projects.dto.ProjectDetailsResponse;
+import com.ercopac.ercopac_tracker.projects.dto.ProjectFormOptionsResponse;
 import com.ercopac.ercopac_tracker.projects.dto.UpsertProjectRequest;
 import com.ercopac.ercopac_tracker.projects.service.ProjectService;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,12 @@ public class ProjectController {
 
     public ProjectController(ProjectService projectService) {
         this.projectService = projectService;
+    }
+
+    @GetMapping("/form-options")
+    @PreAuthorize(PROJECTS_READ)
+    public ResponseEntity<ProjectFormOptionsResponse> getFormOptions() {
+        return ResponseEntity.ok(projectService.getFormOptions());
     }
 
     @GetMapping("/{id}")
