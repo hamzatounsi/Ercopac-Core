@@ -6,8 +6,8 @@ import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepositor
 import com.ercopac.ercopac_tracker.platform_dashboard.dto.CreateOrganisationWithAdminRequest;
 import com.ercopac.ercopac_tracker.platform_dashboard.dto.CreateOrganisationWithAdminResponse;
 import com.ercopac.ercopac_tracker.platform_dashboard.dto.PlatformOrganisationDto;
+import com.ercopac.ercopac_tracker.platform_dashboard.dto.PlatformLicenceUsageDto;
 import com.ercopac.ercopac_tracker.user.AppUser;
-import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import jakarta.transaction.Transactional;
@@ -19,7 +19,6 @@ import java.util.List;
 @Service
 public class PlatformOrganisationService {
 
-    private final ResourceTypeRepository resourceTypeRepository;
     private final OrganisationRepository organisationRepo;
     private final UserRepository userRepo;
     private final PasswordEncoder encoder;
@@ -27,13 +26,11 @@ public class PlatformOrganisationService {
     public PlatformOrganisationService(
             OrganisationRepository organisationRepo,
             UserRepository userRepo,
-            PasswordEncoder encoder,
-            ResourceTypeRepository resourceTypeRepository
+            PasswordEncoder encoder
     ) {
         this.organisationRepo = organisationRepo;
         this.userRepo = userRepo;
         this.encoder = encoder;
-        this.resourceTypeRepository = resourceTypeRepository;
     }
 
     @Transactional
@@ -70,9 +67,11 @@ public class PlatformOrganisationService {
         );
         organisation.setUserLimit(request.userLimit);
         organisation.setOrgAdminLicenceLimit(request.orgAdminLicenceLimit);
-        organisation.setGeneralManagerLicenceLimit(request.generalManagerLicenceLimit);
+        organisation.setProjectManagerLicenceLimit(request.projectManagerLicenceLimit);
         organisation.setDepartmentManagerLicenceLimit(request.departmentManagerLicenceLimit);
         organisation.setEmployeeLicenceLimit(request.employeeLicenceLimit);
+        organisation.setSalesManagerLicenceLimit(request.salesManagerLicenceLimit);
+        organisation.setClientLicenceLimit(request.clientLicenceLimit);
 
         organisation.setHealthScore(request.healthScore);
 
@@ -99,33 +98,19 @@ public class PlatformOrganisationService {
 
         organisation = organisationRepo.save(organisation);
 
-        final Organisation savedOrganisation = organisation;
-
-        var adminResourceType = resourceTypeRepository
-                .findByCodeAndOrganisation_Id("ADMINISTRATION", savedOrganisation.getId())
-                .orElseGet(() -> resourceTypeRepository.save(
-                        new com.ercopac.ercopac_tracker.user.ResourceType(
-                                "ADMINISTRATION",
-                                "Administration",
-                                savedOrganisation
-                        )
-                ));
-
         AppUser admin = new AppUser();
         admin.setFullName(request.adminFullName != null ? request.adminFullName.trim() : "Organisation Admin");
         admin.setEmail(adminEmail);
         admin.setPasswordHash(encoder.encode(request.adminPassword));
         admin.setRole(Role.ORG_ADMIN);
         admin.setOrganisation(organisation);
-        admin.setDepartmentCode("EXEC");
         admin.setJobTitle("Organisation Administrator");
-        admin.setResourceType(adminResourceType);
         admin.setSeniority("SENIOR");
         admin.setHoursPerDay(8);
         admin.setDaysPerWeek(5);
         admin.setWorkdays("MON-FRI");
         admin.setColor("#875a7b");
-        admin.setInternalUser(true);
+        admin.setInternalUser(false);
         admin.setActive(true);
 
         admin = userRepo.save(admin);
@@ -144,6 +129,19 @@ public class PlatformOrganisationService {
                 .stream()
                 .map(this::toDto)
                 .toList();
+    }
+
+    public List<PlatformLicenceUsageDto> getLicenceUsage(Long organisationId) {
+        Organisation organisation = organisationRepo.findById(organisationId)
+                .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
+        return List.of(
+                usage(organisation, Role.ORG_ADMIN, organisation.getOrgAdminLicenceLimit()),
+                usage(organisation, Role.PROJECT_MANAGER, organisation.getProjectManagerLicenceLimit()),
+                usage(organisation, Role.DEPARTMENT_MANAGER, organisation.getDepartmentManagerLicenceLimit()),
+                usage(organisation, Role.EMPLOYEE, organisation.getEmployeeLicenceLimit()),
+                usage(organisation, Role.SALES_MANAGER, organisation.getSalesManagerLicenceLimit()),
+                usage(organisation, Role.CLIENT, organisation.getClientLicenceLimit())
+        );
     }
 
     public PlatformOrganisationDto getOrganisation(Long id) {
@@ -217,9 +215,11 @@ public class PlatformOrganisationService {
         organisation.setMonthlyRevenue(request.monthlyRevenue);
         organisation.setUserLimit(request.userLimit);
         organisation.setOrgAdminLicenceLimit(request.orgAdminLicenceLimit);
-        organisation.setGeneralManagerLicenceLimit(request.generalManagerLicenceLimit);
+        organisation.setProjectManagerLicenceLimit(request.projectManagerLicenceLimit);
         organisation.setDepartmentManagerLicenceLimit(request.departmentManagerLicenceLimit);
         organisation.setEmployeeLicenceLimit(request.employeeLicenceLimit);
+        organisation.setSalesManagerLicenceLimit(request.salesManagerLicenceLimit);
+        organisation.setClientLicenceLimit(request.clientLicenceLimit);
 
         organisation.setHealthScore(request.healthScore);
 
@@ -279,6 +279,29 @@ public class PlatformOrganisationService {
         }
     }
 
+    private PlatformLicenceUsageDto usage(Organisation organisation, Role role, int allocated) {
+        long used = userRepo.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role);
+        return new PlatformLicenceUsageDto(
+                role.name(),
+                roleLabel(role),
+                allocated,
+                used,
+                Math.max(0, allocated - used)
+        );
+    }
+
+    private String roleLabel(Role role) {
+        return switch (role) {
+            case ORG_ADMIN -> "Organisation Admin";
+            case PROJECT_MANAGER -> "Project Manager";
+            case DEPARTMENT_MANAGER -> "Department Manager";
+            case EMPLOYEE -> "Employee";
+            case SALES_MANAGER -> "Sales Manager";
+            case CLIENT -> "Client";
+            case PLATFORM_OWNER -> "Platform Owner";
+        };
+    }
+
     private PlatformOrganisationDto toDto(Organisation organisation) {
         PlatformOrganisationDto dto = new PlatformOrganisationDto();
 
@@ -292,9 +315,11 @@ public class PlatformOrganisationService {
         dto.userLimit = organisation.getUserLimit();
 
         dto.orgAdminLicenceLimit = organisation.getOrgAdminLicenceLimit();
-        dto.generalManagerLicenceLimit = organisation.getGeneralManagerLicenceLimit();
+        dto.projectManagerLicenceLimit = organisation.getProjectManagerLicenceLimit();
         dto.departmentManagerLicenceLimit = organisation.getDepartmentManagerLicenceLimit();
         dto.employeeLicenceLimit = organisation.getEmployeeLicenceLimit();
+        dto.salesManagerLicenceLimit = organisation.getSalesManagerLicenceLimit();
+        dto.clientLicenceLimit = organisation.getClientLicenceLimit();
 
         dto.monthlyRevenue = organisation.getMonthlyRevenue();
         dto.healthScore = organisation.getHealthScore();

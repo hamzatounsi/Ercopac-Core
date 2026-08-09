@@ -11,7 +11,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin")
 @org.springframework.security.access.prepost.PreAuthorize(
-    "hasAnyAuthority('PLATFORM_OWNER','ROLE_PLATFORM_OWNER','ORG_ADMIN','ROLE_ORG_ADMIN')"
+    "hasAnyAuthority('ORG_ADMIN','ROLE_ORG_ADMIN')"
 )
 public class AdminController {
 
@@ -26,6 +26,16 @@ public class AdminController {
     @GetMapping("/licences")
     public ResponseEntity<List<AdminLicenceAssignmentDto>> getLicences() {
         return ResponseEntity.ok(adminService.getLicences());
+    }
+
+    @GetMapping("/licences/usage")
+    public ResponseEntity<List<AdminLicenceUsageDto>> getLicenceUsage() {
+        return ResponseEntity.ok(adminService.getLicenceUsage());
+    }
+
+    @GetMapping("/licences/candidates")
+    public ResponseEntity<List<AdminLicenceCandidateDto>> getLicenceCandidates() {
+        return ResponseEntity.ok(adminService.getLicenceCandidates());
     }
 
     @PostMapping("/licences")

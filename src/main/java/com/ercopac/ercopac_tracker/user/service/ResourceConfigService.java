@@ -152,6 +152,8 @@ public class ResourceConfigService {
             Department department = departmentRepository.findByIdAndOrganisation_Id(request.departmentId(), organisationId)
                     .orElseThrow(() -> new IllegalArgumentException("Department not found"));
             type.setDepartment(department);
+        } else {
+            type.setDepartment(null);
         }
     }
 

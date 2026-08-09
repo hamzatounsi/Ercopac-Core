@@ -29,13 +29,11 @@ public class SecurityConfig {
     private final CorsConfigurationSource corsConfigurationSource;
 
     private static final String[] PLATFORM_ROLES = {
-            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
-            "PLATFORM_ADMIN", "ROLE_PLATFORM_ADMIN"
+            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER"
     };
 
     private static final String[] ORG_ADMIN_ROLES = {
             "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
-            "PLATFORM_ADMIN", "ROLE_PLATFORM_ADMIN",
             "ORG_ADMIN", "ROLE_ORG_ADMIN"
     };
 
@@ -43,7 +41,7 @@ public class SecurityConfig {
 
     private static final String[] MANAGER_ROLES = {
             "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
-            "GENERAL_MANAGER", "ROLE_GENERAL_MANAGER",
+            "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
             "DEPARTMENT_MANAGER", "ROLE_DEPARTMENT_MANAGER"
     };
 

@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 
+import java.util.Arrays;
 import java.util.List;
 
 @Service
@@ -57,20 +58,54 @@ public class AdminService {
     public List<AdminLicenceAssignmentDto> getLicences() {
         Long organisationId = requireOrganisationId();
 
-        return licenceRepository.findByOrganisation_IdOrderByUser_FullNameAsc(organisationId)
+        // Licence allocation is the organisation's current active role
+        // assignment, not a separate subset of historical allocation rows.
+        return userRepository.findByOrganisation_IdAndActiveTrueOrderByFullNameAsc(organisationId)
                 .stream()
+                .filter(user -> user.getRole() != Role.PLATFORM_OWNER)
                 .map(this::toLicenceDto)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<AdminLicenceUsageDto> getLicenceUsage() {
+        Organisation organisation = getOrganisation(requireOrganisationId());
+        return Arrays.stream(AdminLicenceType.values())
+                .map(type -> {
+                    Role role = mapLicenceToRole(type.name());
+                    int limit = roleLimit(organisation, role);
+                    long used = userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role);
+                    boolean unlimited = limit == Integer.MAX_VALUE;
+                    return new AdminLicenceUsageDto(
+                            role.name(), roleLabel(role), unlimited ? 0 : limit, used,
+                            unlimited ? 0 : Math.max(0, limit - used), unlimited
+                    );
+                })
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AdminLicenceCandidateDto> getLicenceCandidates() {
+        return userRepository.findByOrganisation_IdAndActiveTrueOrderByFullNameAsc(requireOrganisationId())
+                .stream()
+                .map(user -> new AdminLicenceCandidateDto(
+                        user.getId(), user.getFullName(), user.getEmail(), user.getDepartmentCode(),
+                        user.getResourceType() == null ? null : user.getResourceType().getCode(),
+                        user.getRole().name()
+                ))
+                .toList();
+    }
+
     private Role mapLicenceToRole(String licenceType) {
-        return switch (licenceType) {
-            case "ADMIN" -> Role.ORG_ADMIN;
-            case "PM" -> Role.GENERAL_MANAGER;
-            case "DEPT_MANAGER" -> Role.DEPARTMENT_MANAGER;
-            case "READ_ONLY" -> Role.EMPLOYEE;
-            default -> throw new IllegalArgumentException("Unknown licence type: " + licenceType);
-        };
+        try {
+            Role role = Role.valueOf(licenceType.trim().toUpperCase());
+            if (role == Role.PLATFORM_OWNER) {
+                throw new IllegalArgumentException("Platform Owner is not an organisation licence.");
+            }
+            return role;
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Unknown organisation licence type: " + licenceType);
+        }
     }
 
     public AdminLicenceAssignmentDto assignLicence(AssignLicenceRequest request) {
@@ -90,6 +125,7 @@ public class AdminService {
 
         Role targetRole = mapLicenceToRole(licenceType.name());
         protectRequiredAdmin(user, targetRole, organisationId);
+        validateRoleProfile(user, targetRole);
         if (user.isActive() && user.getRole() != targetRole) {
             enforceRoleLimit(organisation, targetRole);
         }
@@ -320,20 +356,52 @@ public class AdminService {
     }
 
     private void enforceRoleLimit(Organisation organisation, Role role) {
-        int limit = switch (role) {
-            case ORG_ADMIN -> organisation.getOrgAdminLicenceLimit();
-            case GENERAL_MANAGER -> organisation.getGeneralManagerLicenceLimit();
-            case DEPARTMENT_MANAGER -> organisation.getDepartmentManagerLicenceLimit();
-            case EMPLOYEE -> organisation.getEmployeeLicenceLimit();
-            case PLATFORM_OWNER, PLATFORM_ADMIN -> 0;
-            case SALES_MANAGER, CLIENT -> Integer.MAX_VALUE;
-        };
+        int limit = roleLimit(organisation, role);
+        if (limit == Integer.MAX_VALUE) {
+            return;
+        }
         if (userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role) >= limit) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "No active licence is available for role " + role.name() + "."
             );
         }
+    }
+
+    private int roleLimit(Organisation organisation, Role role) {
+        return switch (role) {
+            case ORG_ADMIN -> organisation.getOrgAdminLicenceLimit();
+            case PROJECT_MANAGER -> organisation.getProjectManagerLicenceLimit();
+            case DEPARTMENT_MANAGER -> organisation.getDepartmentManagerLicenceLimit();
+            case EMPLOYEE -> organisation.getEmployeeLicenceLimit();
+            case PLATFORM_OWNER -> 0;
+            case SALES_MANAGER -> organisation.getSalesManagerLicenceLimit();
+            case CLIENT -> organisation.getClientLicenceLimit();
+        };
+    }
+
+    private void validateRoleProfile(AppUser user, Role role) {
+        if (!role.requiresResourceProfile()) {
+            return;
+        }
+        if (user.getDepartment() == null || user.getResourceType() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    roleLabel(role) + " requires both a department and a resource type. Update the user profile first."
+            );
+        }
+    }
+
+    private String roleLabel(Role role) {
+        return switch (role) {
+            case ORG_ADMIN -> "Organisation Admin";
+            case PROJECT_MANAGER -> "Project Manager";
+            case DEPARTMENT_MANAGER -> "Department Manager";
+            case EMPLOYEE -> "Employee";
+            case SALES_MANAGER -> "Sales Manager";
+            case CLIENT -> "Client";
+            case PLATFORM_OWNER -> "Platform Owner";
+        };
     }
 
     private AdminLicenceAssignmentDto toLicenceDto(AdminLicenceAssignment assignment) {
@@ -467,6 +535,17 @@ public class AdminService {
     private Organisation getOrganisation(Long organisationId) {
         return organisationRepository.findById(organisationId)
                 .orElseThrow(() -> notFound("Organisation not found"));
+    }
+
+    private AdminLicenceAssignmentDto toLicenceDto(AppUser user) {
+        return new AdminLicenceAssignmentDto(
+                user.getId(),
+                user.getFullName(),
+                user.getEmail(),
+                user.getDepartmentCode(),
+                user.getResourceType() != null ? user.getResourceType().getCode() : null,
+                user.getRole().name()
+        );
     }
 
     private Long requireOrganisationId() {

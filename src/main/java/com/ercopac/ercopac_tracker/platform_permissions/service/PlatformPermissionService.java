@@ -42,9 +42,11 @@ public class PlatformPermissionService {
     public List<String> getRoles() {
         return List.of(
                 Role.ORG_ADMIN.name(),
-                Role.GENERAL_MANAGER.name(),
+                Role.PROJECT_MANAGER.name(),
                 Role.DEPARTMENT_MANAGER.name(),
-                Role.EMPLOYEE.name()
+                Role.EMPLOYEE.name(),
+                Role.SALES_MANAGER.name(),
+                Role.CLIENT.name()
         );
     }
 

@@ -14,6 +14,8 @@ import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
+import com.ercopac.ercopac_tracker.user.ResourceType;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -39,6 +41,7 @@ public class DataSeeder implements CommandLineRunner {
     
     // ✅ ADDED: Department Repository
     private final DepartmentRepository departmentRepository;
+    private final ResourceTypeRepository resourceTypeRepository;
 
     @Override
     public void run(String... args) {
@@ -58,9 +61,11 @@ public class DataSeeder implements CommandLineRunner {
         org.setDomain("pharmastore.com");
         org.setPlan("ENTERPRISE");
         org.setOrgAdminLicenceLimit(5);
-        org.setGeneralManagerLicenceLimit(10);
+        org.setProjectManagerLicenceLimit(10);
         org.setDepartmentManagerLicenceLimit(20);
         org.setEmployeeLicenceLimit(100);
+        org.setSalesManagerLicenceLimit(10);
+        org.setClientLicenceLimit(50);
         organisationRepository.save(org);
 
         // =========================================================
@@ -71,21 +76,23 @@ public class DataSeeder implements CommandLineRunner {
 
         Department deptEng = new Department("ENG", "Engineering", org);
         departmentRepository.save(deptEng);
+        ResourceType projectManagerType = resourceType(org, "PROJECT_MANAGER", "Project Manager");
+        ResourceType engineeringType = resourceType(org, "SOFTWARE_ENGINEER", "Software Engineer");
 
         // =========================================================
         // 3. USERS (Linked to Departments)
         // =========================================================
-        AppUser platformOwner = seedUser("hamza@projectum.com", "Hamza Tounsi", "Hamza123!", Role.PLATFORM_OWNER, null, "Executive", null);
-        AppUser orgAdmin = seedUser("admin@pharmastore.com", "Organisation Admin", "Hamza123!", Role.ORG_ADMIN, org, "Administration", null);
+        AppUser platformOwner = seedUser("hamza@projectum.com", "Hamza Tounsi", "Hamza123!", Role.PLATFORM_OWNER, null, "Executive", null, null);
+        AppUser orgAdmin = seedUser("admin@pharmastore.com", "Organisation Admin", "Hamza123!", Role.ORG_ADMIN, org, "Administration", null, null);
         
         // ✅ Link GM to Design Department
-        AppUser gm = seedUser("gm@pharmastore.com", "Michael Weber", "Hamza123!", Role.GENERAL_MANAGER, org, "Management", deptDesign);
+        AppUser gm = seedUser("gm@pharmastore.com", "Michael Weber", "Hamza123!", Role.PROJECT_MANAGER, org, "Management", deptDesign, projectManagerType);
         
         // ✅ Link DM to Engineering Department
-        AppUser dm = seedUser("dm@pharmastore.com", "Sarah Engineering", "Hamza123!", Role.DEPARTMENT_MANAGER, org, "Engineering", deptEng);
+        AppUser dm = seedUser("dm@pharmastore.com", "Sarah Engineering", "Hamza123!", Role.DEPARTMENT_MANAGER, org, "Engineering", deptEng, engineeringType);
         
-        AppUser employee1 = seedUser("employee1@pharmastore.com", "John Developer", "Hamza123!", Role.EMPLOYEE, org, "Engineering", deptEng);
-        AppUser employee2 = seedUser("employee2@pharmastore.com", "Emma Planner", "Hamza123!", Role.EMPLOYEE, org, "Planning", null);
+        AppUser employee1 = seedUser("employee1@pharmastore.com", "John Developer", "Hamza123!", Role.EMPLOYEE, org, "Engineering", deptEng, engineeringType);
+        AppUser employee2 = seedUser("employee2@pharmastore.com", "Emma Planner", "Hamza123!", Role.EMPLOYEE, org, "Design", deptDesign, projectManagerType);
 
         seedGeneralManagerPermissions(org);
 
@@ -131,14 +138,14 @@ public class DataSeeder implements CommandLineRunner {
         System.out.println("=======================================");
     }
 
-    private AppUser seedUser(String email, String fullName, String rawPassword, Role role, Organisation organisation, String departmentCode, Department department) {
+    private AppUser seedUser(String email, String fullName, String rawPassword, Role role, Organisation organisation, String departmentCode, Department department, ResourceType resourceType) {
         AppUser user = new AppUser();
         user.setEmail(email);
         user.setFullName(fullName);
         user.setPasswordHash(passwordEncoder.encode(rawPassword));
         user.setRole(role);
         user.setActive(true);
-        user.setInternalUser(true);
+        user.setInternalUser(role.requiresResourceProfile());
         user.setDepartmentCode(departmentCode);
         user.setJobTitle(role.name());
         user.setDefaultRate(new BigDecimal("120"));
@@ -146,7 +153,13 @@ public class DataSeeder implements CommandLineRunner {
         user.setOrganisation(organisation);
         
         user.setDepartment(department);
+        user.setResourceType(resourceType);
         return userRepository.save(user);
+    }
+
+    private ResourceType resourceType(Organisation organisation, String code, String label) {
+        return resourceTypeRepository.findByCodeAndOrganisation_Id(code, organisation.getId())
+                .orElseGet(() -> resourceTypeRepository.save(new ResourceType(code, label, organisation)));
     }
 
     private void seedGeneralManagerPermissions(Organisation organisation) {
@@ -167,14 +180,14 @@ public class DataSeeder implements CommandLineRunner {
 
         for (PermissionModule module : modules) {
             if (rolePermissionRepository
-                    .findByOrganisation_IdAndRoleAndModule(organisation.getId(), Role.GENERAL_MANAGER, module)
+                    .findByOrganisation_IdAndRoleAndModule(organisation.getId(), Role.PROJECT_MANAGER, module)
                     .isPresent()) {
                 continue;
             }
 
             RolePermission permission = new RolePermission();
             permission.setOrganisation(organisation);
-            permission.setRole(Role.GENERAL_MANAGER);
+            permission.setRole(Role.PROJECT_MANAGER);
             permission.setModule(module);
             permission.setCanRead(true);
             permission.setCanWrite(true);

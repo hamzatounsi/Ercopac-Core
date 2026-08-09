@@ -14,7 +14,11 @@ public class DbUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        AppUser u = repo.findByEmail(username)
+        // AuthController accepts email addresses case-insensitively.  The
+        // authentication provider must use the same lookup rule, otherwise a
+        // valid account found by the controller can still fail password
+        // authentication when the caller changes the email casing.
+        AppUser u = repo.findByEmailIgnoreCase(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
         return org.springframework.security.core.userdetails.User

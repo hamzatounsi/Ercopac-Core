@@ -99,6 +99,7 @@ public class DepartmentDashboardService {
                 .findByOrganisation_IdAndDepartmentCodeOrderByFullNameAsc(currentOrgId, departmentCode)
                 .stream()
                 .filter(AppUser::isActive)
+                .filter(user -> user.getRole().requiresResourceProfile())
                 .map(this::toMemberDto)
                 .toList();
 
@@ -769,6 +770,7 @@ public class DepartmentDashboardService {
                 .findByOrganisation_IdAndDepartmentCodeOrderByFullNameAsc(currentOrgId, departmentCode)
                 .stream()
                 .filter(AppUser::isActive)
+                .filter(user -> user.getRole().requiresResourceProfile())
                 .map(this::toMemberDto)
                 .toList();
 

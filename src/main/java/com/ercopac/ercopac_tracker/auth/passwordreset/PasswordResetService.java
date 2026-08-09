@@ -109,7 +109,7 @@ public class PasswordResetService {
         if (admins.isEmpty()) {
             admins = userRepository.findByOrganisation_IdAndRoleOrderByFullNameAsc(
                     organisationId,
-                    Role.GENERAL_MANAGER
+                    Role.PROJECT_MANAGER
             );
         }
 

@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.user.service;
 
+import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
@@ -28,17 +29,20 @@ public class ResourceService {
     private final UserRepository         userRepository;
     private final OrganisationRepository organisationRepository;
     private final ResourceTypeRepository resourceTypeRepository;
+    private final DepartmentRepository departmentRepository;
     private final PasswordEncoder        passwordEncoder;
     private final SecurityUtils          securityUtils;
 
     public ResourceService(UserRepository userRepository,
                            OrganisationRepository organisationRepository,
                            ResourceTypeRepository resourceTypeRepository,
+                           DepartmentRepository departmentRepository,
                            PasswordEncoder passwordEncoder,
                            SecurityUtils securityUtils) {
         this.userRepository         = userRepository;
         this.organisationRepository = organisationRepository;
         this.resourceTypeRepository = resourceTypeRepository;
+        this.departmentRepository = departmentRepository;
         this.passwordEncoder        = passwordEncoder;
         this.securityUtils          = securityUtils;
     }
@@ -83,16 +87,16 @@ public class ResourceService {
         user.setFullName(request.fullName());
         user.setEmail(request.email().trim().toLowerCase());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setRole(parseRequiredRole(request.role()));
+        Role role = parseRequiredRole(request.role());
+        user.setRole(role);
         user.setOrganisation(organisation);
 
         user.setEmployeeCode(normalize(request.employeeCode()));
-        user.setDepartmentCode(normalize(request.departmentCode()));
+        assignResourceProfile(user, role, request.departmentCode(), request.resourceType(), organisationId);
         // FIXED: look up ResourceType entity by code
-        user.setResourceType(resolveResourceType(normalize(request.resourceType()), organisationId));
         user.setJobTitle(normalize(request.jobTitle()));
         user.setSeniority(normalize(request.seniority()));
-        user.setInternalUser(request.internalUser() != null ? request.internalUser() : true);
+        user.setInternalUser(true);
         user.setHoursPerDay(request.hoursPerDay() != null ? request.hoursPerDay() : 8);
         user.setDaysPerWeek(request.daysPerWeek() != null ? request.daysPerWeek() : 5);
         user.setWorkdays(normalizeOrDefault(request.workdays(), "MON-FRI"));
@@ -113,8 +117,8 @@ public class ResourceService {
         AppUser user = userRepository.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
 
-        if (user.getRole() == Role.ORG_ADMIN || user.getRole() == Role.PLATFORM_OWNER) {
-            throw new IllegalArgumentException("Administrative accounts must be managed in the administration console");
+        if (!user.getRole().requiresResourceProfile()) {
+            throw new IllegalArgumentException("Only internal resource accounts can be managed here");
         }
 
         if (request.fullName() != null && !request.fullName().isBlank()) {
@@ -133,12 +137,10 @@ public class ResourceService {
             user.setEmployeeCode(null);
         }
 
-        user.setDepartmentCode(normalize(request.departmentCode()));
-        // FIXED: look up ResourceType entity by code
-        user.setResourceType(resolveResourceType(normalize(request.resourceType()), organisationId));
+        assignResourceProfile(user, user.getRole(), request.departmentCode(), request.resourceType(), organisationId);
         user.setJobTitle(normalize(request.jobTitle()));
         user.setSeniority(normalize(request.seniority()));
-        user.setInternalUser(request.internalUser() != null ? request.internalUser() : user.isInternalUser());
+        user.setInternalUser(true);
         user.setHoursPerDay(request.hoursPerDay() != null ? request.hoursPerDay() : user.getHoursPerDay());
         user.setDaysPerWeek(request.daysPerWeek() != null ? request.daysPerWeek() : user.getDaysPerWeek());
         user.setWorkdays(normalizeOrDefault(request.workdays(), user.getWorkdays()));
@@ -157,8 +159,8 @@ public class ResourceService {
         Long organisationId = requireOrganisationIdForWrite();
         AppUser user = userRepository.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
-        if (user.getRole() == Role.ORG_ADMIN || user.getRole() == Role.PLATFORM_OWNER) {
-            throw new IllegalArgumentException("Administrative accounts must be managed in the administration console");
+        if (!user.getRole().requiresResourceProfile()) {
+            throw new IllegalArgumentException("Only internal resource accounts can be managed here");
         }
         user.setActive(active);
         userRepository.save(user);
@@ -357,10 +359,39 @@ public class ResourceService {
             parsed = Role.valueOf(role.trim().toUpperCase());
         }
         catch (Exception ex) { throw new IllegalArgumentException("Invalid role: " + role); }
-        if (parsed == Role.PLATFORM_OWNER || parsed == Role.ORG_ADMIN) {
-            throw new IllegalArgumentException("Administrative roles cannot be assigned through resource management");
+        if (!parsed.requiresResourceProfile()) {
+            throw new IllegalArgumentException("Only internal resource roles can be assigned through resource management");
         }
         return parsed;
+    }
+
+    private void assignResourceProfile(
+            AppUser user,
+            Role role,
+            String departmentCode,
+            String resourceTypeCode,
+            Long organisationId
+    ) {
+        if (!role.requiresResourceProfile()) {
+            throw new IllegalArgumentException("A resource profile is required for this operation");
+        }
+        String normalizedDepartment = normalize(departmentCode);
+        String normalizedResourceType = normalize(resourceTypeCode);
+        if (normalizedDepartment == null) {
+            throw new IllegalArgumentException("Department is required for " + role.name());
+        }
+        if (normalizedResourceType == null) {
+            throw new IllegalArgumentException("Resource type is required for " + role.name());
+        }
+        var department = departmentRepository.findByCodeAndOrganisation_Id(normalizedDepartment, organisationId)
+                .orElseThrow(() -> new IllegalArgumentException("Department not found"));
+        ResourceType resourceType = resolveResourceType(normalizedResourceType, organisationId);
+        if (resourceType == null || !resourceType.isActive() || !resourceType.isAssignable()) {
+            throw new IllegalArgumentException("Resource type is not available for assignment");
+        }
+        user.setDepartment(department);
+        user.setDepartmentCode(department.getCode());
+        user.setResourceType(resourceType);
     }
 
     private String normalize(String value) {

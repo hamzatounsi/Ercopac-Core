@@ -14,6 +14,7 @@ INSERT INTO organisations (
     name, code, country, domain, status, plan, user_limit,
     org_admin_licence_limit, general_manager_licence_limit,
     department_manager_licence_limit, employee_licence_limit,
+    sales_manager_licence_limit, client_licence_limit,
     monthly_revenue, health_score, created_at, billing_email, vat_number,
     payment_method, force2fa_admins, force2fa_specialists,
     force2fa_operators, default2fa_method, session_timeout,
@@ -23,7 +24,7 @@ INSERT INTO organisations (
 ) VALUES
 (
     'Northstar Industrial Automation GmbH', 'NSIA', 'Germany', 'northstar-ia.example',
-    'ACTIVE', 'ENTERPRISE', 60, 3, 4, 8, 45, 2490.00, 92,
+    'ACTIVE', 'ENTERPRISE', 60, 3, 4, 8, 45, 6, 20, 2490.00, 92,
     TIMESTAMP '2025-11-04 09:00:00', 'billing@northstar-ia.example', 'DE318765492',
     'SEPA_DIRECT_DEBIT', 'ENABLED', 'ENABLED', 'OPTIONAL', 'AUTHENTICATOR_APP', '4_HOURS',
     5, 12, 'NEVER', 'Enterprise demonstration tenant for industrial automation delivery.',
@@ -31,7 +32,7 @@ INSERT INTO organisations (
 ),
 (
     'Veltis Field Services Ltd', 'VELTIS', 'United Kingdom', 'veltis.example',
-    'TRIAL', 'GROWTH', 25, 2, 2, 4, 17, 990.00, 78,
+    'TRIAL', 'GROWTH', 25, 2, 2, 4, 17, 3, 10, 990.00, 78,
     TIMESTAMP '2026-05-20 09:00:00', 'finance@veltis.example', 'GB492381760',
     'CARD', 'ENABLED', 'OPTIONAL', 'OPTIONAL', 'AUTHENTICATOR_APP', '2_HOURS',
     5, 12, '180_DAYS', 'Trial tenant with an active field-services opportunity pipeline.',
@@ -47,9 +48,9 @@ INSERT INTO users (
 ('Platform Owner', 'owner@ercopac.example', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'PLATFORM_OWNER', NULL,
  'PLT-001', 'PLATFORM', 'Platform Owner', 'EXECUTIVE', 8, 5, 'MON-FRI', '#0f172a', true, 0.00, 'SALARY', 'EUR', 'Demo platform owner.', true),
 ('Marie Hoffmann', 'marie.hoffmann@northstar-ia.example', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ORG_ADMIN',
- (SELECT id FROM organisations WHERE code = 'NSIA'), 'NS-ADM-001', 'ADMIN', 'Organisation Administrator', 'SENIOR', 8, 5, 'MON-FRI', '#7c3aed', true, 98.00, 'HOURLY', 'EUR', 'Tenant administrator and finance sponsor.', true),
-('Daniel Keller', 'daniel.keller@northstar-ia.example', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'GENERAL_MANAGER',
- (SELECT id FROM organisations WHERE code = 'NSIA'), 'NS-GM-001', 'PMO', 'General Manager', 'EXECUTIVE', 8, 5, 'MON-FRI', '#1d4ed8', true, 140.00, 'HOURLY', 'EUR', 'Portfolio executive and escalation owner.', true),
+ (SELECT id FROM organisations WHERE code = 'NSIA'), 'NS-ADM-001', NULL, 'Organisation Administrator', 'SENIOR', 8, 5, 'MON-FRI', '#7c3aed', false, 98.00, 'HOURLY', 'EUR', 'Tenant administrator and finance sponsor.', true),
+('Daniel Keller', 'daniel.keller@northstar-ia.example', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'PROJECT_MANAGER',
+ (SELECT id FROM organisations WHERE code = 'NSIA'), 'NS-PM-001', 'PMO', 'Project Manager', 'EXECUTIVE', 8, 5, 'MON-FRI', '#1d4ed8', true, 140.00, 'HOURLY', 'EUR', 'Portfolio executive and escalation owner.', true),
 ('Elena Fischer', 'elena.fischer@northstar-ia.example', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'DEPARTMENT_MANAGER',
  (SELECT id FROM organisations WHERE code = 'NSIA'), 'NS-ENG-001', 'ENG', 'Engineering Manager', 'SENIOR', 8, 5, 'MON-FRI', '#2563eb', true, 112.00, 'HOURLY', 'EUR', 'Manager for automation engineering.', true),
 ('Lukas Brandt', 'lukas.brandt@northstar-ia.example', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'DEPARTMENT_MANAGER',
@@ -57,8 +58,8 @@ INSERT INTO users (
 ('Sofia Roth', 'sofia.roth@northstar-ia.example', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'DEPARTMENT_MANAGER',
  (SELECT id FROM organisations WHERE code = 'NSIA'), 'NS-PMO-001', 'PMO', 'PMO Manager', 'SENIOR', 8, 5, 'MON-FRI', '#9333ea', true, 105.00, 'HOURLY', 'EUR', 'Manager for PMO and project controls.', true),
 ('Rita Collins', 'rita.collins@veltis.example', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ORG_ADMIN',
- (SELECT id FROM organisations WHERE code = 'VELTIS'), 'VF-ADM-001', 'OPS', 'Operations Director', 'SENIOR', 8, 5, 'MON-FRI', '#0f766e', true, 88.00, 'HOURLY', 'GBP', 'Trial tenant administrator.', true),
-('Timo Weber', 'timo.weber@veltis.example', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'GENERAL_MANAGER',
+ (SELECT id FROM organisations WHERE code = 'VELTIS'), 'VF-ADM-001', NULL, 'Operations Director', 'SENIOR', 8, 5, 'MON-FRI', '#0f766e', false, 88.00, 'HOURLY', 'GBP', 'Trial tenant administrator.', true),
+('Timo Weber', 'timo.weber@veltis.example', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'PROJECT_MANAGER',
  (SELECT id FROM organisations WHERE code = 'VELTIS'), 'VF-GM-001', 'OPS', 'Service Delivery Manager', 'SENIOR', 8, 5, 'MON-FRI', '#0369a1', true, 95.00, 'HOURLY', 'GBP', 'Leads the Veltis delivery portfolio.', true);
 
 INSERT INTO departments (code, label, organisation_id, manager_id) VALUES
@@ -81,6 +82,29 @@ INSERT INTO resource_type_dept_map (resource_type_id, department_id, colour, def
 ((SELECT id FROM resource_types WHERE code = 'SITE_TECHNICIAN' AND organisation_id = (SELECT id FROM organisations WHERE code = 'NSIA')), (SELECT id FROM departments WHERE code = 'OPS' AND organisation_id = (SELECT id FROM organisations WHERE code = 'NSIA')), '#059669', 78.00, (SELECT id FROM organisations WHERE code = 'NSIA')),
 ((SELECT id FROM resource_types WHERE code = 'FIELD_ENGINEER' AND organisation_id = (SELECT id FROM organisations WHERE code = 'VELTIS')), (SELECT id FROM departments WHERE code = 'OPS' AND organisation_id = (SELECT id FROM organisations WHERE code = 'VELTIS')), '#0f766e', 72.00, (SELECT id FROM organisations WHERE code = 'VELTIS'));
 
+-- Operational users seeded before departments/resource types are reconciled
+-- here with real tenant-scoped foreign keys.
+UPDATE users SET
+  department_id = (SELECT id FROM departments WHERE code = 'PMO' AND organisation_id = (SELECT id FROM organisations WHERE code = 'NSIA')),
+  resource_type_id = (SELECT id FROM resource_types WHERE code = 'PROJECT_CONTROLLER' AND organisation_id = (SELECT id FROM organisations WHERE code = 'NSIA'))
+WHERE email = 'daniel.keller@northstar-ia.example';
+UPDATE users SET
+  department_id = (SELECT id FROM departments WHERE code = 'ENG' AND organisation_id = (SELECT id FROM organisations WHERE code = 'NSIA')),
+  resource_type_id = (SELECT id FROM resource_types WHERE code = 'AUTOMATION_ENG' AND organisation_id = (SELECT id FROM organisations WHERE code = 'NSIA'))
+WHERE email = 'elena.fischer@northstar-ia.example';
+UPDATE users SET
+  department_id = (SELECT id FROM departments WHERE code = 'OPS' AND organisation_id = (SELECT id FROM organisations WHERE code = 'NSIA')),
+  resource_type_id = (SELECT id FROM resource_types WHERE code = 'SITE_TECHNICIAN' AND organisation_id = (SELECT id FROM organisations WHERE code = 'NSIA'))
+WHERE email = 'lukas.brandt@northstar-ia.example';
+UPDATE users SET
+  department_id = (SELECT id FROM departments WHERE code = 'PMO' AND organisation_id = (SELECT id FROM organisations WHERE code = 'NSIA')),
+  resource_type_id = (SELECT id FROM resource_types WHERE code = 'PROJECT_CONTROLLER' AND organisation_id = (SELECT id FROM organisations WHERE code = 'NSIA'))
+WHERE email = 'sofia.roth@northstar-ia.example';
+UPDATE users SET
+  department_id = (SELECT id FROM departments WHERE code = 'OPS' AND organisation_id = (SELECT id FROM organisations WHERE code = 'VELTIS')),
+  resource_type_id = (SELECT id FROM resource_types WHERE code = 'FIELD_ENGINEER' AND organisation_id = (SELECT id FROM organisations WHERE code = 'VELTIS'))
+WHERE email = 'timo.weber@veltis.example';
+
 INSERT INTO users (
     full_name, email, password_hash, role, organisation_id, employee_code,
     department_code, department_id, job_title, resource_type_id, seniority,
@@ -95,13 +119,13 @@ INSERT INTO users (
 
 -- Licences and permissions
 INSERT INTO admin_licence_assignments (organisation_id, user_id, licence_type, created_at, updated_at) VALUES
-((SELECT id FROM organisations WHERE code = 'NSIA'), (SELECT id FROM users WHERE email = 'marie.hoffmann@northstar-ia.example'), 'ADMIN', TIMESTAMP '2025-11-04 09:15:00', TIMESTAMP '2025-11-04 09:15:00'),
-((SELECT id FROM organisations WHERE code = 'NSIA'), (SELECT id FROM users WHERE email = 'daniel.keller@northstar-ia.example'), 'PM', TIMESTAMP '2025-11-04 09:15:00', TIMESTAMP '2025-11-04 09:15:00'),
-((SELECT id FROM organisations WHERE code = 'NSIA'), (SELECT id FROM users WHERE email = 'elena.fischer@northstar-ia.example'), 'DEPT_MANAGER', TIMESTAMP '2025-11-04 09:15:00', TIMESTAMP '2025-11-04 09:15:00'),
-((SELECT id FROM organisations WHERE code = 'NSIA'), (SELECT id FROM users WHERE email = 'lukas.brandt@northstar-ia.example'), 'DEPT_MANAGER', TIMESTAMP '2025-11-04 09:15:00', TIMESTAMP '2025-11-04 09:15:00'),
-((SELECT id FROM organisations WHERE code = 'NSIA'), (SELECT id FROM users WHERE email = 'sofia.roth@northstar-ia.example'), 'DEPT_MANAGER', TIMESTAMP '2025-11-04 09:15:00', TIMESTAMP '2025-11-04 09:15:00'),
-((SELECT id FROM organisations WHERE code = 'VELTIS'), (SELECT id FROM users WHERE email = 'rita.collins@veltis.example'), 'ADMIN', TIMESTAMP '2026-05-20 09:15:00', TIMESTAMP '2026-05-20 09:15:00'),
-((SELECT id FROM organisations WHERE code = 'VELTIS'), (SELECT id FROM users WHERE email = 'timo.weber@veltis.example'), 'PM', TIMESTAMP '2026-05-20 09:15:00', TIMESTAMP '2026-05-20 09:15:00');
+((SELECT id FROM organisations WHERE code = 'NSIA'), (SELECT id FROM users WHERE email = 'marie.hoffmann@northstar-ia.example'), 'ORG_ADMIN', TIMESTAMP '2025-11-04 09:15:00', TIMESTAMP '2025-11-04 09:15:00'),
+((SELECT id FROM organisations WHERE code = 'NSIA'), (SELECT id FROM users WHERE email = 'daniel.keller@northstar-ia.example'), 'PROJECT_MANAGER', TIMESTAMP '2025-11-04 09:15:00', TIMESTAMP '2025-11-04 09:15:00'),
+((SELECT id FROM organisations WHERE code = 'NSIA'), (SELECT id FROM users WHERE email = 'elena.fischer@northstar-ia.example'), 'DEPARTMENT_MANAGER', TIMESTAMP '2025-11-04 09:15:00', TIMESTAMP '2025-11-04 09:15:00'),
+((SELECT id FROM organisations WHERE code = 'NSIA'), (SELECT id FROM users WHERE email = 'lukas.brandt@northstar-ia.example'), 'DEPARTMENT_MANAGER', TIMESTAMP '2025-11-04 09:15:00', TIMESTAMP '2025-11-04 09:15:00'),
+((SELECT id FROM organisations WHERE code = 'NSIA'), (SELECT id FROM users WHERE email = 'sofia.roth@northstar-ia.example'), 'DEPARTMENT_MANAGER', TIMESTAMP '2025-11-04 09:15:00', TIMESTAMP '2025-11-04 09:15:00'),
+((SELECT id FROM organisations WHERE code = 'VELTIS'), (SELECT id FROM users WHERE email = 'rita.collins@veltis.example'), 'ORG_ADMIN', TIMESTAMP '2026-05-20 09:15:00', TIMESTAMP '2026-05-20 09:15:00'),
+((SELECT id FROM organisations WHERE code = 'VELTIS'), (SELECT id FROM users WHERE email = 'timo.weber@veltis.example'), 'PROJECT_MANAGER', TIMESTAMP '2026-05-20 09:15:00', TIMESTAMP '2026-05-20 09:15:00');
 
 INSERT INTO role_permissions (organisation_id, role, module, can_read, can_write)
 SELECT o.id, p.role, p.module, p.can_read, p.can_write
@@ -114,9 +138,9 @@ CROSS JOIN (
     ('ORG_ADMIN', 'FORECAST', true, true), ('ORG_ADMIN', 'RISKS', true, true),
     ('ORG_ADMIN', 'CHANGE_REQUESTS', true, true), ('ORG_ADMIN', 'ACTIONS', true, true),
     ('ORG_ADMIN', 'RESOURCES', true, true), ('ORG_ADMIN', 'SUPPLIERS', true, true),
-    ('GENERAL_MANAGER', 'GM_DASHBOARD', true, true), ('GENERAL_MANAGER', 'PROJECTS', true, true),
-    ('GENERAL_MANAGER', 'FINANCE', true, true), ('GENERAL_MANAGER', 'FORECAST', true, true),
-    ('GENERAL_MANAGER', 'RISKS', true, true), ('DEPARTMENT_MANAGER', 'DEPARTMENT_DASHBOARD', true, true),
+    ('PROJECT_MANAGER', 'GM_DASHBOARD', true, true), ('PROJECT_MANAGER', 'PROJECTS', true, true),
+    ('PROJECT_MANAGER', 'FINANCE', true, true), ('PROJECT_MANAGER', 'FORECAST', true, true),
+    ('PROJECT_MANAGER', 'RISKS', true, true), ('DEPARTMENT_MANAGER', 'DEPARTMENT_DASHBOARD', true, true),
     ('DEPARTMENT_MANAGER', 'TASKS', true, true), ('EMPLOYEE', 'EMPLOYEE_DASHBOARD', true, true),
     ('EMPLOYEE', 'TASKS', true, false)
 ) AS p(role, module, can_read, can_write)

@@ -10,7 +10,7 @@ public class RoleTestController {
 
     @GetMapping("/gm/hello")
     public String gmHello() {
-        return "Hello GENERAL_MANAGER ✅";
+        return "Hello PROJECT_MANAGER ✅";
     }
 
     @GetMapping("/department/hello")

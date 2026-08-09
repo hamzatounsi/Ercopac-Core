@@ -35,6 +35,11 @@ public class PlatformOrganisationController {
         return ResponseEntity.ok(service.getOrganisation(id));
     }
 
+    @GetMapping("/{id}/licence-usage")
+    public ResponseEntity<?> getLicenceUsage(@PathVariable Long id) {
+        return ResponseEntity.ok(service.getLicenceUsage(id));
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<?> updateOrganisation(
             @PathVariable Long id,

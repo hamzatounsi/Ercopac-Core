@@ -40,6 +40,8 @@ import com.ercopac.ercopac_tracker.ticketing.repository.TicketReadStateRepositor
 import com.ercopac.ercopac_tracker.ticketing.repository.TicketRepository;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
+import com.ercopac.ercopac_tracker.user.ResourceType;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -68,6 +70,7 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
     private final OrganisationRepository organisations;
     private final DepartmentRepository departments;
     private final UserRepository users;
+    private final ResourceTypeRepository resourceTypes;
     private final TicketRepository tickets;
     private final TicketMessageRepository messages;
     private final TicketActivityRepository activities;
@@ -87,6 +90,7 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
             OrganisationRepository organisations,
             DepartmentRepository departments,
             UserRepository users,
+            ResourceTypeRepository resourceTypes,
             TicketRepository tickets,
             TicketMessageRepository messages,
             TicketActivityRepository activities,
@@ -105,6 +109,7 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
         this.organisations = organisations;
         this.departments = departments;
         this.users = users;
+        this.resourceTypes = resourceTypes;
         this.tickets = tickets;
         this.messages = messages;
         this.activities = activities;
@@ -136,9 +141,8 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
         Department testProduction = department(testIndustries, "PRODUCTION", "Production");
 
         AppUser owner = user("owner@projectum.local", "Platform Owner", Role.PLATFORM_OWNER, null, null, true);
-        user("platform.admin@projectum.local", "Platform Administrator", Role.PLATFORM_ADMIN, null, null, true);
-        user("org.admin@projectum.local", "ERCOPAC Organisation Admin", Role.ORG_ADMIN, ercopac, operations, true);
-        AppUser gm = user("gm@projectum.local", "ERCOPAC General Manager", Role.GENERAL_MANAGER, ercopac, operations, true);
+        user("org.admin@projectum.local", "ERCOPAC Organisation Admin", Role.ORG_ADMIN, ercopac, null, false);
+        AppUser gm = user("gm@projectum.local", "ERCOPAC Project Manager", Role.PROJECT_MANAGER, ercopac, operations, true);
         AppUser departmentManager = user("department.manager@projectum.local", "Engineering Department Manager", Role.DEPARTMENT_MANAGER, ercopac, engineering, true);
         AppUser engineer = user("employee@projectum.local", "Engineering Specialist", Role.EMPLOYEE, ercopac, engineering, true);
         AppUser productionEmployee = user("production.employee@projectum.local", "Production Planner", Role.EMPLOYEE, ercopac, production, true);
@@ -147,8 +151,8 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
         AppUser ercopacSales = user("sales.manager@projectum.local", "ERCOPAC Sales Manager", Role.SALES_MANAGER, ercopac, sales, true);
         AppUser ercopacClient = user("client@projectum.local", "ERCOPAC Client Contact", Role.CLIENT, ercopac, null, false);
 
-        user("org.admin@testindustries.local", "Test Industries Organisation Admin", Role.ORG_ADMIN, testIndustries, testProduction, true);
-        AppUser testGm = user("gm@testindustries.local", "Test Industries General Manager", Role.GENERAL_MANAGER, testIndustries, testProduction, true);
+        user("org.admin@testindustries.local", "Test Industries Organisation Admin", Role.ORG_ADMIN, testIndustries, null, false);
+        AppUser testGm = user("gm@testindustries.local", "Test Industries Project Manager", Role.PROJECT_MANAGER, testIndustries, testProduction, true);
         AppUser testDm = user("department.manager@testindustries.local", "Test Industries Engineering Manager", Role.DEPARTMENT_MANAGER, testIndustries, testEngineering, true);
         AppUser testEmployee = user("employee@testindustries.local", "Test Industries Engineer", Role.EMPLOYEE, testIndustries, testEngineering, true);
         AppUser testSales = user("sales.manager@testindustries.local", "Test Industries Sales Manager", Role.SALES_MANAGER, testIndustries, testProduction, true);
@@ -206,9 +210,8 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
     private void printCredentials() {
         System.out.println("=== DEVELOPMENT TEST ACCOUNTS (password: " + DEVELOPMENT_PASSWORD + ") ===");
         System.out.println("PLATFORM_OWNER owner@projectum.local | Platform");
-        System.out.println("PLATFORM_ADMIN platform.admin@projectum.local | Platform");
         System.out.println("ORG_ADMIN org.admin@projectum.local | ERCOPAC Demo / Operations");
-        System.out.println("GENERAL_MANAGER gm@projectum.local | ERCOPAC Demo / Operations");
+        System.out.println("PROJECT_MANAGER gm@projectum.local | ERCOPAC Demo / Operations");
         System.out.println("DEPARTMENT_MANAGER department.manager@projectum.local | ERCOPAC Demo / Engineering");
         System.out.println("EMPLOYEE employee@projectum.local | ERCOPAC Demo / Engineering");
         System.out.println("SALES_MANAGER sales.manager@projectum.local | ERCOPAC Demo / Sales");
@@ -228,9 +231,11 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
             organisation.setPlan("ENTERPRISE");
             organisation.setUserLimit(100);
             organisation.setOrgAdminLicenceLimit(10);
-            organisation.setGeneralManagerLicenceLimit(10);
+            organisation.setProjectManagerLicenceLimit(10);
             organisation.setDepartmentManagerLicenceLimit(20);
             organisation.setEmployeeLicenceLimit(100);
+            organisation.setSalesManagerLicenceLimit(20);
+            organisation.setClientLicenceLimit(100);
             return organisations.save(organisation);
         });
     }
@@ -247,7 +252,8 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
             existing.setOrganisation(organisation);
             existing.setDepartment(department);
             existing.setDepartmentCode(department == null ? null : department.getCode());
-            existing.setInternalUser(internal);
+            existing.setResourceType(resourceTypeFor(role, organisation, department));
+            existing.setInternalUser(role.requiresResourceProfile());
             existing.setActive(true);
             existing.setJobTitle(role.name());
             existing.setDefaultRate(new BigDecimal("120"));
@@ -265,7 +271,8 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
             created.setOrganisation(organisation);
             created.setDepartment(department);
             created.setDepartmentCode(department == null ? null : department.getCode());
-            created.setInternalUser(internal);
+            created.setResourceType(resourceTypeFor(role, organisation, department));
+            created.setInternalUser(role.requiresResourceProfile());
             created.setJobTitle(role.name());
             created.setDefaultRate(new BigDecimal("120"));
             created.setSeniority(role == Role.EMPLOYEE ? "MID" : "SENIOR");
@@ -277,8 +284,30 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
         });
     }
 
+    private ResourceType resourceTypeFor(Role role, Organisation organisation, Department department) {
+        if (!role.requiresResourceProfile()) {
+            return null;
+        }
+        String code = switch (role) {
+            case PROJECT_MANAGER -> "PROJECT_MANAGER";
+            case SALES_MANAGER -> "SALES_REPRESENTATIVE";
+            case DEPARTMENT_MANAGER -> "DEPARTMENT_MANAGER";
+            case EMPLOYEE -> department.getCode() + "_SPECIALIST";
+            default -> throw new IllegalStateException("Unexpected resource role");
+        };
+        String label = switch (role) {
+            case PROJECT_MANAGER -> "Project Manager";
+            case SALES_MANAGER -> "Sales Representative";
+            case DEPARTMENT_MANAGER -> "Department Manager";
+            case EMPLOYEE -> department.getLabel() + " Specialist";
+            default -> throw new IllegalStateException("Unexpected resource role");
+        };
+        return resourceTypes.findByCodeAndOrganisation_Id(code, organisation.getId())
+                .orElseGet(() -> resourceTypes.save(new ResourceType(code, label, organisation)));
+    }
+
     private void seedPermissions(Organisation organisation) {
-        grant(organisation, Role.GENERAL_MANAGER, List.of(
+        grant(organisation, Role.PROJECT_MANAGER, List.of(
                 PermissionModule.GM_DASHBOARD, PermissionModule.CRM, PermissionModule.PROJECTS,
                 PermissionModule.PLANNING, PermissionModule.TASKS, PermissionModule.FINANCE,
                 PermissionModule.FORECAST, PermissionModule.RISKS, PermissionModule.CHANGE_REQUESTS,

@@ -6,8 +6,10 @@ import com.ercopac.ercopac_tracker.admin.repository.CustomerRepository;
 import com.ercopac.ercopac_tracker.admin.repository.ProjectCategoryRepository;
 import com.ercopac.ercopac_tracker.admin.repository.ProjectTypeRepository;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
+import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
+import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,6 +70,40 @@ class AdminServiceTenantTest {
         assertThatThrownBy(() -> service.createCategory(categoryRequest("OPS")))
                 .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
                         assertThat(exception.getStatusCode().value()).isEqualTo(409));
+    }
+
+    @Test
+    void licenceUsageUsesAllOrganisationRolesExceptPlatformOwner() {
+        Organisation organisation = new Organisation();
+        organisation.setId(10L);
+        organisation.setOrgAdminLicenceLimit(2);
+        organisation.setProjectManagerLicenceLimit(3);
+        organisation.setDepartmentManagerLicenceLimit(4);
+        organisation.setEmployeeLicenceLimit(5);
+        organisation.setSalesManagerLicenceLimit(3);
+        organisation.setClientLicenceLimit(2);
+        when(organisationRepository.findById(10L)).thenReturn(Optional.of(organisation));
+        when(userRepository.countByOrganisation_IdAndRoleAndActiveTrue(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.any(Role.class)
+        )).thenReturn(0);
+        when(userRepository.countByOrganisation_IdAndRoleAndActiveTrue(10L, Role.SALES_MANAGER)).thenReturn(2);
+        when(userRepository.countByOrganisation_IdAndRoleAndActiveTrue(10L, Role.CLIENT)).thenReturn(1);
+
+        var usage = service.getLicenceUsage();
+
+        assertThat(usage).extracting(item -> item.role())
+                .containsExactlyInAnyOrder(
+                        "ORG_ADMIN", "PROJECT_MANAGER", "DEPARTMENT_MANAGER",
+                        "EMPLOYEE", "SALES_MANAGER", "CLIENT"
+                )
+                .doesNotContain("PLATFORM_OWNER");
+        assertThat(usage.stream().filter(item -> item.role().equals("SALES_MANAGER")).findFirst().orElseThrow())
+                .extracting(item -> item.limit(), item -> item.used(), item -> item.available(), item -> item.unlimited())
+                .containsExactly(3, 2L, 1L, false);
+        assertThat(usage.stream().filter(item -> item.role().equals("CLIENT")).findFirst().orElseThrow())
+                .extracting(item -> item.limit(), item -> item.used(), item -> item.available(), item -> item.unlimited())
+                .containsExactly(2, 1L, 1L, false);
     }
 
     private SaveProjectCategoryRequest categoryRequest(String code) {
