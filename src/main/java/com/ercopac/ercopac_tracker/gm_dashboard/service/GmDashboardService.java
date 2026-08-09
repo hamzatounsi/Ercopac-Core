@@ -5,6 +5,7 @@ import com.ercopac.ercopac_tracker.kpi.domain.HealthStatus;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.domain.ProjectApplicationType;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
+import com.ercopac.ercopac_tracker.projects.service.ProjectProgressService;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,10 +17,14 @@ import java.util.List;
 public class GmDashboardService {
 
     private final ProjectRepository projectRepository;
+    private final ProjectProgressService projectProgressService;
     private final SecurityUtils securityUtils;
 
-    public GmDashboardService(ProjectRepository projectRepository, SecurityUtils securityUtils) {
+    public GmDashboardService(ProjectRepository projectRepository,
+                              ProjectProgressService projectProgressService,
+                              SecurityUtils securityUtils) {
         this.projectRepository = projectRepository;
+        this.projectProgressService = projectProgressService;
         this.securityUtils = securityUtils;
     }
 
@@ -50,9 +55,7 @@ public class GmDashboardService {
                     dto.setPlannedEnd(p.getPlannedEnd());
                     dto.setProjectBudget(p.getProjectBudget());
                     dto.setEstimatedCost(p.getEstimatedCost());
-                    // Progress is a persisted project value. Do not derive it from
-                    // health colours or incomplete task data in the client.
-                    dto.setProgressPercent(p.getProgress());
+                    dto.setProgressPercent(projectProgressService.calculate(p.getId()));
                     dto.setArchived(p.getArchived());
                     dto.setTimeHealth(computeTimeHealth(p.getPlannedEnd(), today).name());
                     dto.setApplicationType(

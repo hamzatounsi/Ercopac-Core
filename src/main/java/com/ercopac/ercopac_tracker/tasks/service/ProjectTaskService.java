@@ -4,6 +4,7 @@ import com.ercopac.ercopac_tracker.department.dto.DepartmentDto;
 import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
+import com.ercopac.ercopac_tracker.projects.service.ProjectProgressService;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskDependency;
@@ -23,6 +24,7 @@ import jakarta.transaction.Transactional;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -44,6 +46,8 @@ public class ProjectTaskService {
     private final TaskConsoleService               taskConsoleService;
     private final ResourceTypeRepository           resourceTypeRepository;
     private final DepartmentRepository             departmentRepository;
+    @Autowired
+    private ProjectProgressService projectProgressService;
     private final SecurityUtils securityUtils;
     public ProjectTaskService(
             ProjectTaskRepository projectTaskRepository,
@@ -168,6 +172,7 @@ public class ProjectTaskService {
         Integer newPercent = saved.getPercentComplete() != null ? saved.getPercentComplete() : 0;
 
         rollupSummaries(projectId);
+        projectProgressService.recalculate(projectId);
         taskSchedulingService.rescheduleFromTask(projectId, saved.getId());
 
         ProjectTask finalTask = projectTaskRepository.findById(saved.getId())
@@ -280,6 +285,7 @@ public class ProjectTaskService {
 
         rebuildStructureFromParentId(projectId);
         rollupSummaries(projectId);
+        projectProgressService.recalculate(projectId);
 
         return mapToResponse(projectTaskRepository.findById(saved.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Task not found after insert: " + saved.getId())));
@@ -324,6 +330,7 @@ public class ProjectTaskService {
 
         rebuildStructureFromParentId(projectId);
         rollupSummaries(projectId);
+        projectProgressService.recalculate(projectId);
 
         return mapToResponse(projectTaskRepository.findById(saved.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Task not found after insert: " + saved.getId())));
@@ -418,6 +425,7 @@ public class ProjectTaskService {
 
         rebuildStructureFromParentId(projectId);
         rollupSummaries(projectId);
+        projectProgressService.recalculate(projectId);
 
         return mapToResponse(projectTaskRepository.findById(savedList.get(0).getId())
                 .orElseThrow(() -> new IllegalArgumentException("Root copy not found")));
@@ -446,6 +454,7 @@ public class ProjectTaskService {
 
         rebuildStructureFromParentId(projectId);
         rollupSummaries(projectId);
+        projectProgressService.recalculate(projectId);
     }
 
     public void deleteTask(Long taskId) {
@@ -888,6 +897,10 @@ public class ProjectTaskService {
                 ? project.getOrganisation().getId() : null;
         if (organisationId == null) throw new IllegalStateException("Project has no organisation");
 
+        // Validate the whole replacement before deleting the current schedule.
+        // Import is atomic: an invalid row leaves the existing schedule untouched.
+        validateImportedTasks(importedTasks, organisationId);
+
         List<ProjectTask> oldTasks =
                 projectTaskRepository.findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
         for (ProjectTask task : oldTasks) {
@@ -899,34 +912,35 @@ public class ProjectTaskService {
         projectTaskRepository.flush();
 
         List<ProjectTask> savedTasks = new ArrayList<>();
+        Map<String, ProjectTask> importedByWbs = new HashMap<>();
         for (int i = 0; i < importedTasks.size(); i++) {
             UpdateProjectTaskRequest req = importedTasks.get(i);
             ProjectTask task = new ProjectTask();
             task.setProjectId(projectId);
             task.setOrganisationId(organisationId);
-            task.setName(req.getName() != null && !req.getName().isBlank()
-                    ? req.getName() : "Imported Task " + (i + 1));
+            task.setName(req.getName().trim());
             task.setDescription(req.getDescription());
-            task.setTaskType(req.getTaskType() != null ? req.getTaskType() : "ACTIVITY");
+            task.setTaskType(req.getTaskType().toUpperCase());
             task.setBaselineStart(req.getBaselineStart() != null ? req.getBaselineStart() : req.getPlannedStart());
             task.setBaselineEnd(req.getBaselineEnd() != null ? req.getBaselineEnd() : req.getPlannedEnd());
             task.setPlannedStart(req.getPlannedStart() != null ? req.getPlannedStart() : task.getBaselineStart());
             task.setPlannedEnd(req.getPlannedEnd() != null ? req.getPlannedEnd() : task.getBaselineEnd());
-            if (task.getBaselineStart() != null && task.getBaselineEnd() == null)
-                task.setBaselineEnd(task.getBaselineStart());
-            if (task.getPlannedStart() != null && task.getPlannedEnd() == null)
-                task.setPlannedEnd(task.getPlannedStart());
             task.setActualStart(req.getActualStart());
             task.setActualEnd(req.getActualEnd());
-            task.setDurationDays(req.getDurationDays() != null
-                    ? req.getDurationDays() : calculateImportedDuration(task));
+            task.setDurationDays(req.getDurationDays());
             task.setPercentComplete(req.getPercentComplete() != null ? req.getPercentComplete() : 0);
             task.setAllocationPercent(req.getAllocationPercent() != null ? req.getAllocationPercent() : 100);
             task.setPriority(req.getPriority() != null ? req.getPriority() : 500);
             task.setWbsCode(req.getWbsCode());
-            task.setDepartmentCode(req.getDepartmentCode());
-            // FIX: use setResourceTypeCode for String from request
-            task.setResourceTypeCode(req.getResourceType());
+            if (hasText(req.getDepartmentCode())) {
+                task.setDepartment(departmentRepository.findByCodeAndOrganisationId(req.getDepartmentCode(), organisationId).orElseThrow());
+            }
+            if (hasText(req.getResourceType())) {
+                task.setResourceType(resourceTypeRepository.findByCodeAndOrganisationId(req.getResourceType(), organisationId).orElseThrow());
+            }
+            if (req.getAssignedUserId() != null) {
+                task.setAssignedUser(userRepository.findByIdAndOrganisation_Id(req.getAssignedUserId(), organisationId).orElseThrow());
+            }
             task.setActive(req.getActive() != null ? req.getActive() : true);
             task.setDisplayOrder(req.getDisplayOrder() != null ? req.getDisplayOrder() : i + 1);
             task.setOutlineLevel(req.getOutlineLevel() != null ? req.getOutlineLevel() : 1);
@@ -934,12 +948,20 @@ public class ProjectTaskService {
             task.setScheduleMode(req.getScheduleMode() != null ? req.getScheduleMode() : "AUTO");
             task.setStatus(req.getStatus() != null ? req.getStatus() : "NOT_STARTED");
             task.setColor(req.getColor());
+
+            String parentWbs = parentWbs(req.getWbsCode());
+            task.setParentId(parentWbs == null ? null : importedByWbs.get(parentWbs).getId());
+            resolveDatesAndDuration(task, req, new ProjectTask());
+            if (task.getDurationDays() == null) task.setDurationDays(calculateImportedDuration(task));
             normalizeMilestone(task);
-            savedTasks.add(projectTaskRepository.save(task));
+            ProjectTask saved = projectTaskRepository.save(task);
+            savedTasks.add(saved);
+            if (hasText(req.getWbsCode())) importedByWbs.put(req.getWbsCode().trim(), saved);
         }
 
         rebuildStructureFromParentId(projectId);
         rollupSummaries(projectId);
+        projectProgressService.recalculate(projectId);
 
         return projectTaskRepository
                 .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId)
@@ -973,6 +995,73 @@ public class ProjectTaskService {
         if (task.getBaselineStart() == null || task.getBaselineEnd() == null) return 1;
         long days = ChronoUnit.DAYS.between(task.getBaselineStart(), task.getBaselineEnd()) + 1;
         return Math.max(1, (int) days);
+    }
+
+    private void validateImportedTasks(List<UpdateProjectTaskRequest> importedTasks, Long organisationId) {
+        Set<String> wbsCodes = new HashSet<>();
+        Set<String> availableWbsCodes = new HashSet<>();
+        for (int i = 0; i < importedTasks.size(); i++) {
+            int row = i + 1;
+            UpdateProjectTaskRequest req = importedTasks.get(i);
+            if (req == null) throw importError(row, "task data is missing");
+            if (!hasText(req.getName())) throw importError(row, "task name is required");
+
+            String type = hasText(req.getTaskType()) ? req.getTaskType().trim().toUpperCase() : "ACTIVITY";
+            if (!Set.of("ACTIVITY", "SUMMARY", "MILESTONE").contains(type)) {
+                throw importError(row, "task type must be ACTIVITY, SUMMARY, or MILESTONE");
+            }
+            req.setTaskType(type);
+            validateImportedDateRange(row, req.getPlannedStart(), req.getPlannedEnd(), "planned");
+            validateImportedDateRange(row, req.getBaselineStart(), req.getBaselineEnd(), "baseline");
+            validateImportedDateRange(row, req.getActualStart(), req.getActualEnd(), "actual");
+            validatePercent(req.getPercentComplete(), "Row " + row + " progress");
+            if (req.getDurationDays() != null
+                    && (req.getDurationDays() < 0 || ("ACTIVITY".equals(type) && req.getDurationDays() == 0))) {
+                throw importError(row, "duration is invalid for this task type");
+            }
+            if (hasText(req.getDepartmentCode())
+                    && departmentRepository.findByCodeAndOrganisationId(req.getDepartmentCode(), organisationId).isEmpty()) {
+                throw importError(row, "department is not available for this organisation");
+            }
+            if (hasText(req.getResourceType())
+                    && resourceTypeRepository.findByCodeAndOrganisationId(req.getResourceType(), organisationId).isEmpty()) {
+                throw importError(row, "resource type is not available for this organisation");
+            }
+            if (req.getAssignedUserId() != null
+                    && userRepository.findByIdAndOrganisation_Id(req.getAssignedUserId(), organisationId).isEmpty()) {
+                throw importError(row, "assigned user is not available for this organisation");
+            }
+
+            if (hasText(req.getWbsCode())) {
+                String wbs = req.getWbsCode().trim();
+                if (!wbsCodes.add(wbs)) throw importError(row, "duplicate WBS '" + wbs + "'");
+                String parent = parentWbs(wbs);
+                if (parent != null && !availableWbsCodes.contains(parent)) {
+                    throw importError(row, "parent WBS '" + parent + "' must appear before the child");
+                }
+                availableWbsCodes.add(wbs);
+            }
+        }
+    }
+
+    private IllegalArgumentException importError(int row, String reason) {
+        return new IllegalArgumentException("Import row " + row + ": " + reason);
+    }
+
+    private void validateImportedDateRange(int row, LocalDate start, LocalDate end, String label) {
+        if (start != null && end != null && end.isBefore(start)) {
+            throw importError(row, label + " end cannot be before " + label + " start");
+        }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private String parentWbs(String wbsCode) {
+        if (!hasText(wbsCode)) return null;
+        int separator = wbsCode.trim().lastIndexOf('.');
+        return separator > 0 ? wbsCode.trim().substring(0, separator) : null;
     }
 
     // ══════════════════════════════════════════════════════════════

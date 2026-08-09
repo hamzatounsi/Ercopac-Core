@@ -7,9 +7,15 @@ import com.ercopac.ercopac_tracker.planning.repository.ProjectPlanningRepository
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.domain.ProjectApplicationType;
 import com.ercopac.ercopac_tracker.projects.dto.ProjectDetailsResponse;
+import com.ercopac.ercopac_tracker.projects.dto.ProjectFormOptionsResponse;
 import com.ercopac.ercopac_tracker.projects.dto.UpsertProjectRequest;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
+import com.ercopac.ercopac_tracker.admin.repository.ProjectCategoryRepository;
+import com.ercopac.ercopac_tracker.admin.domain.ProjectCategory;
+import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.user.Role;
+import com.ercopac.ercopac_tracker.user.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
@@ -21,13 +27,30 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final ProjectPlanningRepository projectPlanningRepository;
     private final SecurityUtils securityUtils;
+    private final ProjectCategoryRepository categoryRepository;
+    private final UserRepository userRepository;
 
     public ProjectService(ProjectRepository projectRepository,
                           ProjectPlanningRepository projectPlanningRepository,
-                          SecurityUtils securityUtils) {
+                          SecurityUtils securityUtils,
+                          ProjectCategoryRepository categoryRepository,
+                          UserRepository userRepository) {
         this.projectRepository = projectRepository;
         this.projectPlanningRepository = projectPlanningRepository;
         this.securityUtils = securityUtils;
+        this.categoryRepository = categoryRepository;
+        this.userRepository = userRepository;
+    }
+
+    public ProjectFormOptionsResponse getFormOptions() {
+        Long organisationId = requireCurrentOrganisationId();
+        return new ProjectFormOptionsResponse(
+                categoryRepository.findByOrganisation_IdOrderByNameAsc(organisationId).stream()
+                        .filter(ProjectCategory::isActive)
+                        .map(category -> new ProjectFormOptionsResponse.CategoryOption(category.getId(), category.getName())).toList(),
+                usersForRole(organisationId, Role.PROJECT_MANAGER),
+                usersForRole(organisationId, Role.SALES_MANAGER)
+        );
     }
 
     public ProjectDetailsResponse getProjectDetailsById(Long projectId) {
@@ -88,12 +111,12 @@ public class ProjectService {
     @Transactional
     public ProjectDashboardRowDto createProject(UpsertProjectRequest request) {
         Project project = new Project();
-        applyRequest(project, request);
+        Long organisationId = requireCurrentOrganisationId();
+        applyRequest(project, request, organisationId);
 
         if (!securityUtils.isPlatformUser()) {
-            Long orgId = requireCurrentOrganisationId();
             Organisation organisation = new Organisation();
-            organisation.setId(orgId);
+            organisation.setId(organisationId);
             project.setOrganisation(organisation);
         }
 
@@ -104,7 +127,7 @@ public class ProjectService {
     @Transactional
     public ProjectDashboardRowDto updateProject(Long id, UpsertProjectRequest request) {
         Project project = getAccessibleProjectById(id);
-        applyRequest(project, request);
+        applyRequest(project, request, requireCurrentOrganisationId());
 
         if (!securityUtils.isPlatformUser()) {
             Long orgId = requireCurrentOrganisationId();
@@ -125,12 +148,16 @@ public class ProjectService {
         projectRepository.save(project);
     }
 
-    private void applyRequest(Project project, UpsertProjectRequest request) {
+    private void applyRequest(Project project, UpsertProjectRequest request, Long organisationId) {
         project.setCode(request.getCode());
         project.setName(request.getName());
         project.setShortName(request.getShortName());
         project.setCustomer(request.getCustomer());
-        project.setCategory(request.getCategory());
+        if (request.getCategoryId() == null) throw new IllegalArgumentException("Category is required");
+        ProjectCategory category = categoryRepository.findByIdAndOrganisation_Id(request.getCategoryId(), organisationId)
+                .filter(ProjectCategory::isActive)
+                .orElseThrow(() -> new IllegalArgumentException("Category is not available for this organisation"));
+        project.setCategory(category.getName());
         project.setCountry(request.getCountry());
         project.setProjectType(request.getProjectType());
         project.setProjectPhase(request.getProjectPhase());
@@ -139,9 +166,7 @@ public class ProjectService {
         project.setPlannedEnd(request.getPlannedEnd());
         project.setProjectBudget(request.getProjectBudget());
         project.setEstimatedCost(request.getEstimatedCost());
-        project.setProjectManagerName(request.getProjectManagerName());
-        project.setProgramManagerName(request.getProgramManagerName());
-        project.setSalesManagerName(request.getSalesManagerName());
+        applyOwnership(project, request, organisationId);
         project.setComment(request.getComment());
         if (request.getApplicationType() != null && !request.getApplicationType().isBlank()) {
             project.setApplicationType(
@@ -150,6 +175,35 @@ public class ProjectService {
         } else if (project.getApplicationType() == null) {
             project.setApplicationType(ProjectApplicationType.PROJECTUM);
         }
+    }
+
+    private void applyOwnership(Project project, UpsertProjectRequest request, Long organisationId) {
+        if (request.getProjectManagerId() != null) {
+            AppUser user = eligibleUser(request.getProjectManagerId(), organisationId, Role.PROJECT_MANAGER);
+            project.setProjectManagerId(user.getId());
+            project.setProjectManagerName(user.getFullName());
+        } else { project.setProjectManagerId(null); project.setProjectManagerName(null); }
+        if (request.getSalesManagerId() != null) {
+            project.setSalesManagerName(eligibleUser(request.getSalesManagerId(), organisationId, Role.SALES_MANAGER).getFullName());
+        } else { project.setSalesManagerName(null); }
+        // Keep historical program-manager values intact; new and edited projects no longer collect this field.
+    }
+
+    private AppUser eligibleUser(Long userId, Long organisationId, Role role) {
+        AppUser user = userRepository.findByIdAndOrganisation_Id(userId, organisationId)
+                .orElseThrow(() -> new IllegalArgumentException("Selected user is not available for this organisation"));
+        if (!user.isActive() || user.getRole() != role) throw new IllegalArgumentException("Selected user is not eligible for this ownership role");
+        return user;
+    }
+
+    private java.util.List<ProjectFormOptionsResponse.UserOption> usersForRole(Long organisationId, Role role) {
+        return userRepository.findByOrganisation_IdAndRoleOrderByFullNameAsc(organisationId, role).stream()
+                .filter(AppUser::isActive).map(this::toUserOption).toList();
+    }
+
+    private ProjectFormOptionsResponse.UserOption toUserOption(AppUser user) {
+        return new ProjectFormOptionsResponse.UserOption(user.getId(), user.getFullName(), user.getDepartmentCode(),
+                user.getResourceType() == null ? null : user.getResourceType().getCode());
     }
 
     private ProjectDashboardRowDto toDashboardDto(Project p) {

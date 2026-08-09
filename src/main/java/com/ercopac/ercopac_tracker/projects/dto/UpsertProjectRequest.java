@@ -9,6 +9,7 @@ public class UpsertProjectRequest {
     private String shortName;
     private String customer;
     private String category;
+    private Long categoryId;
     private String country;
     private String projectType;
     private String projectPhase;
@@ -18,7 +19,7 @@ public class UpsertProjectRequest {
     private BigDecimal projectBudget;
     private BigDecimal estimatedCost;
     private String projectManagerName;
-    private String programManagerName;
+    private Long projectManagerId;
     private String applicationType;
     public String getApplicationType() {
         return applicationType;
@@ -56,6 +57,8 @@ public class UpsertProjectRequest {
     public void setCategory(String category) {
         this.category = category;
     }
+    public Long getCategoryId() { return categoryId; }
+    public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
     public String getCountry() {
         return country;
     }
@@ -110,12 +113,8 @@ public class UpsertProjectRequest {
     public void setProjectManagerName(String projectManagerName) {
         this.projectManagerName = projectManagerName;
     }
-    public String getProgramManagerName() {
-        return programManagerName;
-    }
-    public void setProgramManagerName(String programManagerName) {
-        this.programManagerName = programManagerName;
-    }
+    public Long getProjectManagerId() { return projectManagerId; }
+    public void setProjectManagerId(Long projectManagerId) { this.projectManagerId = projectManagerId; }
     public String getSalesManagerName() {
         return salesManagerName;
     }
@@ -129,6 +128,9 @@ public class UpsertProjectRequest {
         this.comment = comment;
     }
     private String salesManagerName;
+    private Long salesManagerId;
+    public Long getSalesManagerId() { return salesManagerId; }
+    public void setSalesManagerId(Long salesManagerId) { this.salesManagerId = salesManagerId; }
     private String comment;
 
     // getters and setters
