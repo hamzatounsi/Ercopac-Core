@@ -115,6 +115,15 @@ public class ProjectTaskService {
             task.setParentId(null);
         }
 
+        if (!isActivity(task)) {
+            // Summary and milestone tasks cannot carry task-level assignments.
+            task.setAssignedUser(null);
+            task.setResourceType(null);
+            task.setResourceTypeCode(null);
+            task.setDepartment(null);
+            task.setDepartmentCode(null);
+            taskResourceAssignmentRepository.deleteByProjectIdAndTaskId(projectId, taskId);
+        } else {
         // Assigned user — sync department from user
         if (request.getAssignedUserId() != null) {
             userRepository.findById(request.getAssignedUserId()).ifPresent(user -> {
@@ -156,6 +165,8 @@ public class ProjectTaskService {
             } else {
                 task.setDepartmentCode(request.getDepartmentCode());
             }
+        }
+
         }
 
         resolveDatesAndDuration(task, request, oldTask);
@@ -750,37 +761,21 @@ public class ProjectTaskService {
         boolean plannedStartChanged = !Objects.equals(oldTask.getPlannedStart(), task.getPlannedStart());
         boolean plannedEndChanged = !Objects.equals(oldTask.getPlannedEnd(), task.getPlannedEnd());
 
-        if ((baselineStartChanged || baselineEndChanged)
-                && task.getBaselineStart() != null && task.getBaselineEnd() != null) {
-            int duration = inclusiveDuration(task.getBaselineStart(), task.getBaselineEnd());
-            task.setDurationDays(duration);
-            task.setPlannedStart(task.getBaselineStart());
-            task.setPlannedEnd(task.getBaselineEnd());
-            if (newActualStart != null) task.setActualEnd(newActualStart.plusDays(duration - 1));
-            return;
-        }
-
-        if ((plannedStartChanged || plannedEndChanged)
-                && task.getPlannedStart() != null && task.getPlannedEnd() != null) {
-            int duration = inclusiveDuration(task.getPlannedStart(), task.getPlannedEnd());
-            task.setDurationDays(duration);
-            if (task.getBaselineStart() != null) {
-                task.setBaselineEnd(task.getBaselineStart().plusDays(duration - 1));
-                task.setPlannedStart(task.getBaselineStart());
-                task.setPlannedEnd(task.getBaselineEnd());
-            }
-            if (newActualStart != null) task.setActualEnd(newActualStart.plusDays(duration - 1));
-            return;
-        }
-
-        if ((actualStartChanged || actualEndChanged)
-                && newActualStart != null && newActualEnd != null) {
-            int duration = inclusiveDuration(newActualStart, newActualEnd);
-            task.setDurationDays(duration);
-            if (baselineStart != null) {
-                task.setBaselineEnd(baselineStart.plusDays(duration - 1));
-                task.setPlannedStart(baselineStart);
-                task.setPlannedEnd(task.getBaselineEnd());
+        // The task editor already resolves the edited date pair before save:
+        // start edits keep their end date, and end edits keep their duration
+        // and move start backwards. Preserve that resolved pair here instead
+        // of regenerating an endpoint (or changing another date pair).
+        if (baselineStartChanged || baselineEndChanged
+                || plannedStartChanged || plannedEndChanged
+                || actualStartChanged || actualEndChanged) {
+            if (requestedDuration != null && requestedDuration > 0) {
+                task.setDurationDays(requestedDuration);
+            } else if (task.getBaselineStart() != null && task.getBaselineEnd() != null) {
+                task.setDurationDays(inclusiveDuration(task.getBaselineStart(), task.getBaselineEnd()));
+            } else if (task.getPlannedStart() != null && task.getPlannedEnd() != null) {
+                task.setDurationDays(inclusiveDuration(task.getPlannedStart(), task.getPlannedEnd()));
+            } else if (newActualStart != null && newActualEnd != null) {
+                task.setDurationDays(inclusiveDuration(newActualStart, newActualEnd));
             }
             return;
         }
@@ -1011,6 +1006,11 @@ public class ProjectTaskService {
                 throw importError(row, "task type must be ACTIVITY, SUMMARY, or MILESTONE");
             }
             req.setTaskType(type);
+            if (!"ACTIVITY".equals(type)) {
+                req.setDepartmentCode(null);
+                req.setResourceType(null);
+                req.setAssignedUserId(null);
+            }
             validateImportedDateRange(row, req.getPlannedStart(), req.getPlannedEnd(), "planned");
             validateImportedDateRange(row, req.getBaselineStart(), req.getBaselineEnd(), "baseline");
             validateImportedDateRange(row, req.getActualStart(), req.getActualEnd(), "actual");
@@ -1091,6 +1091,10 @@ public class ProjectTaskService {
         if (req.getActualStart() != null && req.getActualEnd() != null
                 && req.getActualEnd().isBefore(req.getActualStart()))
             throw new IllegalArgumentException("Actual end cannot be before actual start.");
+    }
+
+    private boolean isActivity(ProjectTask task) {
+        return "ACTIVITY".equalsIgnoreCase(task.getTaskType());
     }
 
     private void validatePercent(Integer value, String label) {

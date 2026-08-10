@@ -110,7 +110,13 @@ public class TaskResourceAssignmentService {
     }
 
     private void apply(TaskResourceAssignment entity, TaskResourceAssignmentDto dto, Project project, Long taskId) {
-        validateTaskBelongsToProject(project.getId(), taskId, project);
+        ProjectTask task = projectTaskRepository.findById(taskId)
+                .filter(candidate -> project.getId().equals(candidate.getProjectId()))
+                .filter(candidate -> project.getOrganisation().getId().equals(candidate.getOrganisationId()))
+                .orElseThrow(() -> new IllegalArgumentException("Task not accessible in project"));
+        if (!"ACTIVITY".equalsIgnoreCase(task.getTaskType())) {
+            throw new IllegalArgumentException("Resources can only be assigned to ACTIVITY tasks.");
+        }
         entity.setResourceType(dto.getResourceType());
         entity.setAssignmentName(dto.getAssignmentName());
         entity.setQuantity(dto.getQuantity() == null ? 1 : dto.getQuantity());
