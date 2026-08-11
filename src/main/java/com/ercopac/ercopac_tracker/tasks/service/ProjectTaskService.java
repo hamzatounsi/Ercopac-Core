@@ -5,6 +5,7 @@ import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.projects.service.ProjectProgressService;
+import com.ercopac.ercopac_tracker.planning.service.ProjectWorkingDayService;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskDependency;
@@ -48,6 +49,8 @@ public class ProjectTaskService {
     private final DepartmentRepository             departmentRepository;
     @Autowired
     private ProjectProgressService projectProgressService;
+    @Autowired
+    private ProjectWorkingDayService workingDayService;
     private final SecurityUtils securityUtils;
     public ProjectTaskService(
             ProjectTaskRepository projectTaskRepository,
@@ -761,22 +764,42 @@ public class ProjectTaskService {
         boolean plannedStartChanged = !Objects.equals(oldTask.getPlannedStart(), task.getPlannedStart());
         boolean plannedEndChanged = !Objects.equals(oldTask.getPlannedEnd(), task.getPlannedEnd());
 
-        // The task editor already resolves the edited date pair before save:
-        // start edits keep their end date, and end edits keep their duration
-        // and move start backwards. Preserve that resolved pair here instead
-        // of regenerating an endpoint (or changing another date pair).
-        if (baselineStartChanged || baselineEndChanged
-                || plannedStartChanged || plannedEndChanged
-                || actualStartChanged || actualEndChanged) {
-            if (requestedDuration != null && requestedDuration > 0) {
-                task.setDurationDays(requestedDuration);
-            } else if (task.getBaselineStart() != null && task.getBaselineEnd() != null) {
-                task.setDurationDays(inclusiveDuration(task.getBaselineStart(), task.getBaselineEnd()));
-            } else if (task.getPlannedStart() != null && task.getPlannedEnd() != null) {
-                task.setDurationDays(inclusiveDuration(task.getPlannedStart(), task.getPlannedEnd()));
-            } else if (newActualStart != null && newActualEnd != null) {
-                task.setDurationDays(inclusiveDuration(newActualStart, newActualEnd));
-            }
+        int duration = requestedDuration != null && requestedDuration > 0
+                ? requestedDuration
+                : previousDuration == null && task.getBaselineStart() != null && task.getBaselineEnd() != null
+                    ? workingDuration(task, task.getBaselineStart(), task.getBaselineEnd())
+                    : Math.max(1, previousDuration == null ? 1 : previousDuration);
+
+        // Start edits retain duration. End edits retain start and recalculate
+        // duration. Both rules use the selected project's working days.
+        if (baselineStartChanged || plannedStartChanged) {
+            LocalDate start = task.getBaselineStart() != null ? task.getBaselineStart() : task.getPlannedStart();
+            LocalDate end = addWorkingDays(task, start, duration - 1);
+            task.setBaselineStart(start);
+            task.setBaselineEnd(end);
+            task.setPlannedStart(start);
+            task.setPlannedEnd(end);
+            task.setDurationDays(duration);
+            if (newActualStart != null) task.setActualEnd(addWorkingDays(task, newActualStart, duration - 1));
+            return;
+        }
+        if (baselineEndChanged || plannedEndChanged) {
+            LocalDate start = task.getBaselineStart() != null ? task.getBaselineStart() : task.getPlannedStart();
+            LocalDate end = task.getBaselineEnd() != null ? task.getBaselineEnd() : task.getPlannedEnd();
+            task.setBaselineStart(start);
+            task.setBaselineEnd(end);
+            task.setPlannedStart(start);
+            task.setPlannedEnd(end);
+            task.setDurationDays(workingDuration(task, start, end));
+            return;
+        }
+        if (actualStartChanged) {
+            task.setDurationDays(duration);
+            task.setActualEnd(addWorkingDays(task, newActualStart, duration - 1));
+            return;
+        }
+        if (actualEndChanged) {
+            task.setDurationDays(workingDuration(task, newActualStart, newActualEnd));
             return;
         }
 
@@ -785,31 +808,28 @@ public class ProjectTaskService {
 
             if (durationChanged) {
                 if (baselineStart != null) {
-                    task.setBaselineEnd(baselineStart.plusDays(requestedDuration - 1));
+                    task.setBaselineEnd(addWorkingDays(task, baselineStart, requestedDuration - 1));
                     task.setPlannedStart(baselineStart);
                     task.setPlannedEnd(task.getBaselineEnd());
                 }
                 // Duration → ActualEnd
                 if (newActualStart != null) {
-                    task.setActualEnd(newActualStart.plusDays(requestedDuration - 1));
+                    task.setActualEnd(addWorkingDays(task, newActualStart, requestedDuration - 1));
                 }
             } else if ((actualStartChanged || actualEndChanged) && newActualStart != null && newActualEnd != null) {
                 // Reverse: ActualStart/ActualEnd → Duration
-                long days = ChronoUnit.DAYS.between(newActualStart, newActualEnd) + 1;
-                task.setDurationDays((int) Math.max(1, days));
+                task.setDurationDays(workingDuration(task, newActualStart, newActualEnd));
             }
             return;
         }
 
         if (plannedStart != null && task.getPlannedEnd() != null) {
-            long days = ChronoUnit.DAYS.between(plannedStart, task.getPlannedEnd()) + 1;
-            task.setDurationDays((int) Math.max(1, days));
+            task.setDurationDays(workingDuration(task, plannedStart, task.getPlannedEnd()));
             return;
         }
 
         if (baselineStart != null && task.getBaselineEnd() != null) {
-            long days = ChronoUnit.DAYS.between(baselineStart, task.getBaselineEnd()) + 1;
-            task.setDurationDays((int) Math.max(1, days));
+            task.setDurationDays(workingDuration(task, baselineStart, task.getBaselineEnd()));
             if (plannedStart == null) task.setPlannedStart(baselineStart);
             if (task.getPlannedEnd() == null) task.setPlannedEnd(task.getBaselineEnd());
         }
@@ -818,8 +838,12 @@ public class ProjectTaskService {
     // ══════════════════════════════════════════════════════════════
     // MAP TO RESPONSE
     // ══════════════════════════════════════════════════════════════
-    private int inclusiveDuration(LocalDate start, LocalDate end) {
-        return Math.max(1, (int) ChronoUnit.DAYS.between(start, end) + 1);
+    private LocalDate addWorkingDays(ProjectTask task, LocalDate start, int daysAfterStart) {
+        return workingDayService.addWorkingDays(task.getProjectId(), task.getOrganisationId(), start, daysAfterStart);
+    }
+
+    private int workingDuration(ProjectTask task, LocalDate start, LocalDate end) {
+        return workingDayService.workingDuration(task.getProjectId(), task.getOrganisationId(), start, end);
     }
 
     public ProjectScheduleTaskResponse mapToResponse(ProjectTask task) {
@@ -988,8 +1012,7 @@ public class ProjectTaskService {
     private Integer calculateImportedDuration(ProjectTask task) {
         if ("MILESTONE".equalsIgnoreCase(task.getTaskType())) return 0;
         if (task.getBaselineStart() == null || task.getBaselineEnd() == null) return 1;
-        long days = ChronoUnit.DAYS.between(task.getBaselineStart(), task.getBaselineEnd()) + 1;
-        return Math.max(1, (int) days);
+        return workingDuration(task, task.getBaselineStart(), task.getBaselineEnd());
     }
 
     private void validateImportedTasks(List<UpdateProjectTaskRequest> importedTasks, Long organisationId) {

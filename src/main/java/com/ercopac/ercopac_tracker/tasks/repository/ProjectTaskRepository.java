@@ -16,6 +16,7 @@ public interface ProjectTaskRepository extends JpaRepository<ProjectTask, Long> 
     List<ProjectTask> findByProjectIdAndOrganisationIdOrderByDisplayOrderAscIdAsc(Long projectId, Long organisationId);
     List<ProjectTask> findByProjectId(Long projectId);
     long countByProjectId(Long projectId);
+    boolean existsByProjectIdAndSourceTemplateId(Long projectId, Long sourceTemplateId);
     Optional<ProjectTask> findByProjectIdAndWbsCode(Long projectId, String wbsCode);
     boolean existsByProjectIdAndWbsCode(Long projectId, String wbsCode);
     List<ProjectTask> findByAssignedUser_Id(Long userId);

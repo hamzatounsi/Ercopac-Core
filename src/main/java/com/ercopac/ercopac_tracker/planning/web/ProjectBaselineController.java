@@ -59,4 +59,13 @@ public class ProjectBaselineController {
     ) {
         return baselineService.renameBaseline(projectId, baselineId, request.getName());
     }
+
+    @PutMapping("/{baselineId}/apply")
+    @PreAuthorize(PLANNING_WRITE)
+    public ProjectBaselineDto applyBaseline(
+            @PathVariable Long projectId,
+            @PathVariable Long baselineId
+    ) {
+        return baselineService.applyBaseline(projectId, baselineId);
+    }
 }

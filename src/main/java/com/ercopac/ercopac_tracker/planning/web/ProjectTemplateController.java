@@ -1,6 +1,7 @@
 package com.ercopac.ercopac_tracker.planning.web;
 
 import com.ercopac.ercopac_tracker.planning.dto.ApplyStandardTemplateResultDto;
+import com.ercopac.ercopac_tracker.planning.dto.ApplyProjectTemplateResultDto;
 import com.ercopac.ercopac_tracker.planning.dto.CreateProjectTemplateRequest;
 import com.ercopac.ercopac_tracker.planning.dto.ProjectTemplateDto;
 import com.ercopac.ercopac_tracker.planning.service.ProjectTemplateService;
@@ -48,6 +49,15 @@ public class ProjectTemplateController {
             @PathVariable Long templateId
     ) {
         templateService.deleteTemplate(projectId, templateId);
+    }
+
+    @PostMapping("/{templateId}/apply")
+    @PreAuthorize(PLANNING_WRITE)
+    public ApplyProjectTemplateResultDto applyTemplate(
+            @PathVariable Long projectId,
+            @PathVariable Long templateId
+    ) {
+        return templateService.applyTemplate(projectId, templateId);
     }
 
     @PostMapping("/apply-standard")

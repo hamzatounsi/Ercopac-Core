@@ -11,4 +11,6 @@ public interface ProjectBaselineRepository extends JpaRepository<ProjectBaseline
     List<ProjectBaseline> findByProjectIdAndOrganisationIdOrderByCreatedAtDesc(Long projectId, Long organisationId);
 
     Optional<ProjectBaseline> findByIdAndProjectIdAndOrganisationId(Long id, Long projectId, Long organisationId);
+
+    long countByProjectIdAndOrganisationId(Long projectId, Long organisationId);
 }

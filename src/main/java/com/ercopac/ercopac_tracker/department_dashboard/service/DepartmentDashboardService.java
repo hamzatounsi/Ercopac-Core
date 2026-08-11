@@ -64,6 +64,8 @@ public class DepartmentDashboardService {
                         Role.DEPARTMENT_MANAGER
                 )
                 .stream()
+                .filter(AppUser::isActive)
+                .filter(this::hasDepartment)
                 .map(this::toManagerDto)
                 .toList();
     }
@@ -75,6 +77,7 @@ public class DepartmentDashboardService {
 
         Long currentOrgId = getCurrentOrganisationIdOrThrow();
         AppUser currentUser = getCurrentUserOrThrow();
+        assertUserInOrganisation(currentUser, currentOrgId);
 
         AppUser manager;
 
@@ -91,6 +94,13 @@ public class DepartmentDashboardService {
             if (manager.getRole() != Role.DEPARTMENT_MANAGER) {
                 throw new AccessDeniedException("Selected user is not a department manager.");
             }
+            if (!manager.isActive() || !hasDepartment(manager)) {
+                throw new AccessDeniedException("Selected department manager is not available.");
+            }
+        }
+
+        if (!hasDepartment(manager)) {
+            throw new AccessDeniedException("Department manager has no department.");
         }
 
         String departmentCode = manager.getDepartmentCode();
@@ -761,9 +771,15 @@ public class DepartmentDashboardService {
 
         Long currentOrgId = getCurrentOrganisationIdOrThrow();
         AppUser currentUser = getCurrentUserOrThrow();
-        if (currentUser.getRole() == Role.DEPARTMENT_MANAGER
-                && !Objects.equals(currentUser.getDepartmentCode(), departmentCode)) {
-            throw new AccessDeniedException("Department managers can access only their own department.");
+        assertUserInOrganisation(currentUser, currentOrgId);
+
+        // This legacy code-based endpoint must not bypass manager selection.
+        // Department managers are always scoped to themselves, while project
+        // managers must use /overview with a same-organisation managerId.
+        if (currentUser.getRole() == Role.DEPARTMENT_MANAGER) {
+            departmentCode = currentUser.getDepartmentCode();
+        } else if (currentUser.getRole() == Role.PROJECT_MANAGER) {
+            throw new AccessDeniedException("Project managers must select a department manager.");
         }
 
         List<DepartmentMemberDto> realMembers = userRepository
@@ -837,6 +853,14 @@ public class DepartmentDashboardService {
 
     public List<String> getDepartments() {
     Long currentOrgId = getCurrentOrganisationIdOrThrow();
+    AppUser currentUser = getCurrentUserOrThrow();
+    assertUserInOrganisation(currentUser, currentOrgId);
+
+    if (currentUser.getRole() == Role.DEPARTMENT_MANAGER) {
+        return hasDepartment(currentUser)
+                ? List.of(currentUser.getDepartmentCode())
+                : List.of();
+    }
 
     return userRepository.findByOrganisation_IdOrderByFullNameAsc(currentOrgId)
             .stream()
@@ -848,4 +872,14 @@ public class DepartmentDashboardService {
             .sorted()
             .toList();
 }
+
+    private boolean hasDepartment(AppUser user) {
+        return user.getDepartmentCode() != null && !user.getDepartmentCode().isBlank();
+    }
+
+    private void assertUserInOrganisation(AppUser user, Long organisationId) {
+        if (user.getOrganisation() == null || !Objects.equals(user.getOrganisation().getId(), organisationId)) {
+            throw new AccessDeniedException("Authenticated user is outside the current organisation.");
+        }
+    }
 }

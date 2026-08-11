@@ -46,6 +46,9 @@ public class ProjectTask {
     @Column(name = "parent_id")
     private Long parentId;
 
+    @Column(name = "source_template_id")
+    private Long sourceTemplateId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id", insertable = false, updatable = false)
     private ProjectTask parent;
@@ -172,6 +175,8 @@ public class ProjectTask {
     public void setOrganisationId(Long organisationId) { this.organisationId = organisationId; }
     public Long getParentId() { return parentId; }
     public void setParentId(Long parentId) { this.parentId = parentId; }
+    public Long getSourceTemplateId() { return sourceTemplateId; }
+    public void setSourceTemplateId(Long sourceTemplateId) { this.sourceTemplateId = sourceTemplateId; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getDescription() { return description; }
