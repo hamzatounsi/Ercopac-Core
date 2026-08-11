@@ -1,16 +1,15 @@
 package com.ercopac.ercopac_tracker.tasks.service;
 
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
+import com.ercopac.ercopac_tracker.notifications.service.ProjectumMailService;
 import org.springframework.stereotype.Service;
 
 @Service
 public class TaskEmailAlertService {
 
-    private final JavaMailSender mailSender;
+    private final ProjectumMailService mailService;
 
-    public TaskEmailAlertService(JavaMailSender mailSender) {
-        this.mailSender = mailSender;
+    public TaskEmailAlertService(ProjectumMailService mailService) {
+        this.mailService = mailService;
     }
 
     public void sendTaskAlert(String to, String subject, String message) {
@@ -19,20 +18,6 @@ public class TaskEmailAlertService {
             return;
         }
 
-        try {
-            System.out.println("SENDING EMAIL TO: " + to);
-
-            SimpleMailMessage mail = new SimpleMailMessage();
-            mail.setTo(to);
-            mail.setSubject(subject);
-            mail.setText(message);
-
-            mailSender.send(mail);
-
-            System.out.println("EMAIL SENT SUCCESSFULLY TO: " + to);
-        } catch (Exception e) {
-            System.out.println("EMAIL SEND FAILED: " + e.getMessage());
-            e.printStackTrace();
-        }
+        mailService.sendText(to, subject, message);
     }
 }

@@ -311,7 +311,8 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
                 PermissionModule.GM_DASHBOARD, PermissionModule.CRM, PermissionModule.PROJECTS,
                 PermissionModule.PLANNING, PermissionModule.TASKS, PermissionModule.FINANCE,
                 PermissionModule.FORECAST, PermissionModule.RISKS, PermissionModule.CHANGE_REQUESTS,
-                PermissionModule.ACTIONS, PermissionModule.RESOURCES, PermissionModule.SUPPLIERS
+                PermissionModule.ACTIONS, PermissionModule.RESOURCES, PermissionModule.SUPPLIERS,
+                PermissionModule.DEPARTMENT_DASHBOARD
         ), true);
         grant(organisation, Role.DEPARTMENT_MANAGER, List.of(
                 PermissionModule.DEPARTMENT_DASHBOARD, PermissionModule.PROJECTS,

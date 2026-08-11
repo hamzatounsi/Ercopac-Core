@@ -57,6 +57,8 @@ public class Project {
     private String salesManagerName;
     private Boolean archived = false;
     private Integer progress = 0;
+    @Column(name = "active_baseline_id")
+    private Long activeBaselineId;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ProjectApplicationType applicationType = ProjectApplicationType.PROJECTUM;
@@ -75,6 +77,14 @@ public class Project {
     }
     public void setProgress(Integer progress) {
         this.progress = progress;
+    }
+
+    public Long getActiveBaselineId() {
+        return activeBaselineId;
+    }
+
+    public void setActiveBaselineId(Long activeBaselineId) {
+        this.activeBaselineId = activeBaselineId;
     }
 
     public void setCustomer(String customer) {

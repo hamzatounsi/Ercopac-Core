@@ -6,6 +6,7 @@ import com.ercopac.ercopac_tracker.auth.AuthDtos.ResetPasswordRequest;
 import com.ercopac.ercopac_tracker.notifications.domain.NotificationChannel;
 import com.ercopac.ercopac_tracker.notifications.dto.NotificationRequest;
 import com.ercopac.ercopac_tracker.notifications.service.NotificationService;
+import com.ercopac.ercopac_tracker.notifications.service.ProjectumMailService;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
@@ -26,6 +27,7 @@ public class PasswordResetService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final PasswordEncoder passwordEncoder;
+    private final ProjectumMailService mailService;
     private final String frontendBaseUrl;
 
     public PasswordResetService(
@@ -33,12 +35,14 @@ public class PasswordResetService {
             UserRepository userRepository,
             NotificationService notificationService,
             PasswordEncoder passwordEncoder,
-            @Value("${app.frontend-base-url:http://localhost:4200}") String frontendBaseUrl
+            ProjectumMailService mailService,
+            @Value("${projectum.frontend-url:http://localhost:4200}") String frontendBaseUrl
     ) {
         this.repository = repository;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
         this.passwordEncoder = passwordEncoder;
+        this.mailService = mailService;
         this.frontendBaseUrl = frontendBaseUrl.replaceAll("/+$", "");
     }
 
@@ -55,7 +59,6 @@ public class PasswordResetService {
         if (repository.existsByUser_IdAndStatus(user.getId(), PasswordResetStatus.PENDING)) {
             return;
         }
-
         Long organisationId = user.getOrganisation().getId();
 
         PasswordResetRequest resetRequest = new PasswordResetRequest();
@@ -63,9 +66,7 @@ public class PasswordResetService {
         resetRequest.setOrganisationId(organisationId);
         resetRequest.setStatus(PasswordResetStatus.PENDING);
         resetRequest.setRequestedAt(LocalDateTime.now());
-
         repository.save(resetRequest);
-
         notifyAdmins(user, resetRequest);
     }
 
@@ -118,28 +119,10 @@ public class PasswordResetService {
                 continue;
             }
 
-            NotificationRequest notification = new NotificationRequest(
-                    organisationId,
-                    null,
-                    null,
-                    admin.getId(),
-                    admin.getEmail(),
-                    NotificationChannel.EMAIL,
-                    "WARNING",
-                    "Password reset request - Projectum",
-                    user.getFullName() + " requested a password reset.",
-                    """
-                    <div style="font-family:Arial,sans-serif">
-                      <h2>Password reset request</h2>
-                      <p><strong>User:</strong> %s</p>
-                      <p><strong>Email:</strong> %s</p>
-                      <p>Please open Projectum security/admin panel to approve or reject this request.</p>
-                    </div>
-                    """.formatted(user.getFullName(), user.getEmail())
-            );
-
-            var saved = notificationService.create(notification);
-            notificationService.sendAsync(saved.getId());
+            mailService.sendText(admin.getEmail(), "Password reset request - Projectum",
+                    "User: " + user.getFullName() + "\nEmail: " + user.getEmail()
+                            + "\nRequested: " + resetRequest.getRequestedAt()
+                            + "\nReview in Projectum: " + frontendBaseUrl + "/workspace");
         }
     }
 
@@ -231,6 +214,9 @@ public class PasswordResetService {
         AppUser user = request.getUser();
 
         String resetLink = frontendBaseUrl + "/reset-password?token=" + request.getToken();
+        mailService.sendText(user.getEmail(), "Reset your Projectum password",
+                "Projectum password reset\n\nUse this link within 45 minutes:\n" + resetLink
+                        + "\n\nIf you did not request this, you can ignore this email.");
 
         NotificationRequest notification = new NotificationRequest(
                 request.getOrganisationId(),
