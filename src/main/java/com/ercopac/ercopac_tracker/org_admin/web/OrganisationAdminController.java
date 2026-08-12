@@ -122,6 +122,32 @@ public class OrganisationAdminController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/suppliers")
+    public List<OrgAdminDtos.SupplierSummary> suppliers() {
+        return service.getSuppliers();
+    }
+
+    @PostMapping("/suppliers")
+    public ResponseEntity<OrgAdminDtos.SupplierSummary> createSupplier(
+            @Valid @RequestBody OrgAdminDtos.SaveSupplierRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createSupplier(request));
+    }
+
+    @PutMapping("/suppliers/{id}")
+    public OrgAdminDtos.SupplierSummary updateSupplier(
+            @PathVariable Long id,
+            @Valid @RequestBody OrgAdminDtos.SaveSupplierRequest request
+    ) {
+        return service.updateSupplier(id, request);
+    }
+
+    @DeleteMapping("/suppliers/{id}")
+    public ResponseEntity<Void> deleteSupplier(@PathVariable Long id) {
+        service.deleteSupplier(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/roles")
     public List<OrgAdminDtos.RoleSummary> roles() {
         return service.getRoles();

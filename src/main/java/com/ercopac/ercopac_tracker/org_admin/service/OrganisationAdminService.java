@@ -17,6 +17,8 @@ import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.ResourceType;
 import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
+import com.ercopac.ercopac_tracker.user.domain.Supplier;
+import com.ercopac.ercopac_tracker.user.repository.SupplierRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -83,6 +85,7 @@ public class OrganisationAdminService {
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
     private final ResourceTypeRepository resourceTypeRepository;
+    private final SupplierRepository supplierRepository;
     private final ProjectTaskRepository taskRepository;
     private final PasswordResetRequestRepository passwordResetRepository;
     private final RolePermissionRepository permissionRepository;
@@ -94,6 +97,7 @@ public class OrganisationAdminService {
             UserRepository userRepository,
             DepartmentRepository departmentRepository,
             ResourceTypeRepository resourceTypeRepository,
+            SupplierRepository supplierRepository,
             ProjectTaskRepository taskRepository,
             PasswordResetRequestRepository passwordResetRepository,
             RolePermissionRepository permissionRepository,
@@ -104,6 +108,7 @@ public class OrganisationAdminService {
         this.userRepository = userRepository;
         this.departmentRepository = departmentRepository;
         this.resourceTypeRepository = resourceTypeRepository;
+        this.supplierRepository = supplierRepository;
         this.taskRepository = taskRepository;
         this.passwordResetRepository = passwordResetRepository;
         this.permissionRepository = permissionRepository;
@@ -405,6 +410,47 @@ public class OrganisationAdminService {
         }
 
         departmentRepository.delete(department);
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrgAdminDtos.SupplierSummary> getSuppliers() {
+        return supplierRepository.findByOrganisation_IdOrderByNameAsc(currentOrganisationId())
+                .stream()
+                .map(this::toSupplierSummary)
+                .toList();
+    }
+
+    public OrgAdminDtos.SupplierSummary createSupplier(OrgAdminDtos.SaveSupplierRequest request) {
+        Organisation organisation = currentOrganisation();
+        String code = normalizeUpper(request.code());
+        if (supplierRepository.countByOrganisationAndCodeOrLegacyShortCode(organisation.getId(), code) > 0) {
+            throw conflict("Supplier code already exists.");
+        }
+
+        Supplier supplier = new Supplier();
+        supplier.setOrganisation(organisation);
+        applySupplier(supplier, request, code);
+        return toSupplierSummary(supplierRepository.save(supplier));
+    }
+
+    public OrgAdminDtos.SupplierSummary updateSupplier(Long id, OrgAdminDtos.SaveSupplierRequest request) {
+        Long organisationId = currentOrganisationId();
+        Supplier supplier = supplierRepository.findByIdAndOrganisation_Id(id, organisationId)
+                .orElseThrow(() -> notFound("Supplier not found."));
+        String code = normalizeUpper(request.code());
+        if (supplierRepository.countByOrganisationAndCodeOrLegacyShortCodeExcludingId(organisationId, code, id) > 0) {
+            throw conflict("Supplier code already exists.");
+        }
+
+        applySupplier(supplier, request, code);
+        return toSupplierSummary(supplierRepository.save(supplier));
+    }
+
+    public void deleteSupplier(Long id) {
+        Supplier supplier = supplierRepository.findByIdAndOrganisation_Id(id, currentOrganisationId())
+                .orElseThrow(() -> notFound("Supplier not found."));
+        supplier.setActive(false);
+        supplierRepository.save(supplier);
     }
 
     @Transactional(readOnly = true)
@@ -714,6 +760,41 @@ public class OrganisationAdminService {
                         department.getCode()
                 ),
                 department.getCreatedAt()
+        );
+    }
+
+    private void applySupplier(
+            Supplier supplier,
+            OrgAdminDtos.SaveSupplierRequest request,
+            String code
+    ) {
+        supplier.setName(normalize(request.name()));
+        supplier.setCode(code);
+        // Keep the legacy resource-management fields in sync while the
+        // organisation configuration uses the canonical supplier fields.
+        supplier.setShortCode(code);
+        supplier.setContactPerson(normalize(request.contactPerson()));
+        supplier.setContact(normalize(request.contactPerson()));
+        supplier.setEmail(normalize(request.email()));
+        supplier.setPhone(normalize(request.phone()));
+        supplier.setAddress(normalize(request.address()));
+        supplier.setNotes(normalize(request.notes()));
+        supplier.setActive(Boolean.TRUE.equals(request.active()));
+    }
+
+    private OrgAdminDtos.SupplierSummary toSupplierSummary(Supplier supplier) {
+        return new OrgAdminDtos.SupplierSummary(
+                supplier.getId(),
+                supplier.getName(),
+                supplier.getCode() == null ? supplier.getShortCode() : supplier.getCode(),
+                supplier.getContactPerson() == null ? supplier.getContact() : supplier.getContactPerson(),
+                supplier.getEmail(),
+                supplier.getPhone(),
+                supplier.getAddress(),
+                supplier.getNotes(),
+                supplier.isActive(),
+                supplier.getCreatedAt(),
+                supplier.getUpdatedAt()
         );
     }
 
