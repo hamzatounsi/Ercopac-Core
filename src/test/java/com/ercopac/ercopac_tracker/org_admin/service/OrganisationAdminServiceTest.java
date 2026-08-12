@@ -14,6 +14,7 @@ import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.ResourceType;
 import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
+import com.ercopac.ercopac_tracker.user.repository.SupplierRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +41,7 @@ class OrganisationAdminServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private DepartmentRepository departmentRepository;
     @Mock private ResourceTypeRepository resourceTypeRepository;
+    @Mock private SupplierRepository supplierRepository;
     @Mock private ProjectTaskRepository taskRepository;
     @Mock private PasswordResetRequestRepository passwordResetRepository;
     @Mock private RolePermissionRepository permissionRepository;
@@ -56,6 +58,7 @@ class OrganisationAdminServiceTest {
                 userRepository,
                 departmentRepository,
                 resourceTypeRepository,
+                supplierRepository,
                 taskRepository,
                 passwordResetRepository,
                 permissionRepository,
