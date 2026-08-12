@@ -6,6 +6,7 @@ import com.ercopac.ercopac_tracker.tasks.dto.ImportScheduleRequest;
 import com.ercopac.ercopac_tracker.tasks.dto.ProjectScheduleTaskResponse;
 import com.ercopac.ercopac_tracker.tasks.dto.ResourceUserDto;
 import com.ercopac.ercopac_tracker.tasks.dto.UpdateProjectTaskRequest;
+import com.ercopac.ercopac_tracker.tasks.dto.UpdateProjectTaskStructureRequest;
 import com.ercopac.ercopac_tracker.tasks.service.ProjectTaskService;
 import com.ercopac.ercopac_tracker.user.ResourceTypeDto;
 
@@ -48,6 +49,15 @@ public ResponseEntity<List<DepartmentDto>> getDepartments(
             @PathVariable Long taskId,
             @RequestBody UpdateProjectTaskRequest request) {
         return ResponseEntity.ok(projectTaskService.updateTask(projectId, taskId, request));
+    }
+
+    @PutMapping("/api/projects/{projectId}/tasks/structure")
+    @PreAuthorize(TASKS_WRITE)
+    public ResponseEntity<Void> updateTaskStructure(
+            @PathVariable Long projectId,
+            @RequestBody UpdateProjectTaskStructureRequest request) {
+        projectTaskService.updateTaskStructure(projectId, request);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/api/projects/{projectId}/tasks")

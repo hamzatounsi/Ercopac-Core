@@ -8,7 +8,7 @@ import com.ercopac.ercopac_tracker.tasks.repository.TaskDependencyRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -58,12 +58,7 @@ public class TaskDependencyService {
         if (!pred.getProjectId().equals(projectId) || !succ.getProjectId().equals(projectId))
             throw new IllegalArgumentException("Tasks must belong to project " + projectId);
 
-        // Check for duplicate
-        boolean exists = dependencyRepository.findByProjectId(projectId).stream()
-                .anyMatch(d -> d.getPredecessorTaskId().equals(predId)
-                            && d.getSuccessorTaskId().equals(succId));
-        if (exists)
-            throw new IllegalArgumentException("Dependency already exists.");
+        validateDependencyChange(projectId, predId, succId, null);
 
         TaskDependency dep = new TaskDependency();
         dep.setProjectId(projectId);
@@ -87,6 +82,18 @@ public class TaskDependencyService {
     public TaskDependencyDto updateDependency(Long dependencyId, TaskDependencyDto dto, Long projectId) {
         TaskDependency dep = dependencyRepository.findById(dependencyId)
                 .orElseThrow(() -> new IllegalArgumentException("Dependency not found: " + dependencyId));
+        if (!projectId.equals(dep.getProjectId())) {
+            throw new IllegalArgumentException("Dependency does not belong to the project.");
+        }
+
+        Long predecessorTaskId = dto.getPredecessorTaskId() != null
+                ? dto.getPredecessorTaskId() : dep.getPredecessorTaskId();
+        Long successorTaskId = dto.getSuccessorTaskId() != null
+                ? dto.getSuccessorTaskId() : dep.getSuccessorTaskId();
+        validateDependencyChange(projectId, predecessorTaskId, successorTaskId, dependencyId);
+
+        dep.setPredecessorTaskId(predecessorTaskId);
+        dep.setSuccessorTaskId(successorTaskId);
 
         if (dto.getDependencyType() != null)
             dep.setDependencyType(dto.getDependencyType().toUpperCase());
@@ -106,12 +113,60 @@ public class TaskDependencyService {
     public void deleteDependency(Long dependencyId, Long projectId) {
         TaskDependency dep = dependencyRepository.findById(dependencyId)
                 .orElseThrow(() -> new IllegalArgumentException("Dependency not found: " + dependencyId));
+        if (!projectId.equals(dep.getProjectId())) {
+            throw new IllegalArgumentException("Dependency does not belong to the project.");
+        }
 
         dependencyRepository.delete(dep);
 
         // Re-cascade after removing the constraint
         // (successor may now be free to move earlier)
         taskSchedulingService.rescheduleFromTask(projectId, dep.getPredecessorTaskId());
+    }
+
+    private void validateDependencyChange(
+            Long projectId,
+            Long predecessorTaskId,
+            Long successorTaskId,
+            Long ignoredDependencyId) {
+        if (predecessorTaskId == null || successorTaskId == null) {
+            throw new IllegalArgumentException("predecessorTaskId and successorTaskId are required.");
+        }
+        if (predecessorTaskId.equals(successorTaskId)) {
+            throw new IllegalArgumentException("A task cannot depend on itself.");
+        }
+
+        ProjectTask predecessor = taskRepository.findById(predecessorTaskId)
+                .orElseThrow(() -> new IllegalArgumentException("Predecessor task not found: " + predecessorTaskId));
+        ProjectTask successor = taskRepository.findById(successorTaskId)
+                .orElseThrow(() -> new IllegalArgumentException("Successor task not found: " + successorTaskId));
+        if (!projectId.equals(predecessor.getProjectId()) || !projectId.equals(successor.getProjectId())) {
+            throw new IllegalArgumentException("Tasks must belong to project " + projectId);
+        }
+
+        List<TaskDependency> dependencies = dependencyRepository.findByProjectId(projectId);
+        boolean duplicate = dependencies.stream()
+                .filter(dependency -> !dependency.getId().equals(ignoredDependencyId))
+                .anyMatch(dependency -> dependency.getPredecessorTaskId().equals(predecessorTaskId)
+                        && dependency.getSuccessorTaskId().equals(successorTaskId));
+        if (duplicate) throw new IllegalArgumentException("Dependency already exists.");
+
+        Map<Long, List<Long>> successors = new HashMap<>();
+        for (TaskDependency dependency : dependencies) {
+            if (dependency.getId().equals(ignoredDependencyId)) continue;
+            successors.computeIfAbsent(dependency.getPredecessorTaskId(), key -> new ArrayList<>())
+                    .add(dependency.getSuccessorTaskId());
+        }
+        Deque<Long> pending = new ArrayDeque<>();
+        Set<Long> visited = new HashSet<>();
+        pending.add(successorTaskId);
+        while (!pending.isEmpty()) {
+            Long currentTaskId = pending.removeFirst();
+            if (currentTaskId.equals(predecessorTaskId)) {
+                throw new IllegalArgumentException("Dependency would create a circular relationship.");
+            }
+            if (visited.add(currentTaskId)) pending.addAll(successors.getOrDefault(currentTaskId, List.of()));
+        }
     }
 
     // ── MAP TO DTO ────────────────────────────────────────────────
