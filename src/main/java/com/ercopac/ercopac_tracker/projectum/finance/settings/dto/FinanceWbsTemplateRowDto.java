@@ -10,7 +10,7 @@ public class FinanceWbsTemplateRowDto {
     private String codeTemplate;
     private String description;
     private FinanceWbsRowType type;
-    
+    private String resourceType;
     // ✅ NEW: Department fields
     private Long departmentId;
     private String departmentName;
@@ -46,7 +46,10 @@ public class FinanceWbsTemplateRowDto {
     
     public String getDepartmentName() { return departmentName; }
     public void setDepartmentName(String departmentName) { this.departmentName = departmentName; }
-    
+
+ // Getter et setter :
+ public String getResourceType() { return resourceType; }
+ public void setResourceType(String resourceType) { this.resourceType = resourceType; }
     public Long getOwnerId() { return ownerId; }
     public void setOwnerId(Long ownerId) { this.ownerId = ownerId; }
     

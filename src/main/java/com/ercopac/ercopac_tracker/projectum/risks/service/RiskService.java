@@ -377,12 +377,7 @@ public class RiskService {
         return resourceTypeRepository.findByOrganisation_IdAndActiveTrue(orgId)
             .stream()
             .filter(ResourceType::isAssignable)
-            .map(rt -> new ResourceTypeDto(
-                rt.getId(),
-                rt.getCode(),
-                rt.getLabel(),
-                rt.getColour()
-            ))
+            .map(rt ->  new ResourceTypeDto(rt.getId(), rt.getCode(), rt.getLabel(), rt.getColour(), rt.getDefaultRate())) // ✅ NOUVEAU (5 paramètres)
             .toList();
     }
 

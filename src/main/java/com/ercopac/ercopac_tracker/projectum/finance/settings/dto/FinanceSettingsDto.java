@@ -7,8 +7,7 @@ import java.util.List;
 public class FinanceSettingsDto {
     private BigDecimal defaultHourlyRate;
     private List<FinanceWbsTemplateRowDto> templateRows = new ArrayList<>();
-    private List<FinanceOwnerMappingDto> ownerMappings = new ArrayList<>();
-    private List<FinanceHourlyRateDto> hourlyRates = new ArrayList<>();
+    
 
     public BigDecimal getDefaultHourlyRate() {
         return defaultHourlyRate;
@@ -26,19 +25,6 @@ public class FinanceSettingsDto {
         this.templateRows = templateRows;
     }
 
-    public List<FinanceOwnerMappingDto> getOwnerMappings() {
-        return ownerMappings;
-    }
 
-    public void setOwnerMappings(List<FinanceOwnerMappingDto> ownerMappings) {
-        this.ownerMappings = ownerMappings;
-    }
 
-    public List<FinanceHourlyRateDto> getHourlyRates() {
-        return hourlyRates;
-    }
-
-    public void setHourlyRates(List<FinanceHourlyRateDto> hourlyRates) {
-        this.hourlyRates = hourlyRates;
-    }
 }

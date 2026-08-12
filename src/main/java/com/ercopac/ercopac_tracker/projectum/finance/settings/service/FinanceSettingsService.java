@@ -6,18 +6,18 @@ import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
 import com.ercopac.ercopac_tracker.projectum.finance.domain.FinanceEntry;
 import com.ercopac.ercopac_tracker.projectum.finance.repository.FinanceEntryRepository;
-import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.*;
+import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceSettings;
+import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceWbsTemplateRow;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.*;
-import com.ercopac.ercopac_tracker.projectum.finance.settings.repository.*;
+import com.ercopac.ercopac_tracker.projectum.finance.settings.repository.FinanceSettingsRepository;
+import com.ercopac.ercopac_tracker.projectum.finance.settings.repository.FinanceWbsTemplateRowRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.UserRepository;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -28,21 +28,16 @@ public class FinanceSettingsService {
 
     private final FinanceSettingsRepository financeSettingsRepository;
     private final FinanceWbsTemplateRowRepository templateRowRepository;
-    private final FinanceOwnerMappingRepository ownerMappingRepository;
-    private final FinanceHourlyRateRepository hourlyRateRepository;
     private final FinanceEntryRepository financeEntryRepository;
     private final ProjectRepository projectRepository;
     private final OrganisationRepository organisationRepository;
     private final SecurityUtils securityUtils;
-    
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
 
     public FinanceSettingsService(
             FinanceSettingsRepository financeSettingsRepository,
             FinanceWbsTemplateRowRepository templateRowRepository,
-            FinanceOwnerMappingRepository ownerMappingRepository,
-            FinanceHourlyRateRepository hourlyRateRepository,
             FinanceEntryRepository financeEntryRepository,
             ProjectRepository projectRepository,
             OrganisationRepository organisationRepository,
@@ -52,8 +47,6 @@ public class FinanceSettingsService {
     ) {
         this.financeSettingsRepository = financeSettingsRepository;
         this.templateRowRepository = templateRowRepository;
-        this.ownerMappingRepository = ownerMappingRepository;
-        this.hourlyRateRepository = hourlyRateRepository;
         this.financeEntryRepository = financeEntryRepository;
         this.projectRepository = projectRepository;
         this.organisationRepository = organisationRepository;
@@ -83,19 +76,7 @@ public class FinanceSettingsService {
                         .toList()
         );
 
-        dto.setOwnerMappings(
-                ownerMappingRepository.findAllByOrganisationIdOrderByOwnerKeyAsc(orgId)
-                        .stream()
-                        .map(this::toDto)
-                        .toList()
-        );
-
-        dto.setHourlyRates(
-                hourlyRateRepository.findAllByOrganisationIdOrderByResourceTypeAsc(orgId)
-                        .stream()
-                        .map(this::toDto)
-                        .toList()
-        );
+        // ✅ SUPPRIMÉ : Owner Mappings et Hourly Rates ne sont plus gérés ici
 
         return dto;
     }
@@ -116,8 +97,7 @@ public class FinanceSettingsService {
         financeSettingsRepository.save(settings);
 
         templateRowRepository.deleteAllByOrganisationId(orgId);
-        ownerMappingRepository.deleteAllByOrganisationId(orgId);
-        hourlyRateRepository.deleteAllByOrganisationId(orgId);
+        // ✅ SUPPRIMÉ : Suppression des anciens mappings et taux
 
         for (FinanceWbsTemplateRowDto dto : request.getTemplateRows()) {
             FinanceWbsTemplateRow row = new FinanceWbsTemplateRow();
@@ -133,6 +113,9 @@ public class FinanceSettingsService {
                     .orElseThrow(() -> new IllegalArgumentException("Department not found with ID: " + dto.getDepartmentId()));
                 row.setDepartment(dept);
             }
+            
+            // ✅ NOUVEAU : Lier le Resource Type à la ligne WBS pour le calcul du Forecast
+            row.setResourceType(blankToNull(dto.getResourceType()));
             
             if (dto.getOwnerId() != null) {
                 AppUser owner = userRepository.findById(dto.getOwnerId())
@@ -154,24 +137,6 @@ public class FinanceSettingsService {
             
             row.setHourRate(dto.getHourRate());
             templateRowRepository.save(row);
-        }
-
-        for (FinanceOwnerMappingDto dto : request.getOwnerMappings()) {
-            FinanceOwnerMapping mapping = new FinanceOwnerMapping();
-            mapping.setOrganisation(organisation);
-            mapping.setOwnerKey(dto.getOwnerKey());
-            mapping.setResourceType(dto.getResourceType());
-            mapping.setRoleFilter(blankToNull(dto.getRoleFilter()));
-            mapping.setNotes(blankToNull(dto.getNotes()));
-            ownerMappingRepository.save(mapping);
-        }
-
-        for (FinanceHourlyRateDto dto : request.getHourlyRates()) {
-            FinanceHourlyRate rate = new FinanceHourlyRate();
-            rate.setOrganisation(organisation);
-            rate.setResourceType(dto.getResourceType());
-            rate.setHourlyRate(nvl(dto.getHourlyRate(), BigDecimal.ZERO));
-            hourlyRateRepository.save(rate);
         }
 
         return getSettings();
@@ -224,7 +189,6 @@ public class FinanceSettingsService {
                 entry.setDescription(template.getDescription());
                 entry.setLevel(template.getLevel());
                 entry.setRowType(template.getType());
-
                 entry.setOwnerName(resolveOwnerDisplay(template.getOwnerKey()));
 
                 if (isNew) {
@@ -234,7 +198,6 @@ public class FinanceSettingsService {
                     entry.setActualCost(BigDecimal.ZERO);
                     entry.setForecast(BigDecimal.ZERO);
                 } else {
-                    // ✅ These now work because we added the single-argument nvl() method below
                     entry.setSales(nvl(entry.getSales()));
                     entry.setBudget(nvl(entry.getBudget()));
                     entry.setCommitment(nvl(entry.getCommitment()));
@@ -255,7 +218,6 @@ public class FinanceSettingsService {
 
     public FinanceSettingsDto importWbsTemplate(ImportFinanceWbsTemplateRequest request) {
         Long orgId = requireOrganisationId();
-
         Organisation organisation = organisationRepository.findById(orgId)
                 .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
 
@@ -285,18 +247,13 @@ public class FinanceSettingsService {
             row.setCodeTemplate(dto.getCodeTemplate().trim());
             row.setDescription(blankToNull(dto.getDescription()));
             
-            // ✅ STRICT BACKEND VALIDATION
             if (dto.getType() == null) {
-                throw new IllegalArgumentException("Import failed: WBS row '" + dto.getCodeTemplate() + "' is missing the required TYPE. Must be SUMMARY, HOUR, EXPENSES, or COST.");
+                throw new IllegalArgumentException("Import failed: WBS row '" + dto.getCodeTemplate() + "' is missing the required TYPE.");
             }
+            row.setType(dto.getType());
             
-            // Optional: Validate it's one of the 4 allowed types (Enum handles this, but good for clarity)
-            try {
-                row.setType(dto.getType());
-            } catch (Exception e) {
-                throw new IllegalArgumentException("Import failed: Invalid TYPE '" + dto.getType() + "' for row '" + dto.getCodeTemplate() + "'.");
-            }
-            
+            // ✅ NOUVEAU : Sauvegarder le Resource Type lors de l'import
+            row.setResourceType(blankToNull(dto.getResourceType()));
             row.setOwnerKey(blankToNull(dto.getOwnerKey()));
             row.setHourRate(dto.getHourRate());
 
@@ -320,7 +277,6 @@ public class FinanceSettingsService {
         
         if (row.getDepartment() != null) {
             dto.setDepartmentId(row.getDepartment().getId());
-            // ✅ FIXED: Removed the extra () from getLabel()
             dto.setDepartmentName(row.getDepartment().getLabel());
         }
         
@@ -330,78 +286,36 @@ public class FinanceSettingsService {
         }
         
         dto.setOwnerKey(row.getOwnerKey());
+        dto.setResourceType(row.getResourceType()); // ✅ NOUVEAU
         dto.setHourRate(row.getHourRate());
         return dto;
     }
 
-    private FinanceOwnerMappingDto toDto(FinanceOwnerMapping mapping) {
-        FinanceOwnerMappingDto dto = new FinanceOwnerMappingDto();
-        dto.setId(mapping.getId());
-        dto.setOwnerKey(mapping.getOwnerKey());
-        dto.setResourceType(mapping.getResourceType());
-        dto.setRoleFilter(mapping.getRoleFilter());
-        dto.setNotes(mapping.getNotes());
-        return dto;
-    }
-
-    private FinanceHourlyRateDto toDto(FinanceHourlyRate rate) {
-        FinanceHourlyRateDto dto = new FinanceHourlyRateDto();
-        dto.setId(rate.getId());
-        dto.setResourceType(rate.getResourceType());
-        dto.setHourlyRate(rate.getHourlyRate());
-        return dto;
-    }
-
     private String buildFinalWbsCode(String codeTemplate, String projectCode) {
-        if (codeTemplate == null || codeTemplate.isBlank()) {
-            throw new IllegalArgumentException("Template WBS code cannot be blank");
-        }
-        if (projectCode == null || projectCode.isBlank()) {
-            throw new IllegalArgumentException("Project code cannot be blank");
-        }
+        if (codeTemplate == null || codeTemplate.isBlank()) throw new IllegalArgumentException("Template WBS code cannot be blank");
+        if (projectCode == null || projectCode.isBlank()) throw new IllegalArgumentException("Project code cannot be blank");
         return codeTemplate.replace("xxx25", projectCode.trim());
     }
 
     private String resolveOwnerDisplay(String ownerKey) {
-        if (ownerKey == null || ownerKey.isBlank()) {
-            return "—";
-        }
-        return ownerKey;
+        return (ownerKey == null || ownerKey.isBlank()) ? "—" : ownerKey;
     }
 
-    // ✅ ADDED: Single-argument nvl method to fix the compilation error
-    private BigDecimal nvl(BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value;
-    }
-
-    // Kept the two-argument version
-    private BigDecimal nvl(BigDecimal value, BigDecimal fallback) {
-        return value == null ? fallback : value;
-    }
-
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
+    private BigDecimal nvl(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
+    private BigDecimal nvl(BigDecimal value, BigDecimal fallback) { return value == null ? fallback : value; }
+    private String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
 
     private Long requireOrganisationId() {
         Long orgId = securityUtils.getCurrentOrganisationId();
-        if (orgId == null) {
-            throw new IllegalStateException("User has no organisation");
-        }
+        if (orgId == null) throw new IllegalStateException("User has no organisation");
         return orgId;
     }
 
     private int detectLevel(String code) {
-        if (code == null || code.isBlank()) {
-            return 1;
-        }
+        if (code == null || code.isBlank()) return 1;
         String cleaned = code.trim();
-        if (cleaned.contains(".")) {
-            return Math.max(1, cleaned.split("\\.").length);
-        }
-        if (cleaned.contains("-")) {
-            return Math.max(1, cleaned.split("-").length - 1);
-        }
+        if (cleaned.contains(".")) return Math.max(1, cleaned.split("\\.").length);
+        if (cleaned.contains("-")) return Math.max(1, cleaned.split("-").length - 1);
         return 1;
     }
 }

@@ -221,7 +221,8 @@ public class ProjectTaskService {
         return resourceTypeRepository
             .findByOrganisationIdAndActiveTrueOrderByCodeAsc(orgId)
             .stream()
-            .map(rt -> new ResourceTypeDto(rt.getId(), rt.getCode(), rt.getLabel(), rt.getColour()))
+            .map(rt ->   // ✅ NOUVEAU CODE (5 paramètres)
+            new ResourceTypeDto(rt.getId(), rt.getCode(), rt.getLabel(), rt.getColour(), rt.getDefaultRate()))
             .collect(Collectors.toList());
     }
 

@@ -20,7 +20,8 @@ public class FinanceWbsTemplateRow {
 
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder;
-
+    @Column(name = "resource_type", length = 100)
+    private String resourceType;
     @Column(name = "level_no", nullable = false)
     private Integer level;
 
@@ -50,6 +51,9 @@ public class FinanceWbsTemplateRow {
     @Column(name = "hour_rate", precision = 18, scale = 2)
     private BigDecimal hourRate;
 
+ // Ajoute aussi le getter et le setter :
+ public String getResourceType() { return resourceType; }
+ public void setResourceType(String resourceType) { this.resourceType = resourceType; }
     // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
