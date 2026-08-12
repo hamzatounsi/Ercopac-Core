@@ -1,6 +1,7 @@
 package com.ercopac.ercopac_tracker.tasks.web;
 
 import com.ercopac.ercopac_tracker.tasks.dto.ResourceUserDto;
+import com.ercopac.ercopac_tracker.tasks.dto.SupplierOptionDto;
 import com.ercopac.ercopac_tracker.tasks.dto.TaskResourceAssignmentDto;
 import com.ercopac.ercopac_tracker.tasks.service.TaskResourceAssignmentService;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -50,6 +51,15 @@ public class TaskResourceAssignmentController {
             @RequestParam(required = false) String resourceType
     ) {
         return service.getUsersByResourceType(projectId, resourceType);
+    }
+
+    @GetMapping("/suppliers")
+    @PreAuthorize(TASKS_READ)
+    public List<SupplierOptionDto> getSupplierOptions(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId
+    ) {
+        return service.getActiveSuppliers(projectId, taskId);
     }
 
     @PutMapping("/{assignmentId}")

@@ -9,6 +9,9 @@ public class TaskResourceAssignmentDto {
     private Long taskId;
     private Long assignedUserId;
     private String assignedUserName;
+    private Long supplierId;
+    private String supplierCode;
+    private String supplierName;
     private String resourceType;
     private String assignmentName;
     private Integer quantity;
@@ -29,6 +32,15 @@ public class TaskResourceAssignmentDto {
 
     public String getAssignedUserName() { return assignedUserName; }
     public TaskResourceAssignmentDto setAssignedUserName(String assignedUserName) { this.assignedUserName = assignedUserName; return this; }
+
+    public Long getSupplierId() { return supplierId; }
+    public TaskResourceAssignmentDto setSupplierId(Long supplierId) { this.supplierId = supplierId; return this; }
+
+    public String getSupplierCode() { return supplierCode; }
+    public TaskResourceAssignmentDto setSupplierCode(String supplierCode) { this.supplierCode = supplierCode; return this; }
+
+    public String getSupplierName() { return supplierName; }
+    public TaskResourceAssignmentDto setSupplierName(String supplierName) { this.supplierName = supplierName; return this; }
 
     public String getResourceType() { return resourceType; }
     public TaskResourceAssignmentDto setResourceType(String resourceType) { this.resourceType = resourceType; return this; }
