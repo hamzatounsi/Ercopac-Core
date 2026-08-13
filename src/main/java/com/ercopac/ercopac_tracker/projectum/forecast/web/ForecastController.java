@@ -30,22 +30,27 @@ public class ForecastController {
 
     @GetMapping
     @PreAuthorize(FORECAST_READ)
-    public ResponseEntity<List<ForecastRowDto>> getForecastGrid(@PathVariable Long projectId,
-                                                                @RequestParam(defaultValue = "12") int periods) {
-        return ResponseEntity.ok(forecastService.getForecastGrid(projectId, periods));
+    public ResponseEntity<List<ForecastRowDto>> getForecastGrid(
+            @PathVariable Long projectId,
+            @RequestParam(defaultValue = "12") int periods,
+            @RequestParam(defaultValue = "month") String periodType) { // ✅ AJOUTÉ
+        return ResponseEntity.ok(forecastService.getForecastGrid(projectId, periods, periodType));
     }
 
     @GetMapping("/summary")
     @PreAuthorize(FORECAST_READ)
-    public ResponseEntity<ForecastSummaryDto> getForecastSummary(@PathVariable Long projectId,
-                                                                 @RequestParam(defaultValue = "12") int periods) {
+    public ResponseEntity<ForecastSummaryDto> getForecastSummary(
+            @PathVariable Long projectId,
+            @RequestParam(defaultValue = "12") int periods) {
         return ResponseEntity.ok(forecastService.getSummary(projectId, periods));
     }
 
     @GetMapping("/periods")
     @PreAuthorize(FORECAST_READ)
-    public ResponseEntity<List<String>> getPeriods(@RequestParam(defaultValue = "12") int periods) {
-        return ResponseEntity.ok(forecastService.getPeriods(periods));
+    public ResponseEntity<List<String>> getPeriods(
+            @RequestParam(defaultValue = "12") int periods,
+            @RequestParam(defaultValue = "month") String periodType) { // ✅ AJOUTÉ
+        return ResponseEntity.ok(forecastService.getPeriods(periods, periodType));
     }
 
     @PutMapping
@@ -56,7 +61,6 @@ public class ForecastController {
         return ResponseEntity.ok().build();
     }
 
-    // ✅ NEW ENDPOINT: Update WBS Level
     @PatchMapping("/level")
     @PreAuthorize(FORECAST_WRITE)
     public ResponseEntity<Void> updateWbsLevel(@PathVariable Long projectId,
