@@ -188,7 +188,7 @@ public class FinanceSettingsService {
                 entry.setWbsCode(finalWbsCode);
                 entry.setDescription(template.getDescription());
                 entry.setLevel(template.getLevel());
-                entry.setRowType(template.getType());
+                entry.setRowType(template.getType() == null ? null : template.getType().name());
                 entry.setOwnerName(resolveOwnerDisplay(template.getOwnerKey()));
 
                 if (isNew) {
