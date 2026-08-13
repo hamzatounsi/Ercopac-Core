@@ -10,11 +10,10 @@ import com.ercopac.ercopac_tracker.projectum.finance.dto.UpsertFinanceEntryReque
 import com.ercopac.ercopac_tracker.projectum.finance.repository.FinanceEntryRepository;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceHourlyRate;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceSettings;
-import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceWbsRowType;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.repository.FinanceHourlyRateRepository;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.repository.FinanceSettingsRepository;
 import com.ercopac.ercopac_tracker.projectum.forecast.domain.ForecastEntry;
-import com.ercopac.ercopac_tracker.projectum.forecast.repository.ForecastEntryRepository; // ✅ NEW IMPORT
+import com.ercopac.ercopac_tracker.projectum.forecast.repository.ForecastEntryRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
@@ -37,7 +36,7 @@ import java.util.stream.Collectors;
 public class FinanceService {
 
     private final FinanceEntryRepository financeEntryRepository;
-    private final ForecastEntryRepository forecastEntryRepository; // ✅ NEW
+    private final ForecastEntryRepository forecastEntryRepository;
     private final ProjectRepository projectRepository;
     private final SecurityUtils securityUtils;
     private final ProjectTaskRepository projectTaskRepository;
@@ -45,14 +44,14 @@ public class FinanceService {
     private final FinanceHourlyRateRepository hourlyRateRepository;
 
     public FinanceService(FinanceEntryRepository financeEntryRepository,
-                          ForecastEntryRepository forecastEntryRepository, // ✅ NEW
+                          ForecastEntryRepository forecastEntryRepository,
                           ProjectRepository projectRepository,
                           SecurityUtils securityUtils,
                           ProjectTaskRepository projectTaskRepository,
                           FinanceSettingsRepository financeSettingsRepository,
                           FinanceHourlyRateRepository hourlyRateRepository) {
         this.financeEntryRepository = financeEntryRepository;
-        this.forecastEntryRepository = forecastEntryRepository; // ✅ NEW
+        this.forecastEntryRepository = forecastEntryRepository;
         this.projectRepository = projectRepository;
         this.securityUtils = securityUtils;
         this.projectTaskRepository = projectTaskRepository;
@@ -60,7 +59,6 @@ public class FinanceService {
         this.hourlyRateRepository = hourlyRateRepository;
     }
 
-    // ✅ NEW: Fetches all forecast totals for a project in ONE query to avoid performance issues
     private Map<String, BigDecimal> getForecastTotalsByWbs(Long projectId) {
         Long orgId = securityUtils.getCurrentOrganisationId();
         List<ForecastEntry> entries;
@@ -87,15 +85,12 @@ public class FinanceService {
                 : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(
                         project.getId(), project.getOrganisation().getId());
 
-        // ✅ Get all forecast totals at once
         Map<String, BigDecimal> forecastTotals = getForecastTotalsByWbs(projectId);
-
         return rows.stream().map(row -> toDto(row, forecastTotals)).toList();
     }
 
     @Transactional(readOnly = true)
     public FinanceSummaryDto getProjectFinanceSummary(Long projectId) {
-        // Automatically uses the updated forecast totals from getProjectFinance
         List<FinanceEntryDto> rows = getProjectFinance(projectId);
 
         BigDecimal sales = BigDecimal.ZERO;
@@ -108,7 +103,6 @@ public class FinanceService {
             if (row.getLevel() == null || row.getLevel() != 1) {
                 continue;
             }
-
             sales = sales.add(nvl(row.getSales()));
             budget = budget.add(nvl(row.getBudget()));
             commitment = commitment.add(nvl(row.getCommitment()));
@@ -132,11 +126,9 @@ public class FinanceService {
 
     public FinanceEntryDto createEntry(Long projectId, UpsertFinanceEntryRequest request) {
         Project project = getAccessibleProject(projectId);
-
         FinanceEntry entry = new FinanceEntry();
         entry.setProject(project);
         entry.setOrganisation(project.getOrganisation());
-        
         apply(entry, request);
 
         Map<String, BigDecimal> forecastTotals = getForecastTotalsByWbs(projectId);
@@ -145,72 +137,51 @@ public class FinanceService {
 
     public FinanceEntryDto updateEntry(Long projectId, Long entryId, UpsertFinanceEntryRequest request) {
         Project project = getAccessibleProject(projectId);
-
         FinanceEntry entry = securityUtils.isPlatformUser()
-                ? financeEntryRepository.findById(entryId)
-                    .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"))
-                : financeEntryRepository.findByIdAndProjectIdAndOrganisationId(
-                    entryId, projectId, project.getOrganisation().getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
+                ? financeEntryRepository.findById(entryId).orElseThrow(() -> new IllegalArgumentException("Finance entry not found"))
+                : financeEntryRepository.findByIdAndProjectIdAndOrganisationId(entryId, projectId, project.getOrganisation().getId()).orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
 
         apply(entry, request);
-        
         Map<String, BigDecimal> forecastTotals = getForecastTotalsByWbs(projectId);
         return toDto(financeEntryRepository.save(entry), forecastTotals);
     }
 
     public void deleteEntry(Long projectId, Long entryId) {
         Project project = getAccessibleProject(projectId);
-
         if (securityUtils.isPlatformUser()) {
             financeEntryRepository.deleteById(entryId);
             return;
         }
-
-        financeEntryRepository.deleteByIdAndProjectIdAndOrganisationId(
-                entryId, projectId, project.getOrganisation().getId());
+        financeEntryRepository.deleteByIdAndProjectIdAndOrganisationId(entryId, projectId, project.getOrganisation().getId());
     }
 
     private void apply(FinanceEntry entry, UpsertFinanceEntryRequest request) {
         entry.setWbsCode(request.getWbsCode());
         entry.setDescription(request.getDescription());
         entry.setLevel(request.getLevel());
-        
         entry.setSales(nvl(request.getSales()));
         entry.setBudget(nvl(request.getBudget()));
         entry.setCommitment(nvl(request.getCommitment()));
         entry.setActualCost(nvl(request.getActualCost()));
         entry.setForecast(nvl(request.getForecast()));
-        
         entry.setCostReserve(nvl(request.getCostReserve()));
         entry.setUpdatedBudget(nvl(request.getUpdatedBudget()));
-        
         entry.setOwnerName(request.getOwnerName());
     }
 
-    // ✅ UPDATED: Now takes the forecast totals map
     private FinanceEntryDto toDto(FinanceEntry entry, Map<String, BigDecimal> forecastTotals) {
         FinanceEntryDto dto = new FinanceEntryDto();
-
         dto.setId(entry.getId());
         dto.setWbsCode(entry.getWbsCode());
         dto.setDescription(entry.getDescription());
         dto.setLevel(entry.getLevel());
-
         dto.setOwner(entry.getOwnerName() != null ? entry.getOwnerName() : "—");
 
         BigDecimal sales = nvl(entry.getSales());
         BigDecimal budget = nvl(entry.getBudget());
         BigDecimal commitment = nvl(entry.getCommitment());
         BigDecimal actualCost = nvl(entry.getActualCost());
-        
-        // ✅ AUTOMATICALLY GET FORECAST FROM FORECAST PAGE
         BigDecimal forecast = forecastTotals.getOrDefault(entry.getWbsCode(), BigDecimal.ZERO);
-        
-        // Optional: If you want to keep the old finance_entries.forecast as a fallback when the grid is empty, 
-        // uncomment the line below:
-        // if (forecast.compareTo(BigDecimal.ZERO) == 0) forecast = nvl(entry.getForecast());
-
         BigDecimal costReserve = nvl(entry.getCostReserve());
         BigDecimal updatedBudget = nvl(entry.getUpdatedBudget());
 
@@ -224,44 +195,30 @@ public class FinanceService {
 
         BigDecimal eac = actualCost.add(forecast);
         BigDecimal variance = budget.subtract(eac);
-
         dto.setEac(eac);
         dto.setVariance(variance);
 
-        // CPI
         if (eac.compareTo(BigDecimal.ZERO) > 0) {
             dto.setCpi(budget.divide(eac, 4, RoundingMode.HALF_UP).doubleValue());
         } else {
             dto.setCpi(null);
         }
 
-        // % AC
         if (budget.compareTo(BigDecimal.ZERO) > 0) {
-            dto.setPercentAc(
-                actualCost.divide(budget, 4, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100))
-                    .doubleValue()
-            );
+            dto.setPercentAc(actualCost.divide(budget, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).doubleValue());
         } else {
             dto.setPercentAc(0.0);
         }
-
         return dto;
     }
 
     private Project getAccessibleProject(Long projectId) {
         if (securityUtils.isPlatformUser()) {
-            return projectRepository.findById(projectId)
-                    .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+            return projectRepository.findById(projectId).orElseThrow(() -> new IllegalArgumentException("Project not found"));
         }
-
         Long orgId = securityUtils.getCurrentOrganisationId();
-        if (orgId == null) {
-            throw new IllegalStateException("User has no organisation");
-        }
-
-        return projectRepository.findByIdAndOrganisationId(projectId, orgId)
-                .orElseThrow(() -> new IllegalArgumentException("Project not accessible"));
+        if (orgId == null) throw new IllegalStateException("User has no organisation");
+        return projectRepository.findByIdAndOrganisationId(projectId, orgId).orElseThrow(() -> new IllegalArgumentException("Project not accessible"));
     }
 
     private BigDecimal nvl(BigDecimal value) {
@@ -271,14 +228,11 @@ public class FinanceService {
     @Transactional
     public void importEntries(Long projectId, List<UpsertFinanceEntryRequest> rows) {
         Project project = getAccessibleProject(projectId);
-
         for (UpsertFinanceEntryRequest r : rows) {
             FinanceEntry entry = new FinanceEntry();
             entry.setProject(project);
             entry.setOrganisation(project.getOrganisation());
-
             apply(entry, r);
-
             financeEntryRepository.save(entry);
         }
     }
@@ -286,15 +240,10 @@ public class FinanceService {
     @Transactional(readOnly = true)
     public FinanceEntryDetailDto getEntryDetail(Long projectId, Long entryId) {
         Project project = getAccessibleProject(projectId);
-
         FinanceEntry entry = securityUtils.isPlatformUser()
-                ? financeEntryRepository.findByIdAndProjectId(entryId, projectId)
-                    .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"))
-                : financeEntryRepository.findByIdAndProjectIdAndOrganisationId(
-                    entryId, projectId, project.getOrganisation().getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
+                ? financeEntryRepository.findByIdAndProjectId(entryId, projectId).orElseThrow(() -> new IllegalArgumentException("Finance entry not found"))
+                : financeEntryRepository.findByIdAndProjectIdAndOrganisationId(entryId, projectId, project.getOrganisation().getId()).orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
 
-        // ✅ UPDATED: Pass the forecast totals map
         Map<String, BigDecimal> forecastTotals = getForecastTotalsByWbs(projectId);
         FinanceEntryDto rowDto = toDto(entry, forecastTotals);
 
@@ -307,67 +256,52 @@ public class FinanceService {
 
         FinanceEntryDetailDto dto = new FinanceEntryDetailDto();
         dto.setRow(rowDto);
-
         dto.setPercentCommitment(percent(commitment, budget));
         dto.setPercentForecast(percent(forecast, budget));
         dto.setPercentEac(percent(eac, budget));
 
         if (sales.compareTo(BigDecimal.ZERO) > 0) {
-            dto.setMarginPercent(
-                sales.subtract(eac)
-                    .divide(sales, 4, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100))
-            );
+            dto.setMarginPercent(sales.subtract(eac).divide(sales, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)));
         }
 
         String prefix = entry.getWbsCode() + ".";
         List<FinanceEntry> childEntities = securityUtils.isPlatformUser()
                 ? financeEntryRepository.findAllByProjectIdAndWbsCodeStartingWithOrderByWbsCodeAsc(projectId, prefix)
-                : financeEntryRepository.findAllByProjectIdAndOrganisationIdAndWbsCodeStartingWithOrderByWbsCodeAsc(
-                    projectId, project.getOrganisation().getId(), prefix);
+                : financeEntryRepository.findAllByProjectIdAndOrganisationIdAndWbsCodeStartingWithOrderByWbsCodeAsc(projectId, project.getOrganisation().getId(), prefix);
 
         List<FinanceEntryDto> directChildren = childEntities.stream()
                 .filter(e -> e.getLevel() != null && entry.getLevel() != null && e.getLevel() == entry.getLevel() + 1)
-                .map(e -> toDto(e, forecastTotals)) // ✅ UPDATED
+                .map(e -> toDto(e, forecastTotals))
                 .toList();
 
         dto.setChildren(directChildren);
-
         return dto;
     }
 
     private Double percent(BigDecimal numerator, BigDecimal denominator) {
-        if (denominator == null || denominator.compareTo(BigDecimal.ZERO) <= 0) {
-            return 0.0;
-        }
-        return numerator.divide(denominator, 4, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100))
-                .doubleValue();
+        if (denominator == null || denominator.compareTo(BigDecimal.ZERO) <= 0) return 0.0;
+        return numerator.divide(denominator, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).doubleValue();
     }
 
     @Transactional(readOnly = true)
     public FinanceCostBreakdownDto getCostBreakdown(Long projectId) {
         List<FinanceEntryDto> rows = getProjectFinance(projectId);
-
         BigDecimal budget = BigDecimal.ZERO;
         BigDecimal actualCost = BigDecimal.ZERO;
         BigDecimal forecast = BigDecimal.ZERO;
 
         for (FinanceEntryDto row : rows) {
             if (row.getLevel() == null || row.getLevel() != 1) continue;
-
             budget = budget.add(nvl(row.getBudget()));
             actualCost = actualCost.add(nvl(row.getActualCost()));
             forecast = forecast.add(nvl(row.getForecast()));
         }
 
         BigDecimal remaining = budget.subtract(actualCost.add(forecast));
-
         FinanceCostBreakdownDto dto = new FinanceCostBreakdownDto();
         dto.setActualCost(actualCost);
         dto.setForecast(forecast);
         dto.setRemainingBudget(remaining);
-
         return dto;
     }
 
@@ -383,7 +317,6 @@ public class FinanceService {
 
         for (FinanceEntryDto row : rows) {
             if (row.getLevel() == null || row.getLevel() != 1) continue;
-
             sales = sales.add(nvl(row.getSales()));
             budget = budget.add(nvl(row.getBudget()));
             actualCost = actualCost.add(nvl(row.getActualCost()));
@@ -392,12 +325,9 @@ public class FinanceService {
 
         BigDecimal eac = actualCost.add(forecast);
         BigDecimal variance = budget.subtract(eac);
-
         BigDecimal marginPercent = BigDecimal.ZERO;
         if (sales.compareTo(BigDecimal.ZERO) > 0) {
-            marginPercent = sales.subtract(eac)
-                    .divide(sales, 4, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100));
+            marginPercent = sales.subtract(eac).divide(sales, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
         }
 
         FinanceProjectChartDto dto = new FinanceProjectChartDto();
@@ -410,7 +340,6 @@ public class FinanceService {
         dto.setForecast(forecast);
         dto.setVariance(variance);
         dto.setMarginPercent(marginPercent);
-
         return dto;
     }
 
@@ -420,42 +349,32 @@ public class FinanceService {
 
         List<FinanceEntry> financeRows = securityUtils.isPlatformUser()
                 ? financeEntryRepository.findAllByProjectIdOrderByWbsCodeAsc(projectId)
-                : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(
-                        projectId, project.getOrganisation().getId());
+                : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(projectId, project.getOrganisation().getId());
 
         List<ProjectTask> tasks = projectTaskRepository.findByProjectId(projectId);
-
         Map<String, List<ProjectTask>> tasksByWbs = tasks.stream()
                 .filter(t -> t.getWbsCode() != null && !t.getWbsCode().isBlank())
                 .collect(Collectors.groupingBy(ProjectTask::getWbsCode));
 
         BigDecimal defaultRate = financeSettingsRepository.findByOrganisationId(project.getOrganisation().getId())
-                .map(FinanceSettings::getDefaultHourlyRate)
-                .orElse(BigDecimal.valueOf(65));
+                .map(FinanceSettings::getDefaultHourlyRate).orElse(BigDecimal.valueOf(65));
 
-        Map<String, BigDecimal> rateByResourceType = hourlyRateRepository
-                .findAllByOrganisationIdOrderByResourceTypeAsc(project.getOrganisation().getId())
-                .stream()
-                .collect(Collectors.toMap(
-                        FinanceHourlyRate::getResourceType,
-                        FinanceHourlyRate::getHourlyRate,
-                        (a, b) -> a
-                ));
+        Map<String, BigDecimal> rateByResourceType = hourlyRateRepository.findAllByOrganisationIdOrderByResourceTypeAsc(project.getOrganisation().getId())
+                .stream().collect(Collectors.toMap(FinanceHourlyRate::getResourceType, FinanceHourlyRate::getHourlyRate, (a, b) -> a));
 
         for (FinanceEntry row : financeRows) {
-            if (row.getRowType() == FinanceWbsRowType.HOUR) {
+            // ✅ CORRIGÉ : Utilisation de .equals() pour comparer des Strings
+            if ("HOUR".equals(row.getRowType())) {
                 continue;
             }
 
             List<ProjectTask> matchingTasks = tasksByWbs.getOrDefault(row.getWbsCode(), List.of());
-
             BigDecimal plannedCost = BigDecimal.ZERO;
             BigDecimal actualCost = BigDecimal.ZERO;
             BigDecimal forecastCost = BigDecimal.ZERO;
 
             for (ProjectTask task : matchingTasks) {
                 BigDecimal taskRate = resolveTaskRate(task, row, rateByResourceType, defaultRate);
-
                 BigDecimal plannedHours = nvl(task.getPlannedHours());
                 BigDecimal actualHours = nvl(task.getActualHours());
 
@@ -463,51 +382,32 @@ public class FinanceService {
                 actualCost = actualCost.add(actualHours.multiply(taskRate));
 
                 BigDecimal remainingHours = plannedHours.subtract(actualHours);
-                if (remainingHours.compareTo(BigDecimal.ZERO) < 0) {
-                    remainingHours = BigDecimal.ZERO;
-                }
-
+                if (remainingHours.compareTo(BigDecimal.ZERO) < 0) remainingHours = BigDecimal.ZERO;
                 forecastCost = forecastCost.add(remainingHours.multiply(taskRate));
             }
 
             row.setBudget(plannedCost);
             row.setActualCost(actualCost);
             row.setForecast(forecastCost);
-
             financeEntryRepository.save(row);
         }
-
         recomputeSummaryRows(projectId, project.getOrganisation().getId());
     }
 
-    private BigDecimal resolveTaskRate(
-            ProjectTask task,
-            FinanceEntry financeRow,
-            Map<String, BigDecimal> rateByResourceType,
-            BigDecimal defaultRate
-    ) {
+    private BigDecimal resolveTaskRate(ProjectTask task, FinanceEntry financeRow, Map<String, BigDecimal> rateByResourceType, BigDecimal defaultRate) {
         if (financeRow.getHourRate() != null && financeRow.getHourRate().compareTo(BigDecimal.ZERO) > 0) {
             return financeRow.getHourRate();
         }
-
-        if (task.getAssignedUser() != null
-                && task.getAssignedUser().getDefaultRate() != null
-                && task.getAssignedUser().getDefaultRate().compareTo(BigDecimal.ZERO) > 0) {
+        if (task.getAssignedUser() != null && task.getAssignedUser().getDefaultRate() != null && task.getAssignedUser().getDefaultRate().compareTo(BigDecimal.ZERO) > 0) {
             return task.getAssignedUser().getDefaultRate();
         }
-
         String resourceType = task.getResourceTypeCode();
-
         if ((resourceType == null || resourceType.isBlank()) && task.getAssignedUser() != null) {
-            resourceType = task.getAssignedUser().getResourceType() != null
-                    ? task.getAssignedUser().getResourceType().getCode()
-                    : null;
+            resourceType = task.getAssignedUser().getResourceType() != null ? task.getAssignedUser().getResourceType().getCode() : null;
         }
-
         if (resourceType != null && rateByResourceType.containsKey(resourceType)) {
             return rateByResourceType.get(resourceType);
         }
-
         return defaultRate;
     }
 
@@ -516,8 +416,9 @@ public class FinanceService {
                 ? financeEntryRepository.findAllByProjectIdOrderByWbsCodeAsc(projectId)
                 : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(projectId, organisationId);
 
+        // ✅ CORRIGÉ : Utilisation de .equals() pour comparer des Strings
         List<FinanceEntry> summaryRows = rows.stream()
-                .filter(r -> r.getRowType() == FinanceWbsRowType.SUMMARY)
+                .filter(r -> "SUMMARY".equals(r.getRowType()))
                 .sorted((a, b) -> Integer.compare(
                         b.getLevel() == null ? 0 : b.getLevel(),
                         a.getLevel() == null ? 0 : a.getLevel()
@@ -526,7 +427,6 @@ public class FinanceService {
 
         for (FinanceEntry summary : summaryRows) {
             String prefix = summary.getWbsCode() + ".";
-
             List<FinanceEntry> children = rows.stream()
                     .filter(r -> !Objects.equals(r.getId(), summary.getId()))
                     .filter(r -> r.getWbsCode() != null && r.getWbsCode().startsWith(prefix))
@@ -544,7 +444,6 @@ public class FinanceService {
             summary.setCommitment(commitment);
             summary.setActualCost(actualCost);
             summary.setForecast(forecast);
-
             financeEntryRepository.save(summary);
         }
     }

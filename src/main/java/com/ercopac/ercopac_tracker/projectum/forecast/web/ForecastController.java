@@ -22,7 +22,7 @@ public class ForecastController {
         "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FORECAST)";
 
     private static final String FORECAST_WRITE =
-            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FORECAST)";
+        "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FORECAST)";
 
     public ForecastController(ForecastService forecastService) {
         this.forecastService = forecastService;
@@ -30,22 +30,27 @@ public class ForecastController {
 
     @GetMapping
     @PreAuthorize(FORECAST_READ)
-    public ResponseEntity<List<ForecastRowDto>> getForecastGrid(@PathVariable Long projectId,
-                                                                @RequestParam(defaultValue = "12") int periods) {
-        return ResponseEntity.ok(forecastService.getForecastGrid(projectId, periods));
+    public ResponseEntity<List<ForecastRowDto>> getForecastGrid(
+            @PathVariable Long projectId,
+            @RequestParam(defaultValue = "12") int periods,
+            @RequestParam(defaultValue = "month") String periodType) { // ✅ AJOUTÉ
+        return ResponseEntity.ok(forecastService.getForecastGrid(projectId, periods, periodType));
     }
 
     @GetMapping("/summary")
     @PreAuthorize(FORECAST_READ)
-    public ResponseEntity<ForecastSummaryDto> getForecastSummary(@PathVariable Long projectId,
-                                                                 @RequestParam(defaultValue = "12") int periods) {
+    public ResponseEntity<ForecastSummaryDto> getForecastSummary(
+            @PathVariable Long projectId,
+            @RequestParam(defaultValue = "12") int periods) {
         return ResponseEntity.ok(forecastService.getSummary(projectId, periods));
     }
 
     @GetMapping("/periods")
     @PreAuthorize(FORECAST_READ)
-    public ResponseEntity<List<String>> getPeriods(@RequestParam(defaultValue = "12") int periods) {
-        return ResponseEntity.ok(forecastService.getPeriods(periods));
+    public ResponseEntity<List<String>> getPeriods(
+            @RequestParam(defaultValue = "12") int periods,
+            @RequestParam(defaultValue = "month") String periodType) { // ✅ AJOUTÉ
+        return ResponseEntity.ok(forecastService.getPeriods(periods, periodType));
     }
 
     @PutMapping
@@ -53,6 +58,16 @@ public class ForecastController {
     public ResponseEntity<Void> upsertForecast(@PathVariable Long projectId,
                                                @Valid @RequestBody UpsertForecastEntryRequest request) {
         forecastService.upsertForecast(projectId, request);
+        return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/level")
+    @PreAuthorize(FORECAST_WRITE)
+    public ResponseEntity<Void> updateWbsLevel(@PathVariable Long projectId,
+                                               @RequestBody Map<String, Object> request) {
+        Long financeEntryId = ((Number) request.get("financeEntryId")).longValue();
+        Integer level = ((Number) request.get("level")).intValue();
+        forecastService.updateWbsLevel(financeEntryId, level);
         return ResponseEntity.ok().build();
     }
 }

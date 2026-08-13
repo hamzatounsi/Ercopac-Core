@@ -5,76 +5,56 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ForecastRowDto {
+    private Long financeEntryId;
     private String wbsCode;
     private String description;
     private Integer level;
+    private String rowType;
     private BigDecimal budget;
     private BigDecimal actualCost;
     private BigDecimal totalForecast;
+    
+    // ✅ Proper fields for the calculation (No TODOs!)
+    private String resourceTypeCode;
+    private BigDecimal remainingHours;
+    private BigDecimal remainingCost;
+    
     private List<ForecastGridCellDto> periods = new ArrayList<>();
-    private String rowType; 
-    public ForecastRowDto() {
-    }
 
-    public String getWbsCode() {
-        return wbsCode;
-    }
+    // --- Getters and Setters ---
+    public Long getFinanceEntryId() { return financeEntryId; }
+    public void setFinanceEntryId(Long financeEntryId) { this.financeEntryId = financeEntryId; }
 
-    public void setWbsCode(String wbsCode) {
-        this.wbsCode = wbsCode;
-    }
-    public String getRowType() {
-        return rowType;
-    }
+    public String getWbsCode() { return wbsCode; }
+    public void setWbsCode(String wbsCode) { this.wbsCode = wbsCode; }
 
-    public void setRowType(String rowType) {
-        this.rowType = rowType;
-    }
-    public String getDescription() {
-        return description;
-    }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
 
-    public void setDescription(String description) {
-        this.description = description;
-    }
+    public Integer getLevel() { return level; }
+    public void setLevel(Integer level) { this.level = level; }
 
-    public Integer getLevel() {
-        return level;
-    }
+    public String getRowType() { return rowType; }
+    public void setRowType(String rowType) { this.rowType = rowType; }
 
-    public void setLevel(Integer level) {
-        this.level = level;
-    }
+    public BigDecimal getBudget() { return budget; }
+    public void setBudget(BigDecimal budget) { this.budget = budget; }
 
-    public BigDecimal getBudget() {
-        return budget;
-    }
+    public BigDecimal getActualCost() { return actualCost; }
+    public void setActualCost(BigDecimal actualCost) { this.actualCost = actualCost; }
 
-    public void setBudget(BigDecimal budget) {
-        this.budget = budget;
-    }
+    public BigDecimal getTotalForecast() { return totalForecast; }
+    public void setTotalForecast(BigDecimal totalForecast) { this.totalForecast = totalForecast; }
 
-    public BigDecimal getActualCost() {
-        return actualCost;
-    }
+    public String getResourceTypeCode() { return resourceTypeCode; }
+    public void setResourceTypeCode(String resourceTypeCode) { this.resourceTypeCode = resourceTypeCode; }
 
-    public void setActualCost(BigDecimal actualCost) {
-        this.actualCost = actualCost;
-    }
+    public BigDecimal getRemainingHours() { return remainingHours; }
+    public void setRemainingHours(BigDecimal remainingHours) { this.remainingHours = remainingHours; }
 
-    public BigDecimal getTotalForecast() {
-        return totalForecast;
-    }
+    public BigDecimal getRemainingCost() { return remainingCost; }
+    public void setRemainingCost(BigDecimal remainingCost) { this.remainingCost = remainingCost; }
 
-    public void setTotalForecast(BigDecimal totalForecast) {
-        this.totalForecast = totalForecast;
-    }
-
-    public List<ForecastGridCellDto> getPeriods() {
-        return periods;
-    }
-
-    public void setPeriods(List<ForecastGridCellDto> periods) {
-        this.periods = periods;
-    }
+    public List<ForecastGridCellDto> getPeriods() { return periods; }
+    public void setPeriods(List<ForecastGridCellDto> periods) { this.periods = periods; }
 }
