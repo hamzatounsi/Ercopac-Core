@@ -11,6 +11,10 @@ import com.ercopac.ercopac_tracker.projectum.forecast.repository.ForecastEntryRe
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
+import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
+import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
+import com.ercopac.ercopac_tracker.user.ResourceType;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,15 +30,21 @@ public class ForecastService {
     private final ForecastEntryRepository forecastEntryRepository;
     private final FinanceEntryRepository financeEntryRepository;
     private final ProjectRepository projectRepository;
+    private final ProjectTaskRepository projectTaskRepository;
+    private final ResourceTypeRepository resourceTypeRepository;
     private final SecurityUtils securityUtils;
 
     public ForecastService(ForecastEntryRepository forecastEntryRepository,
                            FinanceEntryRepository financeEntryRepository,
                            ProjectRepository projectRepository,
+                           ProjectTaskRepository projectTaskRepository,
+                           ResourceTypeRepository resourceTypeRepository,
                            SecurityUtils securityUtils) {
         this.forecastEntryRepository = forecastEntryRepository;
         this.financeEntryRepository = financeEntryRepository;
         this.projectRepository = projectRepository;
+        this.projectTaskRepository = projectTaskRepository;
+        this.resourceTypeRepository = resourceTypeRepository;
         this.securityUtils = securityUtils;
     }
 
@@ -57,18 +67,50 @@ public class ForecastService {
                     .put(entry.getPeriodKey(), nvl(entry.getAmount()));
         }
 
+        // ✅ 1. Load Schedule Tasks
+        List<ProjectTask> tasks = projectTaskRepository.findByProjectIdOrderByDisplayOrderAsc(projectId);
+        Map<String, ProjectTask> tasksByWbs = tasks.stream()
+            .filter(t -> t.getWbsCode() != null)
+            .collect(Collectors.toMap(ProjectTask::getWbsCode, t -> t, (a, b) -> a));
+
+        // ✅ 2. Load Resource Types to get Default Rates
+        List<ResourceType> resourceTypes = resourceTypeRepository.findByOrganisation_IdAndActiveTrue(orgId);
+        Map<String, BigDecimal> ratesByCode = resourceTypes.stream()
+            .filter(rt -> rt.getCode() != null && rt.getDefaultRate() != null)
+            .collect(Collectors.toMap(ResourceType::getCode, ResourceType::getDefaultRate, (a, b) -> a));
+
         List<String> periodKeys = buildPeriods(periods);
         List<ForecastRowDto> result = new ArrayList<>();
 
         for (FinanceEntry row : financeRows) {
             ForecastRowDto dto = new ForecastRowDto();
+            dto.setFinanceEntryId(row.getId());
             dto.setWbsCode(row.getWbsCode());
             dto.setDescription(row.getDescription());
-            dto.setLevel(row.getLevel());
+            dto.setLevel(row.getLevel() != null ? row.getLevel() : 1);
             dto.setBudget(nvl(row.getBudget()));
-            dto.setRowType(row.getRowType() != null ? row.getRowType().name() : "COST");
+            
+            // ✅ CORRIGÉ : row.getRowType() est déjà une String, pas besoin de .name()
+            dto.setRowType(row.getRowType() != null ? row.getRowType() : "COST");
             
             dto.setActualCost(nvl(row.getActualCost()));
+            
+            // ✅ 3. Get Resource Type Code
+            String resTypeCode = row.getResourceTypeCode();
+            dto.setResourceTypeCode(resTypeCode);
+
+            // ✅ 4. Calculate Remaining Hours from Schedule (Planned - Actual)
+            BigDecimal remainingHours = BigDecimal.ZERO;
+            ProjectTask task = tasksByWbs.get(row.getWbsCode());
+            if (task != null && task.getPlannedHours() != null) {
+                BigDecimal actual = task.getActualHours() != null ? task.getActualHours() : BigDecimal.ZERO;
+                remainingHours = task.getPlannedHours().subtract(actual).max(BigDecimal.ZERO);
+            }
+            dto.setRemainingHours(remainingHours);
+
+            // ✅ 5. Calculate Remaining Cost = Remaining Hours × Resource Type Rate
+            BigDecimal rate = ratesByCode.getOrDefault(resTypeCode, BigDecimal.ZERO);
+            dto.setRemainingCost(remainingHours.multiply(rate));
 
             Map<String, BigDecimal> rowMap = fcMap.getOrDefault(row.getWbsCode(), Collections.emptyMap());
             BigDecimal totalFc = BigDecimal.ZERO;
@@ -86,6 +128,13 @@ public class ForecastService {
         }
 
         return result;
+    }
+
+    public void updateWbsLevel(Long financeEntryId, Integer level) {
+        FinanceEntry entry = financeEntryRepository.findById(financeEntryId)
+            .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
+        entry.setLevel(level);
+        financeEntryRepository.save(entry);
     }
 
     @Transactional(readOnly = true)

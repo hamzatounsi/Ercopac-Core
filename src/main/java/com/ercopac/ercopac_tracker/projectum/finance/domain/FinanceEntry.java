@@ -2,9 +2,6 @@ package com.ercopac.ercopac_tracker.projectum.finance.domain;
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
-import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceWbsRowType;
-import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
-import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 
@@ -16,13 +13,6 @@ public class FinanceEntry {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "owner_name")
-    private String ownerName;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_id")
-    private AppUser owner;
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "organisation_id", nullable = false)
     private Organisation organisation;
@@ -31,217 +21,97 @@ public class FinanceEntry {
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_task_id")
-    private ProjectTask projectTask;
-
-    @Column(nullable = false, length = 100)
+    @Column(name = "wbs_code", nullable = false, length = 100)
     private String wbsCode;
 
-    @Column(nullable = false, length = 255)
-    private String description;
+    @Column(name = "resource_type_code", length = 40)
+    private String resourceTypeCode;
 
-    @Column(nullable = false)
+    @Column(name = "level")
     private Integer level;
 
-    @Column(precision = 18, scale = 2)
+    @Column(name = "description", length = 1000)
+    private String description;
+
+    @Column(name = "row_type", length = 30)
+    private String rowType;
+
+    @Column(name = "sales", precision = 18, scale = 2)
     private BigDecimal sales = BigDecimal.ZERO;
 
-    @Column(precision = 18, scale = 2)
+    @Column(name = "budget", precision = 18, scale = 2)
     private BigDecimal budget = BigDecimal.ZERO;
 
-    @Column(precision = 18, scale = 2)
+    @Column(name = "cost_reserve", precision = 18, scale = 2)
+    private BigDecimal costReserve = BigDecimal.ZERO;
+
+    @Column(name = "updated_budget", precision = 18, scale = 2)
+    private BigDecimal updatedBudget = BigDecimal.ZERO;
+
+    @Column(name = "commitment", precision = 18, scale = 2)
     private BigDecimal commitment = BigDecimal.ZERO;
 
     @Column(name = "actual_cost", precision = 18, scale = 2)
     private BigDecimal actualCost = BigDecimal.ZERO;
 
-    @Column(precision = 18, scale = 2)
+    @Column(name = "forecast", precision = 18, scale = 2)
     private BigDecimal forecast = BigDecimal.ZERO;
 
-    // ✅ NEW: Cost Reserve (CR) from ERP
-    @Column(name = "cost_reserve", precision = 18, scale = 2)
-    private BigDecimal costReserve = BigDecimal.ZERO;
+    @Column(name = "owner_name", length = 150)
+    private String ownerName;
 
-    // ✅ NEW: Updated Budget from ERP
-    @Column(name = "updated_budget", precision = 18, scale = 2)
-    private BigDecimal updatedBudget = BigDecimal.ZERO;
-
-    @Column(name = "owner_key", length = 100)
-    private String ownerKey;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "row_type", length = 20)
-    private FinanceWbsRowType rowType;
-
-    @Column(name = "hour_rate", precision = 18, scale = 2)
+    @Column(name = "hour_rate", precision = 10, scale = 2)
     private BigDecimal hourRate;
 
-    @Column(name = "is_summary", nullable = false)
-    private Boolean isSummary = false;
+    // --- Getters and Setters ---
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-    // Constructors
-    public FinanceEntry() {
-    }
+    public Organisation getOrganisation() { return organisation; }
+    public void setOrganisation(Organisation organisation) { this.organisation = organisation; }
 
-    // Getters and Setters
-    public Long getId() {
-        return id;
-    }
+    public Project getProject() { return project; }
+    public void setProject(Project project) { this.project = project; }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public String getWbsCode() { return wbsCode; }
+    public void setWbsCode(String wbsCode) { this.wbsCode = wbsCode; }
 
-    public String getOwnerName() {
-        return ownerName;
-    }
+    public String getResourceTypeCode() { return resourceTypeCode; }
+    public void setResourceTypeCode(String resourceTypeCode) { this.resourceTypeCode = resourceTypeCode; }
 
-    public void setOwnerName(String ownerName) {
-        this.ownerName = ownerName;
-    }
+    public Integer getLevel() { return level; }
+    public void setLevel(Integer level) { this.level = level; }
 
-    public AppUser getOwner() {
-        return owner;
-    }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
 
-    public void setOwner(AppUser owner) {
-        this.owner = owner;
-    }
+    public String getRowType() { return rowType; }
+    public void setRowType(String rowType) { this.rowType = rowType; }
 
-    public Organisation getOrganisation() {
-        return organisation;
-    }
+    public BigDecimal getSales() { return sales; }
+    public void setSales(BigDecimal sales) { this.sales = sales; }
 
-    public void setOrganisation(Organisation organisation) {
-        this.organisation = organisation;
-    }
+    public BigDecimal getBudget() { return budget; }
+    public void setBudget(BigDecimal budget) { this.budget = budget; }
 
-    public Project getProject() {
-        return project;
-    }
+    public BigDecimal getCostReserve() { return costReserve; }
+    public void setCostReserve(BigDecimal costReserve) { this.costReserve = costReserve; }
 
-    public void setProject(Project project) {
-        this.project = project;
-    }
+    public BigDecimal getUpdatedBudget() { return updatedBudget; }
+    public void setUpdatedBudget(BigDecimal updatedBudget) { this.updatedBudget = updatedBudget; }
 
-    public ProjectTask getProjectTask() {
-        return projectTask;
-    }
+    public BigDecimal getCommitment() { return commitment; }
+    public void setCommitment(BigDecimal commitment) { this.commitment = commitment; }
 
-    public void setProjectTask(ProjectTask projectTask) {
-        this.projectTask = projectTask;
-    }
+    public BigDecimal getActualCost() { return actualCost; }
+    public void setActualCost(BigDecimal actualCost) { this.actualCost = actualCost; }
 
-    public String getWbsCode() {
-        return wbsCode;
-    }
+    public BigDecimal getForecast() { return forecast; }
+    public void setForecast(BigDecimal forecast) { this.forecast = forecast; }
 
-    public void setWbsCode(String wbsCode) {
-        this.wbsCode = wbsCode;
-    }
+    public String getOwnerName() { return ownerName; }
+    public void setOwnerName(String ownerName) { this.ownerName = ownerName; }
 
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public Integer getLevel() {
-        return level;
-    }
-
-    public void setLevel(Integer level) {
-        this.level = level;
-    }
-
-    public BigDecimal getSales() {
-        return sales;
-    }
-
-    public void setSales(BigDecimal sales) {
-        this.sales = sales;
-    }
-
-    public BigDecimal getBudget() {
-        return budget;
-    }
-
-    public void setBudget(BigDecimal budget) {
-        this.budget = budget;
-    }
-
-    public BigDecimal getCommitment() {
-        return commitment;
-    }
-
-    public void setCommitment(BigDecimal commitment) {
-        this.commitment = commitment;
-    }
-
-    public BigDecimal getActualCost() {
-        return actualCost;
-    }
-
-    public void setActualCost(BigDecimal actualCost) {
-        this.actualCost = actualCost;
-    }
-
-    public BigDecimal getForecast() {
-        return forecast;
-    }
-
-    public void setForecast(BigDecimal forecast) {
-        this.forecast = forecast;
-    }
-
-    public BigDecimal getCostReserve() {
-        return costReserve;
-    }
-
-    public void setCostReserve(BigDecimal costReserve) {
-        this.costReserve = costReserve;
-    }
-
-    public BigDecimal getUpdatedBudget() {
-        return updatedBudget;
-    }
-
-    public void setUpdatedBudget(BigDecimal updatedBudget) {
-        this.updatedBudget = updatedBudget;
-    }
-
-    public String getOwnerKey() {
-        return ownerKey;
-    }
-
-    public void setOwnerKey(String ownerKey) {
-        this.ownerKey = ownerKey;
-    }
-
-    public FinanceWbsRowType getRowType() {
-        return rowType;
-    }
-
-    public void setRowType(FinanceWbsRowType rowType) {
-        this.rowType = rowType;
-    }
-
-    public BigDecimal getHourRate() {
-        return hourRate;
-    }
-
-    public void setHourRate(BigDecimal hourRate) {
-        this.hourRate = hourRate;
-    }
-
-    public Boolean getIsSummary() {
-        return isSummary;
-    }
-
-    public void setIsSummary(Boolean isSummary) {
-        this.isSummary = isSummary;
-    }
+    public BigDecimal getHourRate() { return hourRate; }
+    public void setHourRate(BigDecimal hourRate) { this.hourRate = hourRate; }
 }
