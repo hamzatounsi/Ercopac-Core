@@ -439,7 +439,6 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
                     FinanceEntry entry = new FinanceEntry();
                     entry.setOrganisation(project.getOrganisation());
                     entry.setProject(project);
-                    entry.setOwner(manager);
                     entry.setOwnerName(manager.getFullName());
                     entry.setWbsCode("2.2");
                     entry.setDescription("Implementation work package");
@@ -451,7 +450,6 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
                     entry.setForecast(new BigDecimal("220000"));
                     entry.setCostReserve(new BigDecimal("15000"));
                     entry.setUpdatedBudget(new BigDecimal("195000"));
-                    entry.setIsSummary(false);
                     return financeEntries.save(entry);
                 });
         String period = LocalDate.now().plusMonths(1).toString().substring(0, 7);
