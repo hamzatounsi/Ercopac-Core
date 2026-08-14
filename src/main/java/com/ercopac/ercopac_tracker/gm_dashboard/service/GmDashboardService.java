@@ -4,9 +4,8 @@ import com.ercopac.ercopac_tracker.gm_dashboard.dto.ProjectDashboardRowDto;
 import com.ercopac.ercopac_tracker.kpi.domain.HealthStatus;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.domain.ProjectApplicationType;
-import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
+import com.ercopac.ercopac_tracker.projects.service.ProjectAccessService;
 import com.ercopac.ercopac_tracker.projects.service.ProjectProgressService;
-import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,16 +15,13 @@ import java.util.List;
 @Service
 public class GmDashboardService {
 
-    private final ProjectRepository projectRepository;
+    private final ProjectAccessService projectAccessService;
     private final ProjectProgressService projectProgressService;
-    private final SecurityUtils securityUtils;
 
-    public GmDashboardService(ProjectRepository projectRepository,
-                              ProjectProgressService projectProgressService,
-                              SecurityUtils securityUtils) {
-        this.projectRepository = projectRepository;
+    public GmDashboardService(ProjectAccessService projectAccessService,
+                              ProjectProgressService projectProgressService) {
+        this.projectAccessService = projectAccessService;
         this.projectProgressService = projectProgressService;
-        this.securityUtils = securityUtils;
     }
 
     @Transactional(readOnly = true)
@@ -42,6 +38,7 @@ public class GmDashboardService {
                     dto.setName(p.getName());
                     dto.setShortName(p.getShortName());
                     dto.setCustomer(p.getCustomer());
+                    dto.setCustomerId(p.getCustomerId());
                     dto.setCategory(p.getCategory());
                     dto.setCountry(p.getCountry());
                     dto.setPortfolio(p.getPortfolio());
@@ -66,22 +63,7 @@ public class GmDashboardService {
                 .toList();
     }
     private List<Project> getAccessibleProjects(ProjectApplicationType applicationType) {
-        if (securityUtils.isPlatformUser()) {
-            return projectRepository.findAll()
-                    .stream()
-                    .filter(p -> p.getApplicationType() == applicationType)
-                    .toList();
-        }
-
-        Long organisationId = securityUtils.getCurrentOrganisationId();
-        if (organisationId == null) {
-            throw new IllegalStateException("No organisation context found for current user.");
-        }
-
-        return projectRepository.findAllByOrganisationIdAndApplicationType(
-                organisationId,
-                applicationType
-        );
+        return projectAccessService.getAccessibleProjects(applicationType);
     }
 
     private HealthStatus computeTimeHealth(LocalDate plannedEnd, LocalDate today) {

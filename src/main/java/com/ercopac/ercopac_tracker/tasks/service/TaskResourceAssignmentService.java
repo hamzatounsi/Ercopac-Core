@@ -16,10 +16,12 @@ import com.ercopac.ercopac_tracker.user.UserRepository;
 import com.ercopac.ercopac_tracker.user.domain.Supplier;
 import com.ercopac.ercopac_tracker.user.repository.SupplierRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@Transactional
 public class TaskResourceAssignmentService {
 
     private final TaskResourceAssignmentRepository repository;
@@ -124,7 +126,8 @@ public class TaskResourceAssignmentService {
                 .map(supplier -> new SupplierOptionDto(
                         supplier.getId(),
                         supplier.getCode() == null ? supplier.getShortCode() : supplier.getCode(),
-                        supplier.getName()))
+                        supplier.getName(),
+                        supplier.getResourceTypes().stream().map(resourceType -> resourceType.getCode()).toList()))
                 .toList();
     }
 
@@ -153,6 +156,13 @@ public class TaskResourceAssignmentService {
         }
 
         if (dto.getSupplierId() != null) {
+            if (dto.getResourceType() == null || dto.getResourceType().isBlank()) {
+                throw new IllegalArgumentException("Resource type is required for supplier assignments.");
+            }
+            var resourceType = resourceTypeRepository.findByCodeAndOrganisation_Id(
+                            dto.getResourceType(), project.getOrganisation().getId())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Resource type not found in project organisation"));
             Supplier supplier = supplierRepository.findByIdAndOrganisation_Id(
                             dto.getSupplierId(), project.getOrganisation().getId())
                     .orElseThrow(() -> new IllegalArgumentException(
@@ -161,19 +171,20 @@ public class TaskResourceAssignmentService {
             if (!supplier.isActive() && changingSupplier) {
                 throw new IllegalArgumentException("Inactive suppliers cannot be assigned to a task.");
             }
+            if (supplier.getResourceTypes().stream().noneMatch(linked -> linked.getId().equals(resourceType.getId()))) {
+                throw new IllegalArgumentException("Supplier is not linked to the selected resource type.");
+            }
             entity.setSupplierId(supplier.getId());
+            entity.setResourceType(resourceType.getCode());
             if (dto.getAssignmentName() == null || dto.getAssignmentName().isBlank()) {
                 entity.setAssignmentName(supplier.getName());
-            }
-            if (dto.getResourceType() == null || dto.getResourceType().isBlank()) {
-                entity.setResourceType("SUPPLIER");
             }
         } else {
             entity.setSupplierId(null);
         }
 
         if (dto.getResourceType() != null && !dto.getResourceType().isBlank()
-                && !"SUPPLIER".equalsIgnoreCase(dto.getResourceType())) {
+                && dto.getSupplierId() == null) {
             resourceTypeRepository.findByCodeAndOrganisation_Id(dto.getResourceType(), project.getOrganisation().getId())
                     .orElseThrow(() -> new IllegalArgumentException("Resource type not found in project organisation"));
         }

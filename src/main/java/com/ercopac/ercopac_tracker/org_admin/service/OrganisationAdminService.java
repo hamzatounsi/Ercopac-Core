@@ -429,7 +429,7 @@ public class OrganisationAdminService {
 
         Supplier supplier = new Supplier();
         supplier.setOrganisation(organisation);
-        applySupplier(supplier, request, code);
+        applySupplier(supplier, request, code, organisation.getId());
         return toSupplierSummary(supplierRepository.save(supplier));
     }
 
@@ -442,7 +442,7 @@ public class OrganisationAdminService {
             throw conflict("Supplier code already exists.");
         }
 
-        applySupplier(supplier, request, code);
+        applySupplier(supplier, request, code, organisationId);
         return toSupplierSummary(supplierRepository.save(supplier));
     }
 
@@ -766,7 +766,8 @@ public class OrganisationAdminService {
     private void applySupplier(
             Supplier supplier,
             OrgAdminDtos.SaveSupplierRequest request,
-            String code
+            String code,
+            Long organisationId
     ) {
         supplier.setName(normalize(request.name()));
         supplier.setCode(code);
@@ -779,6 +780,20 @@ public class OrganisationAdminService {
         supplier.setPhone(normalize(request.phone()));
         supplier.setAddress(normalize(request.address()));
         supplier.setNotes(normalize(request.notes()));
+        Set<Long> requestedIds = request.resourceTypeIds() == null
+                ? Set.of()
+                : request.resourceTypeIds().stream().filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+        List<ResourceType> resourceTypes = requestedIds.isEmpty()
+                ? List.of()
+                : resourceTypeRepository.findAllById(requestedIds).stream()
+                        .filter(resourceType -> resourceType.getOrganisation() != null
+                                && organisationId.equals(resourceType.getOrganisation().getId()))
+                        .toList();
+        if (resourceTypes.size() != requestedIds.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Every resource type must belong to the supplier organisation.");
+        }
+        supplier.setResourceTypes(new java.util.LinkedHashSet<>(resourceTypes));
         supplier.setActive(Boolean.TRUE.equals(request.active()));
     }
 
@@ -792,6 +807,10 @@ public class OrganisationAdminService {
                 supplier.getPhone(),
                 supplier.getAddress(),
                 supplier.getNotes(),
+                supplier.getResourceTypes().stream()
+                        .map(resourceType -> new OrgAdminDtos.SupplierResourceTypeSummary(
+                                resourceType.getId(), resourceType.getCode(), resourceType.getLabel()))
+                        .toList(),
                 supplier.isActive(),
                 supplier.getCreatedAt(),
                 supplier.getUpdatedAt()

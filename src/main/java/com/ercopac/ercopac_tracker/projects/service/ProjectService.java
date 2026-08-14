@@ -13,6 +13,8 @@ import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.admin.repository.ProjectCategoryRepository;
 import com.ercopac.ercopac_tracker.admin.domain.ProjectCategory;
+import com.ercopac.ercopac_tracker.admin.domain.Customer;
+import com.ercopac.ercopac_tracker.admin.repository.CustomerRepository;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
@@ -29,17 +31,23 @@ public class ProjectService {
     private final SecurityUtils securityUtils;
     private final ProjectCategoryRepository categoryRepository;
     private final UserRepository userRepository;
+    private final CustomerRepository customerRepository;
+    private final ProjectAccessService projectAccessService;
 
     public ProjectService(ProjectRepository projectRepository,
                           ProjectPlanningRepository projectPlanningRepository,
                           SecurityUtils securityUtils,
                           ProjectCategoryRepository categoryRepository,
-                          UserRepository userRepository) {
+                          UserRepository userRepository,
+                          CustomerRepository customerRepository,
+                          ProjectAccessService projectAccessService) {
         this.projectRepository = projectRepository;
         this.projectPlanningRepository = projectPlanningRepository;
         this.securityUtils = securityUtils;
         this.categoryRepository = categoryRepository;
         this.userRepository = userRepository;
+        this.customerRepository = customerRepository;
+        this.projectAccessService = projectAccessService;
     }
 
     public ProjectFormOptionsResponse getFormOptions() {
@@ -48,6 +56,10 @@ public class ProjectService {
                 categoryRepository.findByOrganisation_IdOrderByNameAsc(organisationId).stream()
                         .filter(ProjectCategory::isActive)
                         .map(category -> new ProjectFormOptionsResponse.CategoryOption(category.getId(), category.getName())).toList(),
+                customerRepository.findByOrganisation_IdOrderByNameAsc(organisationId).stream()
+                        .filter(Customer::isActive)
+                        .map(customer -> new ProjectFormOptionsResponse.CustomerOption(
+                                customer.getId(), customer.getCustomerCode(), customer.getName())).toList(),
                 usersForRole(organisationId, Role.PROJECT_MANAGER),
                 usersForRole(organisationId, Role.SALES_MANAGER)
         );
@@ -73,6 +85,8 @@ public class ProjectService {
         response.setProjectBudget(project.getProjectBudget());
         response.setTotalProjectBudget(project.getTotalProjectBudget());
         response.setProjectManagerId(project.getProjectManagerId());
+        response.setCustomer(project.getCustomer());
+        response.setCustomerId(project.getCustomerId());
         response.setComment(project.getComment());
 
         if (planningOpt.isPresent()) {
@@ -89,15 +103,7 @@ public class ProjectService {
     }
 
     private Project getAccessibleProjectById(Long projectId) {
-        if (securityUtils.isPlatformUser()) {
-            return projectRepository.findById(projectId)
-                    .orElseThrow(() -> new IllegalArgumentException("Project not found"));
-        }
-
-        Long orgId = requireCurrentOrganisationId();
-
-        return projectRepository.findByIdAndOrganisationId(projectId, orgId)
-                .orElseThrow(() -> new IllegalArgumentException("Project not accessible"));
+        return projectAccessService.getAccessibleProject(projectId);
     }
 
     private Long requireCurrentOrganisationId() {
@@ -152,7 +158,12 @@ public class ProjectService {
         project.setCode(request.getCode());
         project.setName(request.getName());
         project.setShortName(request.getShortName());
-        project.setCustomer(request.getCustomer());
+        Customer customer = request.getCustomerId() == null ? null : customerRepository
+                .findByIdAndOrganisation_Id(request.getCustomerId(), organisationId)
+                .filter(Customer::isActive)
+                .orElseThrow(() -> new IllegalArgumentException("Customer is not available for this organisation"));
+        project.setCustomerEntity(customer);
+        project.setCustomer(customer == null ? null : customer.getName());
         if (request.getCategoryId() == null) throw new IllegalArgumentException("Category is required");
         ProjectCategory category = categoryRepository.findByIdAndOrganisation_Id(request.getCategoryId(), organisationId)
                 .filter(ProjectCategory::isActive)
@@ -178,8 +189,11 @@ public class ProjectService {
     }
 
     private void applyOwnership(Project project, UpsertProjectRequest request, Long organisationId) {
-        if (request.getProjectManagerId() != null) {
-            AppUser user = eligibleUser(request.getProjectManagerId(), organisationId, Role.PROJECT_MANAGER);
+        Long projectManagerId = securityUtils.hasAnyRole("PROJECT_MANAGER")
+                ? securityUtils.getCurrentUserId()
+                : request.getProjectManagerId();
+        if (projectManagerId != null) {
+            AppUser user = eligibleUser(projectManagerId, organisationId, Role.PROJECT_MANAGER);
             project.setProjectManagerId(user.getId());
             project.setProjectManagerName(user.getFullName());
         } else { project.setProjectManagerId(null); project.setProjectManagerName(null); }
@@ -213,6 +227,7 @@ public class ProjectService {
         dto.setName(p.getName());
         dto.setShortName(p.getShortName());
         dto.setCustomer(p.getCustomer());
+        dto.setCustomerId(p.getCustomerId());
         dto.setCategory(p.getCategory());
         dto.setCountry(p.getCountry());
         dto.setProjectType(p.getProjectType());

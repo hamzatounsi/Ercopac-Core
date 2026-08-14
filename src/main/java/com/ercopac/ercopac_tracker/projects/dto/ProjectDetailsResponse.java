@@ -28,6 +28,7 @@ public class ProjectDetailsResponse {
     private String subcontractors;
     private String comment;
     private String customer;
+    private Long customerId;
     private String category;
     private String riskLevel;
     private BigDecimal estimatedCost;
@@ -43,6 +44,10 @@ public class ProjectDetailsResponse {
     public void setCustomer(String customer) {
         this.customer = customer;
     }
+
+    public Long getCustomerId() { return customerId; }
+
+    public void setCustomerId(Long customerId) { this.customerId = customerId; }
 
     public String getCategory() {
         return category;
