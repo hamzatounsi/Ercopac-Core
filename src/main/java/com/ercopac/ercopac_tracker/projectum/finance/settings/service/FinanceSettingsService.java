@@ -18,6 +18,7 @@ import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -56,7 +57,7 @@ public class FinanceSettingsService {
     }
 
     @Transactional(readOnly = true)
-    public FinanceSettingsDto getSettings() {
+    public FinanceSettingsDto getSettings(Long projectId) {
         Long orgId = requireOrganisationId();
 
         FinanceSettings settings = financeSettingsRepository.findByOrganisationId(orgId)
@@ -69,19 +70,22 @@ public class FinanceSettingsService {
         FinanceSettingsDto dto = new FinanceSettingsDto();
         dto.setDefaultHourlyRate(settings.getDefaultHourlyRate());
 
-        dto.setTemplateRows(
-                templateRowRepository.findAllByOrganisationIdOrderBySortOrderAscIdAsc(orgId)
-                        .stream()
-                        .map(this::toDto)
-                        .toList()
-        );
+        List<FinanceWbsTemplateRow> rows;
+        if (projectId != null) {
+            rows = templateRowRepository.findAllByProjectIdOrderBySortOrderAscIdAsc(projectId);
+            // Fallback sur le global si le projet n'a pas encore de template
+            if (rows.isEmpty()) {
+                rows = templateRowRepository.findAllByOrganisationIdAndProjectIsNullOrderBySortOrderAscIdAsc(orgId);
+            }
+        } else {
+            rows = templateRowRepository.findAllByOrganisationIdAndProjectIsNullOrderBySortOrderAscIdAsc(orgId);
+        }
 
-        // ✅ SUPPRIMÉ : Owner Mappings et Hourly Rates ne sont plus gérés ici
-
+        dto.setTemplateRows(rows.stream().map(this::toDto).toList());
         return dto;
     }
 
-    public FinanceSettingsDto saveSettings(SaveFinanceSettingsRequest request) {
+    public FinanceSettingsDto saveSettings(Long projectId, SaveFinanceSettingsRequest request) {
         Long orgId = requireOrganisationId();
         Organisation organisation = organisationRepository.findById(orgId)
                 .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
@@ -96,12 +100,19 @@ public class FinanceSettingsService {
         settings.setDefaultHourlyRate(nvl(request.getDefaultHourlyRate(), BigDecimal.valueOf(65)));
         financeSettingsRepository.save(settings);
 
-        templateRowRepository.deleteAllByOrganisationId(orgId);
-        // ✅ SUPPRIMÉ : Suppression des anciens mappings et taux
+        Project project = null;
+        if (projectId != null) {
+            project = projectRepository.findById(projectId)
+                    .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+            templateRowRepository.deleteAllByProjectId(projectId);
+        } else {
+            templateRowRepository.deleteAllByOrganisationId(orgId);
+        }
 
         for (FinanceWbsTemplateRowDto dto : request.getTemplateRows()) {
             FinanceWbsTemplateRow row = new FinanceWbsTemplateRow();
             row.setOrganisation(organisation);
+            row.setProject(project); // ✅ Lien avec le projet
             row.setSortOrder(dto.getSortOrder() == null ? 0 : dto.getSortOrder());
             row.setLevel(dto.getLevel());
             row.setCodeTemplate(dto.getCodeTemplate());
@@ -114,7 +125,6 @@ public class FinanceSettingsService {
                 row.setDepartment(dept);
             }
             
-            // ✅ NOUVEAU : Lier le Resource Type à la ligne WBS pour le calcul du Forecast
             row.setResourceType(blankToNull(dto.getResourceType()));
             
             if (dto.getOwnerId() != null) {
@@ -139,84 +149,77 @@ public class FinanceSettingsService {
             templateRowRepository.save(row);
         }
 
-        return getSettings();
+        return getSettings(projectId);
     }
 
     @Transactional
-    public ApplyFinanceTemplateResultDto applyTemplate(ApplyFinanceTemplateRequest request) {
+    public ApplyFinanceTemplateResultDto applyTemplate(Long projectId, ApplyFinanceTemplateRequest request) {
         Long orgId = requireOrganisationId();
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found"));
 
-        List<Project> projects;
-        if (request.getProjectIds() == null || request.getProjectIds().isEmpty()) {
-            projects = projectRepository.findAllByOrganisationId(orgId);
-        } else {
-            Set<Long> requestedIds = new HashSet<>(request.getProjectIds());
-            projects = projectRepository.findAllById(requestedIds).stream()
-                    .filter(p -> p.getOrganisation() != null && Objects.equals(p.getOrganisation().getId(), orgId))
-                    .toList();
+        // ✅ Utiliser le template spécifique au projet
+        List<FinanceWbsTemplateRow> templateRows = templateRowRepository.findAllByProjectIdOrderBySortOrderAscIdAsc(projectId);
+        
+        // Fallback sur le global si vide
+        if (templateRows.isEmpty()) {
+            templateRows = templateRowRepository.findAllByOrganisationIdAndProjectIsNullOrderBySortOrderAscIdAsc(orgId);
         }
-
-        List<FinanceWbsTemplateRow> templateRows =
-                templateRowRepository.findAllByOrganisationIdOrderBySortOrderAscIdAsc(orgId);
 
         if (templateRows.isEmpty()) {
-            throw new IllegalArgumentException("No finance WBS template configured");
+            throw new IllegalArgumentException("No finance WBS template configured for this project or globally.");
         }
 
+        List<FinanceEntry> existingRows = financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(projectId, orgId);
+        Map<String, FinanceEntry> existingByWbs = existingRows.stream()
+                .collect(Collectors.toMap(FinanceEntry::getWbsCode, e -> e, (a, b) -> a));
+
         int generatedRows = 0;
+        for (FinanceWbsTemplateRow template : templateRows) {
+            String finalWbsCode = buildFinalWbsCode(template.getCodeTemplate(), project.getCode());
 
-        for (Project project : projects) {
-            List<FinanceEntry> existingRows =
-                    financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(project.getId(), orgId);
+            FinanceEntry entry = existingByWbs.get(finalWbsCode);
+            boolean isNew = false;
 
-            Map<String, FinanceEntry> existingByWbs = existingRows.stream()
-                    .collect(Collectors.toMap(FinanceEntry::getWbsCode, e -> e, (a, b) -> a));
-
-            for (FinanceWbsTemplateRow template : templateRows) {
-                String finalWbsCode = buildFinalWbsCode(template.getCodeTemplate(), project.getCode());
-
-                FinanceEntry entry = existingByWbs.get(finalWbsCode);
-                boolean isNew = false;
-
-                if (entry == null) {
-                    entry = new FinanceEntry();
-                    entry.setOrganisation(project.getOrganisation());
-                    entry.setProject(project);
-                    isNew = true;
-                }
-
-                entry.setWbsCode(finalWbsCode);
-                entry.setDescription(template.getDescription());
-                entry.setLevel(template.getLevel());
-                entry.setRowType(template.getType() == null ? null : template.getType().name());
-                entry.setOwnerName(resolveOwnerDisplay(template.getOwnerKey()));
-
-                if (isNew) {
-                    entry.setSales(BigDecimal.ZERO);
-                    entry.setBudget(BigDecimal.ZERO);
-                    entry.setCommitment(BigDecimal.ZERO);
-                    entry.setActualCost(BigDecimal.ZERO);
-                    entry.setForecast(BigDecimal.ZERO);
-                } else {
-                    entry.setSales(nvl(entry.getSales()));
-                    entry.setBudget(nvl(entry.getBudget()));
-                    entry.setCommitment(nvl(entry.getCommitment()));
-                    entry.setActualCost(nvl(entry.getActualCost()));
-                    entry.setForecast(nvl(entry.getForecast()));
-                }
-
-                financeEntryRepository.save(entry);
-                generatedRows++;
+            if (entry == null) {
+                entry = new FinanceEntry();
+                entry.setOrganisation(project.getOrganisation());
+                entry.setProject(project);
+                isNew = true;
             }
+
+            entry.setWbsCode(finalWbsCode);
+            entry.setDescription(template.getDescription());
+            entry.setLevel(template.getLevel());
+            entry.setRowType(template.getType() == null ? null : template.getType().name());
+            entry.setOwnerName(resolveOwnerDisplay(template.getOwnerKey()));
+            entry.setResourceTypeCode(template.getResourceType()); // ✅ Lien avec le Resource Type
+
+            if (isNew) {
+                entry.setSales(BigDecimal.ZERO);
+                entry.setBudget(BigDecimal.ZERO);
+                entry.setCommitment(BigDecimal.ZERO);
+                entry.setActualCost(BigDecimal.ZERO);
+                entry.setForecast(BigDecimal.ZERO);
+            } else {
+                entry.setSales(nvl(entry.getSales()));
+                entry.setBudget(nvl(entry.getBudget()));
+                entry.setCommitment(nvl(entry.getCommitment()));
+                entry.setActualCost(nvl(entry.getActualCost()));
+                entry.setForecast(nvl(entry.getForecast()));
+            }
+
+            financeEntryRepository.save(entry);
+            generatedRows++;
         }
 
         ApplyFinanceTemplateResultDto result = new ApplyFinanceTemplateResultDto();
-        result.setProjectsProcessed(projects.size());
+        result.setProjectsProcessed(1);
         result.setRowsGenerated(generatedRows);
         return result;
     }
 
-    public FinanceSettingsDto importWbsTemplate(ImportFinanceWbsTemplateRequest request) {
+    public FinanceSettingsDto importWbsTemplate(Long projectId, ImportFinanceWbsTemplateRequest request) {
         Long orgId = requireOrganisationId();
         Organisation organisation = organisationRepository.findById(orgId)
                 .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
@@ -225,16 +228,27 @@ public class FinanceSettingsService {
             throw new IllegalArgumentException("Import file contains no WBS rows.");
         }
 
-        if (request.isReplaceExisting()) {
-            templateRowRepository.deleteAllByOrganisationId(orgId);
+        Project project = null;
+        if (projectId != null) {
+            project = projectRepository.findById(projectId)
+                    .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+            if (request.isReplaceExisting()) {
+                templateRowRepository.deleteAllByProjectId(projectId);
+            }
+        } else {
+            if (request.isReplaceExisting()) {
+                templateRowRepository.deleteAllByOrganisationId(orgId);
+            }
         }
 
-        int startSort = request.isReplaceExisting()
-                ? 0
-                : templateRowRepository.findAllByOrganisationIdOrderBySortOrderAscIdAsc(orgId).size();
+        int startSort = 0;
+        if (projectId != null) {
+            startSort = templateRowRepository.findAllByProjectIdOrderBySortOrderAscIdAsc(projectId).size();
+        } else {
+            startSort = templateRowRepository.findAllByOrganisationIdAndProjectIsNullOrderBySortOrderAscIdAsc(orgId).size();
+        }
 
         int index = 1;
-
         for (FinanceWbsTemplateRowDto dto : request.getRows()) {
             if (dto.getCodeTemplate() == null || dto.getCodeTemplate().isBlank()) {
                 continue;
@@ -242,6 +256,7 @@ public class FinanceSettingsService {
 
             FinanceWbsTemplateRow row = new FinanceWbsTemplateRow();
             row.setOrganisation(organisation);
+            row.setProject(project); // ✅ Lien avec le projet
             row.setSortOrder(startSort + index);
             row.setLevel(dto.getLevel() == null ? detectLevel(dto.getCodeTemplate()) : dto.getLevel());
             row.setCodeTemplate(dto.getCodeTemplate().trim());
@@ -252,7 +267,6 @@ public class FinanceSettingsService {
             }
             row.setType(dto.getType());
             
-            // ✅ NOUVEAU : Sauvegarder le Resource Type lors de l'import
             row.setResourceType(blankToNull(dto.getResourceType()));
             row.setOwnerKey(blankToNull(dto.getOwnerKey()));
             row.setHourRate(dto.getHourRate());
@@ -261,7 +275,7 @@ public class FinanceSettingsService {
             index++;
         }
 
-        return getSettings();
+        return getSettings(projectId);
     }
 
     // ─── Helper Methods ──────────────────────────────────────────────────────
@@ -286,7 +300,7 @@ public class FinanceSettingsService {
         }
         
         dto.setOwnerKey(row.getOwnerKey());
-        dto.setResourceType(row.getResourceType()); // ✅ NOUVEAU
+        dto.setResourceType(row.getResourceType());
         dto.setHourRate(row.getHourRate());
         return dto;
     }
