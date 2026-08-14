@@ -11,6 +11,7 @@ public class ProjectDashboardRowDto {
     private String shortName;
 
     private String customer;
+    private Long customerId;
     private String category;
 
     private String country;
@@ -61,6 +62,8 @@ public class ProjectDashboardRowDto {
 
     public String getCustomer() { return customer; }
     public void setCustomer(String customer) { this.customer = customer; }
+    public Long getCustomerId() { return customerId; }
+    public void setCustomerId(Long customerId) { this.customerId = customerId; }
 
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }

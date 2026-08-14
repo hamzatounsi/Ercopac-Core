@@ -20,6 +20,16 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     List<Project> findAllByOrganisationId(Long organisationId);
 
+    List<Project> findAllByOrganisationIdAndProjectManagerId(Long organisationId, Long projectManagerId);
+
+    List<Project> findAllByOrganisationIdAndProjectManagerIdAndApplicationType(
+        Long organisationId, Long projectManagerId, ProjectApplicationType applicationType
+    );
+
+    Optional<Project> findByIdAndOrganisationIdAndProjectManagerId(
+        Long id, Long organisationId, Long projectManagerId
+    );
+
     long countByOrganisationId(Long organisationId);
 
     long countByOrganisationIdAndCategory(Long organisationId, String category);

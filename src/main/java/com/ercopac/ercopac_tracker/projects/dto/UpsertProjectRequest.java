@@ -8,6 +8,7 @@ public class UpsertProjectRequest {
     private String name;
     private String shortName;
     private String customer;
+    private Long customerId;
     private String category;
     private Long categoryId;
     private String country;
@@ -51,6 +52,8 @@ public class UpsertProjectRequest {
     public void setCustomer(String customer) {
         this.customer = customer;
     }
+    public Long getCustomerId() { return customerId; }
+    public void setCustomerId(Long customerId) { this.customerId = customerId; }
     public String getCategory() {
         return category;
     }

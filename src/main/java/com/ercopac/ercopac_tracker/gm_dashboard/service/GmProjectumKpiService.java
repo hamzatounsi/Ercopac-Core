@@ -3,8 +3,7 @@ package com.ercopac.ercopac_tracker.gm_dashboard.service;
 import com.ercopac.ercopac_tracker.gm_dashboard.dto.PortfolioKpiDto;
 import com.ercopac.ercopac_tracker.gm_dashboard.dto.ProjectKpiDto;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
-import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
-import com.ercopac.ercopac_tracker.security.SecurityUtils;
+import com.ercopac.ercopac_tracker.projects.service.ProjectAccessService;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,9 +17,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class GmProjectumKpiService {
 
-    private final ProjectRepository projectRepository;
+    private final ProjectAccessService projectAccessService;
     private final ProjectTaskRepository projectTaskRepository;
-    private final SecurityUtils securityUtils;
 
     public PortfolioKpiDto getPortfolioKpis() {
         List<Project> projects = getAccessibleProjects();
@@ -113,31 +111,11 @@ public class GmProjectumKpiService {
     }
 
     private List<Project> getAccessibleProjects() {
-        if (securityUtils.isPlatformUser()) {
-            return projectRepository.findAll();
-        }
-
-        Long organisationId = securityUtils.getCurrentOrganisationId();
-        if (organisationId == null) {
-            throw new IllegalStateException("No organisation context found for current user.");
-        }
-
-        return projectRepository.findAllByOrganisationId(organisationId);
+        return projectAccessService.getAccessibleProjects(null);
     }
 
     private Project getAccessibleProjectById(Long projectId) {
-        if (securityUtils.isPlatformUser()) {
-            return projectRepository.findById(projectId)
-                    .orElseThrow(() -> new RuntimeException("Project not found with id: " + projectId));
-        }
-
-        Long organisationId = securityUtils.getCurrentOrganisationId();
-        if (organisationId == null) {
-            throw new IllegalStateException("No organisation context found for current user.");
-        }
-
-        return projectRepository.findByIdAndOrganisationId(projectId, organisationId)
-                .orElseThrow(() -> new RuntimeException("Project not found or not accessible with id: " + projectId));
+        return projectAccessService.getAccessibleProject(projectId);
     }
 
     private int calculatePortfolioAverageProgress(List<Project> projects) {

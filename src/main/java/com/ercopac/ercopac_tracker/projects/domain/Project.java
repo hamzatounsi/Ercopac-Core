@@ -1,6 +1,7 @@
 package com.ercopac.ercopac_tracker.projects.domain;
 
 import com.ercopac.ercopac_tracker.crm.domain.CrmOpportunity;
+import com.ercopac.ercopac_tracker.admin.domain.Customer;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.planning.domain.ProjectBaseline;
 import com.ercopac.ercopac_tracker.planning.domain.ProjectCalendar;
@@ -49,6 +50,9 @@ public class Project {
     private BigDecimal totalProjectBudget;
     private Long projectManagerId;
     private String customer;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id")
+    private Customer customerEntity;
     private String category;
     private String riskLevel;
     private BigDecimal estimatedCost;
@@ -90,6 +94,10 @@ public class Project {
     public void setCustomer(String customer) {
         this.customer = customer;
     }
+
+    public Customer getCustomerEntity() { return customerEntity; }
+    public void setCustomerEntity(Customer customerEntity) { this.customerEntity = customerEntity; }
+    public Long getCustomerId() { return customerEntity == null ? null : customerEntity.getId(); }
 
     public String getCategory() {
         return category;

@@ -186,10 +186,14 @@ public final class OrgAdminDtos {
             String phone,
             String address,
             String notes,
+            List<SupplierResourceTypeSummary> resourceTypes,
             boolean active,
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {
+    }
+
+    public record SupplierResourceTypeSummary(Long id, String code, String name) {
     }
 
     public record SaveSupplierRequest(
@@ -217,6 +221,8 @@ public final class OrgAdminDtos {
 
             @Size(max = 2000, message = "Notes must not exceed 2000 characters")
             String notes,
+
+            List<Long> resourceTypeIds,
 
             @NotNull(message = "Supplier status is required")
             Boolean active

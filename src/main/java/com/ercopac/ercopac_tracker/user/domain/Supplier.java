@@ -1,9 +1,12 @@
 package com.ercopac.ercopac_tracker.user.domain;
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.user.ResourceType;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "suppliers", uniqueConstraints = {
@@ -53,8 +56,15 @@ public class Supplier {
     @Column(name = "departments_csv", length = 1000)
     private String departmentsCsv;
 
-    @Column(name = "resource_types_csv", length = 1000)
-    private String resourceTypesCsv;
+    @ManyToMany
+    @JoinTable(
+            name = "supplier_resource_types",
+            joinColumns = @JoinColumn(name = "supplier_id"),
+            inverseJoinColumns = @JoinColumn(name = "resource_type_id"),
+            uniqueConstraints = @UniqueConstraint(columnNames = {"supplier_id", "resource_type_id"})
+    )
+    @OrderBy("code ASC")
+    private Set<ResourceType> resourceTypes = new LinkedHashSet<>();
 
     @Column(length = 2000)
     private String notes;
@@ -151,12 +161,9 @@ public class Supplier {
         this.departmentsCsv = departmentsCsv;
     }
 
-    public String getResourceTypesCsv() {
-        return resourceTypesCsv;
-    }
-
-    public void setResourceTypesCsv(String resourceTypesCsv) {
-        this.resourceTypesCsv = resourceTypesCsv;
+    public Set<ResourceType> getResourceTypes() { return resourceTypes; }
+    public void setResourceTypes(Set<ResourceType> resourceTypes) {
+        this.resourceTypes = resourceTypes == null ? new LinkedHashSet<>() : new LinkedHashSet<>(resourceTypes);
     }
 
     public String getNotes() {
