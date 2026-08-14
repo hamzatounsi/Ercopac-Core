@@ -2,6 +2,8 @@ package com.ercopac.ercopac_tracker.projectum.actions.repository;
 
 import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionItem;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -27,4 +29,11 @@ public interface ActionItemRepository extends JpaRepository<ActionItem, Long> {
     List<ActionItem> findAllByChangeRequest_IdAndOrganisationIdOrderByIdAsc(Long changeRequestId, Long organisationId);
 
     List<ActionItem> findAllByProjectTask_IdAndOrganisationIdOrderByIdAsc(Long taskId, Long organisationId);
+
+    // ✅ NOUVEAU : Récupérer les actions actives de l'utilisateur connecté
+    @Query("SELECT DISTINCT a FROM ActionItem a LEFT JOIN a.assignees ass " +
+           "WHERE (a.owner.id = :userId OR ass.assigneeUser.id = :userId) " +
+           "AND a.organisation.id = :orgId AND a.status != 'done' " +
+           "ORDER BY a.dueDate ASC, a.id ASC")
+    List<ActionItem> findMyActiveActions(@Param("userId") Long userId, @Param("orgId") Long orgId);
 }

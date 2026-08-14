@@ -48,7 +48,30 @@ public class ActionService {
 
         return rows.stream().map(this::toDto).toList();
     }
+    // ✅ NOUVEAU : Récupérer les actions de l'utilisateur connecté
+    @Transactional(readOnly = true)
+    public List<ActionItemDto> getMyActions() {
+        Long orgId = securityUtils.getCurrentOrganisationId();
+        if (orgId == null) {
+            throw new IllegalStateException("User has no organisation");
+        }
+        
+        Long userId = securityUtils.getCurrentUserId();
+        if (userId == null) {
+            throw new IllegalStateException("User not authenticated");
+        }
 
+        List<ActionItem> actions = actionItemRepository.findMyActiveActions(userId, orgId);
+        
+        return actions.stream().map(item -> {
+            ActionItemDto dto = toDto(item);
+            if (item.getProject() != null) {
+                dto.setProjectId(item.getProject().getId());
+                dto.setProjectCode(item.getProject().getCode());
+            }
+            return dto;
+        }).toList();
+    }
     @Transactional(readOnly = true)
     public ActionSummaryDto getSummary(Long projectId) {
         List<ActionItemDto> rows = getProjectActions(projectId);
