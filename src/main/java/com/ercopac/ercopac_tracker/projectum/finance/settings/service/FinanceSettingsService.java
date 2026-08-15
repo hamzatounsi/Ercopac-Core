@@ -72,12 +72,11 @@ public class FinanceSettingsService {
 
         List<FinanceWbsTemplateRow> rows;
         if (projectId != null) {
+            // ✅ STRICT : Charger UNIQUEMENT les templates du projet spécifique. 
+            // Plus de fallback vers le global ! Un nouveau projet sera donc vide.
             rows = templateRowRepository.findAllByProjectIdOrderBySortOrderAscIdAsc(projectId);
-            // Fallback sur le global si le projet n'a pas encore de template
-            if (rows.isEmpty()) {
-                rows = templateRowRepository.findAllByOrganisationIdAndProjectIsNullOrderBySortOrderAscIdAsc(orgId);
-            }
         } else {
+            // Si projectId est null, retourner les templates globaux (utile pour l'admin)
             rows = templateRowRepository.findAllByOrganisationIdAndProjectIsNullOrderBySortOrderAscIdAsc(orgId);
         }
 
@@ -104,15 +103,17 @@ public class FinanceSettingsService {
         if (projectId != null) {
             project = projectRepository.findById(projectId)
                     .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+            // Supprime les anciennes lignes de CE projet uniquement
             templateRowRepository.deleteAllByProjectId(projectId);
         } else {
+            // Supprime les lignes globales
             templateRowRepository.deleteAllByOrganisationId(orgId);
         }
 
         for (FinanceWbsTemplateRowDto dto : request.getTemplateRows()) {
             FinanceWbsTemplateRow row = new FinanceWbsTemplateRow();
             row.setOrganisation(organisation);
-            row.setProject(project); // ✅ Lien avec le projet
+            row.setProject(project); // ✅ Lien avec le projet (null si global)
             row.setSortOrder(dto.getSortOrder() == null ? 0 : dto.getSortOrder());
             row.setLevel(dto.getLevel());
             row.setCodeTemplate(dto.getCodeTemplate());
@@ -158,16 +159,12 @@ public class FinanceSettingsService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found"));
 
-        // ✅ Utiliser le template spécifique au projet
+        // Utiliser le template spécifique au projet
         List<FinanceWbsTemplateRow> templateRows = templateRowRepository.findAllByProjectIdOrderBySortOrderAscIdAsc(projectId);
         
-        // Fallback sur le global si vide
+        // Si le projet n'a pas de template, on ne peut pas appliquer (isolation stricte)
         if (templateRows.isEmpty()) {
-            templateRows = templateRowRepository.findAllByOrganisationIdAndProjectIsNullOrderBySortOrderAscIdAsc(orgId);
-        }
-
-        if (templateRows.isEmpty()) {
-            throw new IllegalArgumentException("No finance WBS template configured for this project or globally.");
+            throw new IllegalArgumentException("No finance WBS template configured for this specific project. Please define one first.");
         }
 
         List<FinanceEntry> existingRows = financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(projectId, orgId);
@@ -193,7 +190,7 @@ public class FinanceSettingsService {
             entry.setLevel(template.getLevel());
             entry.setRowType(template.getType() == null ? null : template.getType().name());
             entry.setOwnerName(resolveOwnerDisplay(template.getOwnerKey()));
-            entry.setResourceTypeCode(template.getResourceType()); // ✅ Lien avec le Resource Type
+            entry.setResourceTypeCode(template.getResourceType());
 
             if (isNew) {
                 entry.setSales(BigDecimal.ZERO);

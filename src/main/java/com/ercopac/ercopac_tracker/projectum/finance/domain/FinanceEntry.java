@@ -35,6 +35,15 @@ public class FinanceEntry {
 
     @Column(name = "row_type", length = 30)
     private String rowType;
+ // Ajoute ce champ dans FinanceEntry.java
+    @Column(name = "linked_schedule_wbs", length = 100)
+    private String linkedScheduleWbs;
+
+    public String getLinkedScheduleWbs() { return linkedScheduleWbs; }
+    public void setLinkedScheduleWbs(String linkedScheduleWbs) { this.linkedScheduleWbs = linkedScheduleWbs; }
+    // ✅ AJOUTÉ : Champ is_summary requis par la base de données
+    @Column(name = "is_summary", nullable = false)
+    private Boolean isSummary = false;
 
     @Column(name = "sales", precision = 18, scale = 2)
     private BigDecimal sales = BigDecimal.ZERO;
@@ -87,6 +96,10 @@ public class FinanceEntry {
 
     public String getRowType() { return rowType; }
     public void setRowType(String rowType) { this.rowType = rowType; }
+
+    // ✅ GETTER ET SETTER AJOUTÉS
+    public Boolean getIsSummary() { return isSummary; }
+    public void setIsSummary(Boolean isSummary) { this.isSummary = isSummary; }
 
     public BigDecimal getSales() { return sales; }
     public void setSales(BigDecimal sales) { this.sales = sales; }

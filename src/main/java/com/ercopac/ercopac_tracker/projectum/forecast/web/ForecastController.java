@@ -60,14 +60,16 @@ public class ForecastController {
         forecastService.upsertForecast(projectId, request);
         return ResponseEntity.ok().build();
     }
-
-    @PatchMapping("/level")
+    // ✅ CORRECTION : Le chemin est juste "/linked-wbs" car le controller a déjà le préfixe
+    @PatchMapping("/linked-wbs")
     @PreAuthorize(FORECAST_WRITE)
-    public ResponseEntity<Void> updateWbsLevel(@PathVariable Long projectId,
-                                               @RequestBody Map<String, Object> request) {
+    public ResponseEntity<Void> updateLinkedScheduleWbs(
+            @PathVariable Long projectId,
+            @RequestBody Map<String, Object> request) {
+        
         Long financeEntryId = ((Number) request.get("financeEntryId")).longValue();
-        Integer level = ((Number) request.get("level")).intValue();
-        forecastService.updateWbsLevel(financeEntryId, level);
+        String linkedScheduleWbs = (String) request.get("linkedScheduleWbs");
+        
+        forecastService.updateLinkedScheduleWbs(financeEntryId, linkedScheduleWbs);
         return ResponseEntity.ok().build();
-    }
-}
+    }}
