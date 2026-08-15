@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   build-and-test:
+    name: Backend Build
     runs-on: ubuntu-latest
 
     steps:
