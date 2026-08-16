@@ -1,0 +1,38 @@
+name: Production SSH Connectivity Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-production-ssh:
+    name: Test Production SSH
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Test SSH connection to production
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          script: |
+            echo "=== Connected user ==="
+            whoami
+
+            echo "=== Host ==="
+            hostname
+
+            echo "=== Projectum directory ==="
+            cd /opt/projectum
+            pwd
+
+            echo "=== Docker access ==="
+            docker ps --format 'table {{.Names}}\t{{.Status}}'
+
+            echo "=== Compose status ==="
+            docker compose ps
