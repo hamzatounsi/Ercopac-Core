@@ -48,8 +48,24 @@ jobs:
             echo "=== Recreate backend container ==="
             docker compose up -d --no-deps projectum-backend
 
-            echo "=== Wait for startup ==="
-            sleep 20
+                        echo "=== Backend health check ==="
+
+            for i in {1..12}; do
+              if docker compose exec -T projectum-backend \
+                  wget -qO- http://localhost:10000/actuator/health \
+                  | grep -q '"status":"UP"'; then
+
+                echo "Backend is healthy."
+                exit 0
+              fi
+
+              echo "Waiting for backend... attempt $i/12"
+              sleep 5
+            done
+
+            echo "Backend failed health check."
+            docker compose logs --tail=100 projectum-backend
+            exit 1
 
             echo "=== Backend status ==="
             docker compose ps projectum-backend
