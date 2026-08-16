@@ -32,7 +32,7 @@ jobs:
 
       - name: Build and test backend
         run: ./mvnw clean verify
-            - name: Build backend Docker image
+      - name: Build backend Docker image
         run: docker build -t projectum-backend:${{ github.sha }} .
 
       - name: Scan backend Docker image
@@ -42,4 +42,4 @@ jobs:
           format: table
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          exit-code: '0'
+          exit-code: "0"
