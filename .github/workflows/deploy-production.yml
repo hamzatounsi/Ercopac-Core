@@ -1,0 +1,58 @@
+name: Deploy Backend to Production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Deploy backend on production server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          script_stop: true
+          script: |
+            set -e
+
+            echo "=== Move to Projectum ==="
+            cd /opt/projectum
+
+            echo "=== Backup database ==="
+            mkdir -p backups
+            docker compose exec -T projectum-db \
+              pg_dump \
+              -U projectum_user \
+              -d projectum_db \
+              > "backups/projectum_$(date +%Y%m%d_%H%M%S).sql"
+
+            echo "=== Update backend source ==="
+            cd /opt/projectum/backend
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+
+            echo "=== Rebuild backend ==="
+            cd /opt/projectum
+            docker compose build projectum-backend
+
+            echo "=== Recreate backend container ==="
+            docker compose up -d --no-deps projectum-backend
+
+            echo "=== Wait for startup ==="
+            sleep 20
+
+            echo "=== Backend status ==="
+            docker compose ps projectum-backend
+
+            echo "=== Recent backend logs ==="
+            docker compose logs --tail=80 projectum-backend
