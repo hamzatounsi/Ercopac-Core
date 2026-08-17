@@ -12,7 +12,8 @@ public class UpsertForecastEntryRequest {
     private String wbsCode;
 
     @NotBlank
-    @Pattern(regexp = "^\\d{4}-\\d{2}$")
+    // ✅ MODIFIÉ : Accepte les deux formats (mois: 2026-08 ET semaine: 2026-W35)
+    @Pattern(regexp = "^\\d{4}(-\\d{2}|-W\\d{2})$")
     private String periodKey;
 
     @DecimalMin(value = "0.00")
