@@ -14,6 +14,7 @@ import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.ResourceType;
 import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
+import com.ercopac.ercopac_tracker.user.repository.SupplierRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.mockito.ArgumentCaptor;
 
 import java.util.Optional;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,6 +42,7 @@ class OrganisationAdminServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private DepartmentRepository departmentRepository;
     @Mock private ResourceTypeRepository resourceTypeRepository;
+    @Mock private SupplierRepository supplierRepository;
     @Mock private ProjectTaskRepository taskRepository;
     @Mock private PasswordResetRequestRepository passwordResetRepository;
     @Mock private RolePermissionRepository permissionRepository;
@@ -56,6 +59,7 @@ class OrganisationAdminServiceTest {
                 userRepository,
                 departmentRepository,
                 resourceTypeRepository,
+                supplierRepository,
                 taskRepository,
                 passwordResetRepository,
                 permissionRepository,
@@ -196,6 +200,51 @@ class OrganisationAdminServiceTest {
         assertThatThrownBy(() -> service.deleteDepartment(55L))
                 .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
                         assertThat(exception.getStatusCode().value()).isEqualTo(409));
+    }
+
+    @Test
+    void supplierCanBeLinkedToMultipleOrganisationResourceTypes() {
+        ResourceType res = resourceType(41L, "RES", organisation);
+        ResourceType elec = resourceType(42L, "ELEC", organisation);
+        when(resourceTypeRepository.findAllById(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of(res, elec));
+        when(supplierRepository.save(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> {
+                    var supplier = invocation.getArgument(0, com.ercopac.ercopac_tracker.user.domain.Supplier.class);
+                    ReflectionTestUtils.setField(supplier, "id", 91L);
+                    return supplier;
+                });
+
+        OrgAdminDtos.SupplierSummary saved = service.createSupplier(supplierRequest(List.of(41L, 42L)));
+
+        assertThat(saved.resourceTypes()).extracting(OrgAdminDtos.SupplierResourceTypeSummary::code)
+                .containsExactly("RES", "ELEC");
+    }
+
+    @Test
+    void supplierRejectsResourceTypeFromAnotherOrganisation() {
+        Organisation other = new Organisation();
+        other.setId(20L);
+        ResourceType foreign = resourceType(99L, "MECH", other);
+        when(resourceTypeRepository.findAllById(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of(foreign));
+
+        assertThatThrownBy(() -> service.createSupplier(supplierRequest(List.of(99L))))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
+                    assertThat(exception.getStatusCode().value()).isEqualTo(400);
+                    assertThat(exception.getReason()).contains("supplier organisation");
+                });
+    }
+
+    private OrgAdminDtos.SaveSupplierRequest supplierRequest(List<Long> resourceTypeIds) {
+        return new OrgAdminDtos.SaveSupplierRequest(
+                "Supplier A", "SUP-001", null, null, null, null, null, resourceTypeIds, true);
+    }
+
+    private ResourceType resourceType(Long id, String code, Organisation owner) {
+        ResourceType resourceType = new ResourceType(code, code, owner);
+        ReflectionTestUtils.setField(resourceType, "id", id);
+        return resourceType;
     }
 
     private AppUser user(Long id, Role role, boolean active) {

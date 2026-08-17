@@ -14,6 +14,7 @@ import com.ercopac.ercopac_tracker.tasks.dto.ProjectScheduleTaskResponse;
 import com.ercopac.ercopac_tracker.tasks.dto.ResourceUserDto;
 import com.ercopac.ercopac_tracker.tasks.dto.TaskDependencyDto;
 import com.ercopac.ercopac_tracker.tasks.dto.UpdateProjectTaskRequest;
+import com.ercopac.ercopac_tracker.tasks.dto.UpdateProjectTaskStructureRequest;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskDependencyRepository;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository;
@@ -210,6 +211,85 @@ public class ProjectTaskService {
         ProjectTask task = projectTaskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
         return updateTask(task.getProjectId(), taskId, request);
+    }
+
+    /**
+     * Persists a complete Gantt hierarchy as one transaction. Keeping this
+     * separate from a normal task update avoids recalculating dates/schedules
+     * once per row while a hierarchy is being rearranged.
+     */
+    public void updateTaskStructure(Long projectId, UpdateProjectTaskStructureRequest request) {
+        Project project = getAccessibleProject(projectId);
+        List<ProjectTask> tasks = projectTaskRepository
+                .findByProjectIdOrderByDisplayOrderAscIdAsc(projectId);
+        List<UpdateProjectTaskStructureRequest.TaskStructureItem> updates = request == null ? null : request.tasks();
+
+        if (updates == null || updates.size() != tasks.size()) {
+            throw new IllegalArgumentException("A complete project task structure is required.");
+        }
+
+        Map<Long, ProjectTask> tasksById = tasks.stream()
+                .collect(Collectors.toMap(ProjectTask::getId, task -> task));
+        Map<Long, UpdateProjectTaskStructureRequest.TaskStructureItem> updatesById = new HashMap<>();
+        Set<Integer> displayOrders = new HashSet<>();
+
+        for (UpdateProjectTaskStructureRequest.TaskStructureItem update : updates) {
+            if (update == null || update.taskId() == null || update.displayOrder() == null || update.displayOrder() < 1) {
+                throw new IllegalArgumentException("Each structure entry requires a task id and positive display order.");
+            }
+            if (!tasksById.containsKey(update.taskId()) || updatesById.put(update.taskId(), update) != null) {
+                throw new IllegalArgumentException("Structure contains an invalid or duplicate task.");
+            }
+            if (!displayOrders.add(update.displayOrder())) {
+                throw new IllegalArgumentException("Task display order must be unique.");
+            }
+        }
+
+        for (UpdateProjectTaskStructureRequest.TaskStructureItem update : updates) {
+            Long parentId = update.parentId();
+            if (parentId == null) continue;
+            ProjectTask parent = tasksById.get(parentId);
+            if (parent == null || parentId.equals(update.taskId())) {
+                throw new IllegalArgumentException("A task cannot reference an invalid parent.");
+            }
+            if (!"SUMMARY".equalsIgnoreCase(parent.getTaskType())) {
+                throw new IllegalArgumentException("A task can only be nested under a summary task.");
+            }
+        }
+
+        validateHierarchyHasNoCycles(updatesById);
+
+        for (ProjectTask task : tasks) {
+            UpdateProjectTaskStructureRequest.TaskStructureItem update = updatesById.get(task.getId());
+            task.setParentId(update.parentId());
+            task.setDisplayOrder(update.displayOrder());
+        }
+        projectTaskRepository.saveAll(tasks);
+        projectTaskRepository.flush();
+
+        // This existing canonical rebuild derives every WBS code and outline
+        // level from the validated parentId/order graph.
+        rebuildStructureFromParentId(projectId);
+        rollupSummaries(projectId);
+        projectProgressService.recalculate(projectId);
+    }
+
+    private void validateHierarchyHasNoCycles(
+            Map<Long, UpdateProjectTaskStructureRequest.TaskStructureItem> updatesById) {
+        for (Long taskId : updatesById.keySet()) {
+            Set<Long> visited = new HashSet<>();
+            Long currentId = taskId;
+            while (currentId != null) {
+                if (!visited.add(currentId)) {
+                    throw new IllegalArgumentException("Task hierarchy cannot contain a cycle.");
+                }
+                UpdateProjectTaskStructureRequest.TaskStructureItem current = updatesById.get(currentId);
+                if (current == null) {
+                    throw new IllegalArgumentException("Task hierarchy references a task outside this project.");
+                }
+                currentId = current.parentId();
+            }
+        }
     }
 
     // ══════════════════════════════════════════════════════════════

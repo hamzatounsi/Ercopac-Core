@@ -177,6 +177,58 @@ public final class OrgAdminDtos {
     ) {
     }
 
+    public record SupplierSummary(
+            Long id,
+            String name,
+            String code,
+            String contactPerson,
+            String email,
+            String phone,
+            String address,
+            String notes,
+            List<SupplierResourceTypeSummary> resourceTypes,
+            boolean active,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt
+    ) {
+    }
+
+    public record SupplierResourceTypeSummary(Long id, String code, String name) {
+    }
+
+    public record SaveSupplierRequest(
+            @NotBlank(message = "Supplier name is required")
+            @Size(max = 150, message = "Supplier name must not exceed 150 characters")
+            String name,
+
+            @NotBlank(message = "Supplier code is required")
+            @Size(max = 50, message = "Supplier code must not exceed 50 characters")
+            @Pattern(regexp = "[A-Za-z0-9_-]+", message = "Supplier code can only contain letters, numbers, hyphens and underscores")
+            String code,
+
+            @Size(max = 150, message = "Contact person must not exceed 150 characters")
+            String contactPerson,
+
+            @jakarta.validation.constraints.Email(message = "Enter a valid supplier email address")
+            @Size(max = 180, message = "Email must not exceed 180 characters")
+            String email,
+
+            @Size(max = 50, message = "Phone must not exceed 50 characters")
+            String phone,
+
+            @Size(max = 500, message = "Address must not exceed 500 characters")
+            String address,
+
+            @Size(max = 2000, message = "Notes must not exceed 2000 characters")
+            String notes,
+
+            List<Long> resourceTypeIds,
+
+            @NotNull(message = "Supplier status is required")
+            Boolean active
+    ) {
+    }
+
     public record PermissionView(String module, String label, boolean canRead, boolean canWrite) {
     }
 

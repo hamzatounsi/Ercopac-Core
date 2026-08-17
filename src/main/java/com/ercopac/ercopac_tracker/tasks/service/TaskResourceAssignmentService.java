@@ -5,6 +5,7 @@ import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskResourceAssignment;
 import com.ercopac.ercopac_tracker.tasks.dto.ResourceUserDto;
+import com.ercopac.ercopac_tracker.tasks.dto.SupplierOptionDto;
 import com.ercopac.ercopac_tracker.tasks.dto.TaskResourceAssignmentDto;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository;
@@ -12,11 +13,15 @@ import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
+import com.ercopac.ercopac_tracker.user.domain.Supplier;
+import com.ercopac.ercopac_tracker.user.repository.SupplierRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@Transactional
 public class TaskResourceAssignmentService {
 
     private final TaskResourceAssignmentRepository repository;
@@ -24,6 +29,7 @@ public class TaskResourceAssignmentService {
     private final ProjectRepository                projectRepository;
     private final ProjectTaskRepository            projectTaskRepository;
     private final ResourceTypeRepository           resourceTypeRepository;
+    private final SupplierRepository               supplierRepository;
     private final SecurityUtils                    securityUtils;
 
     public TaskResourceAssignmentService(
@@ -32,6 +38,7 @@ public class TaskResourceAssignmentService {
             ProjectRepository projectRepository,
             ProjectTaskRepository projectTaskRepository,
             ResourceTypeRepository resourceTypeRepository,
+            SupplierRepository supplierRepository,
             SecurityUtils securityUtils
     ) {
         this.repository        = repository;
@@ -39,6 +46,7 @@ public class TaskResourceAssignmentService {
         this.projectRepository = projectRepository;
         this.projectTaskRepository = projectTaskRepository;
         this.resourceTypeRepository = resourceTypeRepository;
+        this.supplierRepository = supplierRepository;
         this.securityUtils = securityUtils;
     }
 
@@ -110,6 +118,19 @@ public class TaskResourceAssignmentService {
                 .toList();
     }
 
+    public List<SupplierOptionDto> getActiveSuppliers(Long projectId, Long taskId) {
+        Project project = getAccessibleProject(projectId);
+        validateTaskBelongsToProject(projectId, taskId, project);
+        return supplierRepository.findByOrganisation_IdAndActiveTrueOrderByNameAsc(project.getOrganisation().getId())
+                .stream()
+                .map(supplier -> new SupplierOptionDto(
+                        supplier.getId(),
+                        supplier.getCode() == null ? supplier.getShortCode() : supplier.getCode(),
+                        supplier.getName(),
+                        supplier.getResourceTypes().stream().map(resourceType -> resourceType.getCode()).toList()))
+                .toList();
+    }
+
     private void apply(TaskResourceAssignment entity, TaskResourceAssignmentDto dto, Project project, Long taskId) {
         ProjectTask task = projectTaskRepository.findById(taskId)
                 .filter(candidate -> project.getId().equals(candidate.getProjectId()))
@@ -134,7 +155,36 @@ public class TaskResourceAssignmentService {
         entity.setAssignedUserId(null);
         }
 
-        if (dto.getResourceType() != null && !dto.getResourceType().isBlank()) {
+        if (dto.getSupplierId() != null) {
+            if (dto.getResourceType() == null || dto.getResourceType().isBlank()) {
+                throw new IllegalArgumentException("Resource type is required for supplier assignments.");
+            }
+            var resourceType = resourceTypeRepository.findByCodeAndOrganisation_Id(
+                            dto.getResourceType(), project.getOrganisation().getId())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Resource type not found in project organisation"));
+            Supplier supplier = supplierRepository.findByIdAndOrganisation_Id(
+                            dto.getSupplierId(), project.getOrganisation().getId())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Supplier not found in project organisation: " + dto.getSupplierId()));
+            boolean changingSupplier = !dto.getSupplierId().equals(entity.getSupplierId());
+            if (!supplier.isActive() && changingSupplier) {
+                throw new IllegalArgumentException("Inactive suppliers cannot be assigned to a task.");
+            }
+            if (supplier.getResourceTypes().stream().noneMatch(linked -> linked.getId().equals(resourceType.getId()))) {
+                throw new IllegalArgumentException("Supplier is not linked to the selected resource type.");
+            }
+            entity.setSupplierId(supplier.getId());
+            entity.setResourceType(resourceType.getCode());
+            if (dto.getAssignmentName() == null || dto.getAssignmentName().isBlank()) {
+                entity.setAssignmentName(supplier.getName());
+            }
+        } else {
+            entity.setSupplierId(null);
+        }
+
+        if (dto.getResourceType() != null && !dto.getResourceType().isBlank()
+                && dto.getSupplierId() == null) {
             resourceTypeRepository.findByCodeAndOrganisation_Id(dto.getResourceType(), project.getOrganisation().getId())
                     .orElseThrow(() -> new IllegalArgumentException("Resource type not found in project organisation"));
         }
@@ -168,6 +218,10 @@ public class TaskResourceAssignmentService {
                 .setAssignedUserId(entity.getAssignedUserId())
                 .setAssignedUserName(entity.getAssignedUser() != null
                         ? entity.getAssignedUser().getFullName() : null)
+                .setSupplierId(entity.getSupplierId())
+                .setSupplierCode(entity.getSupplier() == null ? null
+                        : (entity.getSupplier().getCode() == null ? entity.getSupplier().getShortCode() : entity.getSupplier().getCode()))
+                .setSupplierName(entity.getSupplier() == null ? null : entity.getSupplier().getName())
                 .setResourceType(entity.getResourceType())
                 .setAssignmentName(entity.getAssignmentName())
                 .setQuantity(entity.getQuantity())

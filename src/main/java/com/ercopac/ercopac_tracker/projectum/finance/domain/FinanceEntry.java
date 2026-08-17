@@ -35,6 +35,15 @@ public class FinanceEntry {
 
     @Column(name = "row_type", length = 30)
     private String rowType;
+ // Ajoute ce champ dans FinanceEntry.java
+    @Column(name = "linked_schedule_wbs", length = 100)
+    private String linkedScheduleWbs;
+
+    public String getLinkedScheduleWbs() { return linkedScheduleWbs; }
+    public void setLinkedScheduleWbs(String linkedScheduleWbs) { this.linkedScheduleWbs = linkedScheduleWbs; }
+    // ✅ AJOUTÉ : Champ is_summary requis par la base de données
+    @Column(name = "is_summary", nullable = false)
+    private Boolean isSummary = false;
 
     
     @Column(name = "linked_schedule_wbs", length = 100)

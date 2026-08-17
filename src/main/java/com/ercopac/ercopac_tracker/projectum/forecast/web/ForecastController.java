@@ -83,8 +83,8 @@ public class ForecastController {
             @PathVariable Long projectId,
             @RequestBody Map<String, Object> request) {
         Long financeEntryId = ((Number) request.get("financeEntryId")).longValue();
-        Integer level = ((Number) request.get("level")).intValue();
-        forecastService.updateWbsLevel(financeEntryId, level);
+        String linkedScheduleWbs = (String) request.get("linkedScheduleWbs");
+        
+        forecastService.updateLinkedScheduleWbs(financeEntryId, linkedScheduleWbs);
         return ResponseEntity.ok().build();
-    }
-}
+    }}

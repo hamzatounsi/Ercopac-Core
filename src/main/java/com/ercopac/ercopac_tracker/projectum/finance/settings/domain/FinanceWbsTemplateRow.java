@@ -2,6 +2,7 @@ package com.ercopac.ercopac_tracker.projectum.finance.settings.domain;
 
 import com.ercopac.ercopac_tracker.department.domain.Department;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
@@ -18,10 +19,17 @@ public class FinanceWbsTemplateRow {
     @JoinColumn(name = "organisation_id", nullable = false)
     private Organisation organisation;
 
+    // ✅ NOUVEAU : Lien avec le projet (null = template global)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id")
+    private Project project;
+
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder;
+
     @Column(name = "resource_type", length = 100)
     private String resourceType;
+
     @Column(name = "level_no", nullable = false)
     private Integer level;
 
@@ -35,12 +43,10 @@ public class FinanceWbsTemplateRow {
     @Column(nullable = false, length = 20)
     private FinanceWbsRowType type;
 
-    // ✅ NEW: Department (first dropdown)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id")
     private Department department;
 
-    // ✅ NEW: Owner/User (second dropdown, filtered by department)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id")
     private AppUser owner;
@@ -51,18 +57,21 @@ public class FinanceWbsTemplateRow {
     @Column(name = "hour_rate", precision = 18, scale = 2)
     private BigDecimal hourRate;
 
- // Ajoute aussi le getter et le setter :
- public String getResourceType() { return resourceType; }
- public void setResourceType(String resourceType) { this.resourceType = resourceType; }
-    // Getters and Setters
+    // --- Getters and Setters ---
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     
     public Organisation getOrganisation() { return organisation; }
     public void setOrganisation(Organisation organisation) { this.organisation = organisation; }
+
+    public Project getProject() { return project; }
+    public void setProject(Project project) { this.project = project; }
     
     public Integer getSortOrder() { return sortOrder; }
     public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
+    
+    public String getResourceType() { return resourceType; }
+    public void setResourceType(String resourceType) { this.resourceType = resourceType; }
     
     public Integer getLevel() { return level; }
     public void setLevel(Integer level) { this.level = level; }

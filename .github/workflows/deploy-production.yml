@@ -1,0 +1,138 @@
+name: Deploy Backend to Production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Deploy backend on production server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          script_stop: true
+          script: |
+            set -e
+
+            echo "=== Move to Projectum ==="
+            cd /opt/projectum
+
+            echo "=== Backup database ==="
+            mkdir -p backups
+            docker compose exec -T projectum-db \
+              pg_dump \
+              -U projectum_user \
+              -d projectum_db \
+              > "backups/projectum_$(date +%Y%m%d_%H%M%S).sql"
+
+            echo "=== Remember current backend version ==="
+            cd /opt/projectum/backend
+
+            PREVIOUS_COMMIT=$(git rev-parse HEAD)
+            echo "Previous commit: $PREVIOUS_COMMIT"
+
+            echo "=== Update backend source ==="
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+
+            NEW_COMMIT=$(git rev-parse HEAD)
+            echo "Deploying commit: $NEW_COMMIT"
+
+            echo "=== Build new backend ==="
+            cd /opt/projectum
+            docker compose build projectum-backend
+
+            echo "=== Start new backend ==="
+            docker compose up -d --no-deps projectum-backend
+
+            echo "=== Backend health check ==="
+
+            HEALTHY=false
+
+            for i in {1..12}; do
+              if docker compose exec -T projectum-backend \
+                  wget -qO- http://localhost:10000/actuator/health \
+                  | grep -q '"status":"UP"'; then
+
+                HEALTHY=true
+                echo "Backend is healthy."
+                break
+              fi
+
+              echo "Waiting for backend... attempt $i/12"
+              sleep 5
+            done
+
+            if [ "$HEALTHY" = true ]; then
+              echo "=== Deployment successful ==="
+              docker compose ps projectum-backend
+              exit 0
+            fi
+
+            echo "======================================"
+            echo "NEW DEPLOYMENT FAILED"
+            echo "Starting automatic rollback..."
+            echo "======================================"
+
+            echo "=== Failed backend logs ==="
+            docker compose logs --tail=100 projectum-backend || true
+
+            echo "=== Restore previous source version ==="
+            cd /opt/projectum/backend
+            git checkout "$PREVIOUS_COMMIT"
+
+            echo "=== Rebuild previous backend ==="
+            cd /opt/projectum
+            docker compose build projectum-backend
+
+            echo "=== Restart previous backend ==="
+            docker compose up -d --no-deps projectum-backend
+
+            echo "=== Verify rollback ==="
+
+            ROLLBACK_HEALTHY=false
+
+            for i in {1..12}; do
+              if docker compose exec -T projectum-backend \
+                  wget -qO- http://localhost:10000/actuator/health \
+                  | grep -q '"status":"UP"'; then
+
+                ROLLBACK_HEALTHY=true
+                echo "Rollback successful. Previous backend is healthy."
+                break
+              fi
+
+              echo "Waiting for rollback... attempt $i/12"
+              sleep 5
+            done
+
+            if [ "$ROLLBACK_HEALTHY" = true ]; then
+              echo "======================================"
+              echo "DEPLOYMENT FAILED BUT ROLLBACK SUCCEEDED"
+              echo "Restored commit: $PREVIOUS_COMMIT"
+              echo "Failed commit:   $NEW_COMMIT"
+              echo "======================================"
+
+              docker compose ps projectum-backend
+
+              # Deployment itself must still be reported as failed.
+              exit 1
+            fi
+
+            echo "======================================"
+            echo "CRITICAL: ROLLBACK ALSO FAILED"
+            echo "======================================"
+
+            docker compose logs --tail=150 projectum-backend || true
+            exit 1

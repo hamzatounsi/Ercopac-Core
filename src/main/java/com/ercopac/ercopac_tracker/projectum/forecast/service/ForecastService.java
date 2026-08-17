@@ -78,7 +78,19 @@ public class ForecastService {
             .filter(rt -> rt.getCode() != null && rt.getDefaultRate() != null)
             .collect(Collectors.toMap(ResourceType::getCode, ResourceType::getDefaultRate, (a, b) -> a));
 
-        // ✅ Utilise le type de période (week ou month)
+        // ✅ Construire la liste des tâches Schedule pour le dropdown
+        List<ForecastRowDto.ScheduleTaskOption> availableTasks = tasks.stream()
+            .filter(t -> t.getWbsCode() != null)
+            .map(t -> {
+                ForecastRowDto.ScheduleTaskOption opt = new ForecastRowDto.ScheduleTaskOption();
+                opt.setWbsCode(t.getWbsCode());
+                opt.setName(t.getName());
+                opt.setOutlineLevel(t.getOutlineLevel());
+                opt.setPlannedHours(t.getPlannedHours() != null ? t.getPlannedHours() : BigDecimal.ZERO);
+                return opt;
+            })
+            .collect(Collectors.toList());
+
         List<String> periodKeys = buildPeriods(periods, periodType != null ? periodType : "month");
         List<ForecastRowDto> result = new ArrayList<>();
 
@@ -95,11 +107,19 @@ public class ForecastService {
             String resTypeCode = row.getResourceTypeCode();
             dto.setResourceTypeCode(resTypeCode);
 
+            // ✅ NOUVEAU : Récupérer le code WBS Schedule lié manuellement
+            String linkedWbs = row.getLinkedScheduleWbs();
+            dto.setLinkedScheduleWbs(linkedWbs);
+            dto.setAvailableScheduleTasks(availableTasks);
+
+            // ✅ Calcul automatique : Si une tâche Schedule est liée, utiliser ses heures
             BigDecimal remainingHours = BigDecimal.ZERO;
-            ProjectTask task = tasksByWbs.get(row.getWbsCode());
-            if (task != null && task.getPlannedHours() != null) {
-                BigDecimal actual = task.getActualHours() != null ? task.getActualHours() : BigDecimal.ZERO;
-                remainingHours = task.getPlannedHours().subtract(actual).max(BigDecimal.ZERO);
+            if (linkedWbs != null && !linkedWbs.isBlank()) {
+                ProjectTask linkedTask = tasksByWbs.get(linkedWbs);
+                if (linkedTask != null && linkedTask.getPlannedHours() != null) {
+                    BigDecimal actual = linkedTask.getActualHours() != null ? linkedTask.getActualHours() : BigDecimal.ZERO;
+                    remainingHours = linkedTask.getPlannedHours().subtract(actual).max(BigDecimal.ZERO);
+                }
             }
             dto.setRemainingHours(remainingHours);
 
@@ -124,6 +144,14 @@ public class ForecastService {
         return result;
     }
 
+    // ✅ NOUVEAU : Sauvegarder le lien WBS Schedule
+    public void updateLinkedScheduleWbs(Long financeEntryId, String linkedScheduleWbs) {
+        FinanceEntry entry = financeEntryRepository.findById(financeEntryId)
+            .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
+        entry.setLinkedScheduleWbs(linkedScheduleWbs);
+        financeEntryRepository.save(entry);
+    }
+
     public void updateWbsLevel(Long financeEntryId, Integer level) {
         FinanceEntry entry = financeEntryRepository.findById(financeEntryId)
             .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
@@ -133,7 +161,7 @@ public class ForecastService {
 
     @Transactional(readOnly = true)
     public ForecastSummaryDto getSummary(Long projectId, int periods) {
-        List<ForecastRowDto> rows = getForecastGrid(projectId, periods, "month"); // Summary reste en mois par défaut ou adapte si besoin
+        List<ForecastRowDto> rows = getForecastGrid(projectId, periods, "month");
 
         BigDecimal totalForecast = BigDecimal.ZERO;
         BigDecimal totalBudget = BigDecimal.ZERO;
@@ -189,7 +217,6 @@ public class ForecastService {
             return buildWeekPeriods(safePeriods);
         }
         
-        // Default: month
         YearMonth start = YearMonth.now();
         List<String> keys = new ArrayList<>();
         for (int i = 0; i < safePeriods; i++) {
@@ -198,10 +225,9 @@ public class ForecastService {
         return keys;
     }
 
-    // ✅ NOUVELLE MÉTHODE : Génère des clés de type "2026-W35"
     private List<String> buildWeekPeriods(int periods) {
         LocalDate start = LocalDate.now();
-        start = start.with(java.time.DayOfWeek.MONDAY); // Début de semaine
+        start = start.with(java.time.DayOfWeek.MONDAY);
         
         List<String> keys = new ArrayList<>();
         for (int i = 0; i < periods; i++) {

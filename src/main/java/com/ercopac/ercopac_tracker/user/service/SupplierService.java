@@ -4,6 +4,8 @@ import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.user.domain.Supplier;
+import com.ercopac.ercopac_tracker.user.ResourceType;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.dto.CreateSupplierRequest;
 import com.ercopac.ercopac_tracker.user.dto.SupplierDto;
 import com.ercopac.ercopac_tracker.user.dto.UpdateSupplierRequest;
@@ -22,15 +24,18 @@ public class SupplierService {
     private final SupplierRepository supplierRepository;
     private final OrganisationRepository organisationRepository;
     private final SecurityUtils securityUtils;
+    private final ResourceTypeRepository resourceTypeRepository;
 
     public SupplierService(
             SupplierRepository supplierRepository,
             OrganisationRepository organisationRepository,
-            SecurityUtils securityUtils
+            SecurityUtils securityUtils,
+            ResourceTypeRepository resourceTypeRepository
     ) {
         this.supplierRepository = supplierRepository;
         this.organisationRepository = organisationRepository;
         this.securityUtils = securityUtils;
+        this.resourceTypeRepository = resourceTypeRepository;
     }
 
     @Transactional(readOnly = true)
@@ -68,7 +73,7 @@ public class SupplierService {
         supplier.setContact(normalize(request.contact()));
         supplier.setWebsite(normalize(request.website()));
         supplier.setDepartmentsCsv(toCsv(request.departments()));
-        supplier.setResourceTypesCsv(toCsv(request.resourceTypes()));
+        supplier.setResourceTypes(resolveResourceTypes(request.resourceTypes(), organisationId));
         supplier.setNotes(normalize(request.notes()));
         supplier.setActive(true);
 
@@ -90,7 +95,7 @@ public class SupplierService {
         supplier.setContact(normalize(request.contact()));
         supplier.setWebsite(normalize(request.website()));
         supplier.setDepartmentsCsv(toCsv(request.departments()));
-        supplier.setResourceTypesCsv(toCsv(request.resourceTypes()));
+        supplier.setResourceTypes(resolveResourceTypes(request.resourceTypes(), organisationId));
         supplier.setNotes(normalize(request.notes()));
 
         return toDto(supplierRepository.save(supplier));
@@ -115,7 +120,7 @@ public class SupplierService {
                 supplier.getContact(),
                 supplier.getWebsite(),
                 fromCsv(supplier.getDepartmentsCsv()),
-                fromCsv(supplier.getResourceTypesCsv()),
+                supplier.getResourceTypes().stream().map(ResourceType::getCode).toList(),
                 supplier.getNotes()
         );
     }
@@ -155,6 +160,21 @@ public class SupplierService {
                 .filter(v -> v != null && !v.isBlank())
                 .distinct()
                 .collect(Collectors.joining(","));
+    }
+
+    private java.util.Set<ResourceType> resolveResourceTypes(List<String> codes, Long organisationId) {
+        if (codes == null || codes.isEmpty()) return java.util.Set.of();
+        java.util.Set<String> normalizedCodes = codes.stream()
+                .map(this::normalize)
+                .filter(java.util.Objects::nonNull)
+                .map(String::toUpperCase)
+                .collect(java.util.stream.Collectors.toSet());
+        java.util.Set<ResourceType> resolved = normalizedCodes.stream()
+                .map(code -> resourceTypeRepository.findByCodeAndOrganisation_Id(code, organisationId)
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "Resource type not found in supplier organisation: " + code)))
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        return resolved;
     }
 
     private List<String> fromCsv(String csv) {

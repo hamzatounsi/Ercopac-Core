@@ -1,10 +1,17 @@
 package com.ercopac.ercopac_tracker.user.domain;
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.user.ResourceType;
 import jakarta.persistence.*;
 
+import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 @Entity
-@Table(name = "suppliers")
+@Table(name = "suppliers", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"code", "organisation_id"})
+})
 public class Supplier {
 
     @Id
@@ -17,6 +24,22 @@ public class Supplier {
 
     @Column(nullable = false, length = 150)
     private String name;
+
+    /** Organisation-scoped supplier identifier used by Resource Configuration. */
+    @Column(length = 50)
+    private String code;
+
+    @Column(name = "contact_person", length = 150)
+    private String contactPerson;
+
+    @Column(length = 180)
+    private String email;
+
+    @Column(length = 50)
+    private String phone;
+
+    @Column(length = 500)
+    private String address;
 
     @Column(length = 50)
     private String shortCode;
@@ -33,14 +56,39 @@ public class Supplier {
     @Column(name = "departments_csv", length = 1000)
     private String departmentsCsv;
 
-    @Column(name = "resource_types_csv", length = 1000)
-    private String resourceTypesCsv;
+    @ManyToMany
+    @JoinTable(
+            name = "supplier_resource_types",
+            joinColumns = @JoinColumn(name = "supplier_id"),
+            inverseJoinColumns = @JoinColumn(name = "resource_type_id"),
+            uniqueConstraints = @UniqueConstraint(columnNames = {"supplier_id", "resource_type_id"})
+    )
+    @OrderBy("code ASC")
+    private Set<ResourceType> resourceTypes = new LinkedHashSet<>();
 
     @Column(length = 2000)
     private String notes;
 
     @Column(nullable = false)
     private boolean active = true;
+
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    void onCreate() {
+        LocalDateTime now = LocalDateTime.now();
+        if (createdAt == null) createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 
     public Long getId() {
         return id;
@@ -61,6 +109,17 @@ public class Supplier {
     public void setName(String name) {
         this.name = name;
     }
+
+    public String getCode() { return code; }
+    public void setCode(String code) { this.code = code; }
+    public String getContactPerson() { return contactPerson; }
+    public void setContactPerson(String contactPerson) { this.contactPerson = contactPerson; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
+    public String getAddress() { return address; }
+    public void setAddress(String address) { this.address = address; }
 
     public String getShortCode() {
         return shortCode;
@@ -102,12 +161,9 @@ public class Supplier {
         this.departmentsCsv = departmentsCsv;
     }
 
-    public String getResourceTypesCsv() {
-        return resourceTypesCsv;
-    }
-
-    public void setResourceTypesCsv(String resourceTypesCsv) {
-        this.resourceTypesCsv = resourceTypesCsv;
+    public Set<ResourceType> getResourceTypes() { return resourceTypes; }
+    public void setResourceTypes(Set<ResourceType> resourceTypes) {
+        this.resourceTypes = resourceTypes == null ? new LinkedHashSet<>() : new LinkedHashSet<>(resourceTypes);
     }
 
     public String getNotes() {
@@ -125,4 +181,7 @@ public class Supplier {
     public void setActive(boolean active) {
         this.active = active;
     }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

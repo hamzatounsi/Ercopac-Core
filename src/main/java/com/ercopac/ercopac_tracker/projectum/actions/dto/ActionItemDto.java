@@ -1,7 +1,6 @@
 package com.ercopac.ercopac_tracker.projectum.actions.dto;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 
 public class ActionItemDto {
@@ -15,12 +14,15 @@ public class ActionItemDto {
     private Boolean customerVisible;
     private LocalDate insertedDate;
     private LocalDate dueDate;
-    private List<String> assignees = new ArrayList<>();
-    private List<ActionCommentDto> comments = new ArrayList<>();
-    private List<ActionAttachmentDto> attachments = new ArrayList<>();
+    private List<String> assignees;
+    private List<ActionCommentDto> comments;
+    private List<ActionAttachmentDto> attachments;
+    
+    // ✅ NOUVEAUX CHAMPS pour le frontend employé
+    private Long projectId;
+    private String projectCode;
 
-    public ActionItemDto() {}
-
+    // Getters et Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -59,4 +61,11 @@ public class ActionItemDto {
 
     public List<ActionAttachmentDto> getAttachments() { return attachments; }
     public void setAttachments(List<ActionAttachmentDto> attachments) { this.attachments = attachments; }
+
+    // ✅ GETTERS ET SETTERS NOUVEAUX
+    public Long getProjectId() { return projectId; }
+    public void setProjectId(Long projectId) { this.projectId = projectId; }
+
+    public String getProjectCode() { return projectCode; }
+    public void setProjectCode(String projectCode) { this.projectCode = projectCode; }
 }

@@ -2,6 +2,7 @@ package com.ercopac.ercopac_tracker.tasks.domain;
 
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.user.domain.Supplier;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -34,6 +35,13 @@ public class TaskResourceAssignment {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_user_id", insertable = false, updatable = false)
     private AppUser assignedUser;
+
+    @Column(name = "supplier_id")
+    private Long supplierId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supplier_id", insertable = false, updatable = false)
+    private Supplier supplier;
 
     @Column(name = "resource_type", length = 30)
     private String resourceType;
@@ -90,4 +98,9 @@ public class TaskResourceAssignment {
     public void setAssignedUserId(Long assignedUserId) {
         this.assignedUserId = assignedUserId;
     }
+
+    public Long getSupplierId() { return supplierId; }
+    public void setSupplierId(Long supplierId) { this.supplierId = supplierId; }
+    public Supplier getSupplier() { return supplier; }
+    public void setSupplier(Supplier supplier) { this.supplier = supplier; }
 }

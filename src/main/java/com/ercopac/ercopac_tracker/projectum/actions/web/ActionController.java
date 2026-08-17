@@ -34,7 +34,12 @@ public class ActionController {
     public ActionController(ActionService actionService) {
         this.actionService = actionService;
     }
-
+    // ✅ NOUVEAU : Endpoint pour le workspace employé
+    @GetMapping("/my")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<ActionItemDto>> getMyActions() {
+        return ResponseEntity.ok(actionService.getMyActions());
+    }
     @GetMapping
     @PreAuthorize(ACTIONS_READ)
     public ResponseEntity<List<ActionItemDto>> getProjectActions(@PathVariable Long projectId) {

@@ -14,14 +14,19 @@ public class ForecastRowDto {
     private BigDecimal actualCost;
     private BigDecimal totalForecast;
     
-    // ✅ Proper fields for the calculation (No TODOs!)
     private String resourceTypeCode;
     private BigDecimal remainingHours;
     private BigDecimal remainingCost;
     
+    // ✅ NOUVEAU : Code WBS du Schedule lié manuellement
+    private String linkedScheduleWbs;
+    
+    // ✅ NOUVEAU : Liste des tâches Schedule disponibles pour le dropdown
+    private List<ScheduleTaskOption> availableScheduleTasks;
+    
     private List<ForecastGridCellDto> periods = new ArrayList<>();
 
-    // --- Getters and Setters ---
+    // Getters et Setters existants
     public Long getFinanceEntryId() { return financeEntryId; }
     public void setFinanceEntryId(Long financeEntryId) { this.financeEntryId = financeEntryId; }
 
@@ -57,4 +62,31 @@ public class ForecastRowDto {
 
     public List<ForecastGridCellDto> getPeriods() { return periods; }
     public void setPeriods(List<ForecastGridCellDto> periods) { this.periods = periods; }
+
+    // ✅ NOUVEAUX GETTERS/SETTERS
+    public String getLinkedScheduleWbs() { return linkedScheduleWbs; }
+    public void setLinkedScheduleWbs(String linkedScheduleWbs) { this.linkedScheduleWbs = linkedScheduleWbs; }
+
+    public List<ScheduleTaskOption> getAvailableScheduleTasks() { return availableScheduleTasks; }
+    public void setAvailableScheduleTasks(List<ScheduleTaskOption> availableScheduleTasks) { this.availableScheduleTasks = availableScheduleTasks; }
+
+    // ✅ Classe interne pour les options du dropdown
+    public static class ScheduleTaskOption {
+        private String wbsCode;
+        private String name;
+        private Integer outlineLevel;
+        private BigDecimal plannedHours;
+
+        public String getWbsCode() { return wbsCode; }
+        public void setWbsCode(String wbsCode) { this.wbsCode = wbsCode; }
+
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+
+        public Integer getOutlineLevel() { return outlineLevel; }
+        public void setOutlineLevel(Integer outlineLevel) { this.outlineLevel = outlineLevel; }
+
+        public BigDecimal getPlannedHours() { return plannedHours; }
+        public void setPlannedHours(BigDecimal plannedHours) { this.plannedHours = plannedHours; }
+    }
 }

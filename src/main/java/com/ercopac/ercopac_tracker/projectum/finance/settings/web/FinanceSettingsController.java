@@ -21,28 +21,31 @@ public class FinanceSettingsController {
     }
 
     @GetMapping
-    public ResponseEntity<FinanceSettingsDto> getSettings() {
-        return ResponseEntity.ok(financeSettingsService.getSettings());
+    public ResponseEntity<FinanceSettingsDto> getSettings(@RequestParam(required = false) Long projectId) {
+        return ResponseEntity.ok(financeSettingsService.getSettings(projectId));
     }
 
     @PutMapping
     public ResponseEntity<FinanceSettingsDto> saveSettings(
+            @RequestParam(required = false) Long projectId,
             @Valid @RequestBody SaveFinanceSettingsRequest request
     ) {
-        return ResponseEntity.ok(financeSettingsService.saveSettings(request));
+        return ResponseEntity.ok(financeSettingsService.saveSettings(projectId, request));
     }
 
     @PostMapping("/apply-template")
     public ResponseEntity<ApplyFinanceTemplateResultDto> applyTemplate(
+            @RequestParam Long projectId, // ✅ Requis pour savoir quel projet appliquer
             @RequestBody ApplyFinanceTemplateRequest request
     ) {
-        return ResponseEntity.ok(financeSettingsService.applyTemplate(request));
+        return ResponseEntity.ok(financeSettingsService.applyTemplate(projectId, request));
     }
 
     @PostMapping("/import-wbs")
     public ResponseEntity<FinanceSettingsDto> importWbsTemplate(
+            @RequestParam(required = false) Long projectId,
             @Valid @RequestBody ImportFinanceWbsTemplateRequest request
     ) {
-        return ResponseEntity.ok(financeSettingsService.importWbsTemplate(request));
+        return ResponseEntity.ok(financeSettingsService.importWbsTemplate(projectId, request));
     }
 }
