@@ -36,9 +36,6 @@ public class FinanceEntry {
     @Column(name = "row_type", length = 30)
     private String rowType;
 
-    public String getLinkedScheduleWbs() { return linkedScheduleWbs; }
-    public void setLinkedScheduleWbs(String linkedScheduleWbs) { this.linkedScheduleWbs = linkedScheduleWbs; }
-
     @Column(name = "linked_schedule_wbs", length = 100)
     private String linkedScheduleWbs;
 
