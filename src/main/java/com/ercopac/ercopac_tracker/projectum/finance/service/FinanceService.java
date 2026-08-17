@@ -80,9 +80,10 @@ public class FinanceService {
     public List<FinanceEntryDto> getProjectFinance(Long projectId) {
         Project project = getAccessibleProject(projectId);
 
+        // ✅ MODIFIÉ : Trier par displayOrder (ordre du template) puis WBS Code
         List<FinanceEntry> rows = securityUtils.isPlatformUser()
-                ? financeEntryRepository.findAllByProjectIdOrderByWbsCodeAsc(project.getId())
-                : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(
+                ? financeEntryRepository.findAllByProjectIdOrderByDisplayOrderAscWbsCodeAsc(project.getId())
+                : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByDisplayOrderAscWbsCodeAsc(
                         project.getId(), project.getOrganisation().getId());
 
         Map<String, BigDecimal> forecastTotals = getForecastTotalsByWbs(projectId);
@@ -347,9 +348,10 @@ public class FinanceService {
     public void recalculateLabourRowsFromTasks(Long projectId) {
         Project project = getAccessibleProject(projectId);
 
+        // ✅ MODIFIÉ : Utiliser le nouveau tri
         List<FinanceEntry> financeRows = securityUtils.isPlatformUser()
-                ? financeEntryRepository.findAllByProjectIdOrderByWbsCodeAsc(projectId)
-                : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(projectId, project.getOrganisation().getId());
+                ? financeEntryRepository.findAllByProjectIdOrderByDisplayOrderAscWbsCodeAsc(projectId)
+                : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByDisplayOrderAscWbsCodeAsc(projectId, project.getOrganisation().getId());
 
         List<ProjectTask> tasks = projectTaskRepository.findByProjectId(projectId);
         Map<String, List<ProjectTask>> tasksByWbs = tasks.stream()
@@ -363,7 +365,6 @@ public class FinanceService {
                 .stream().collect(Collectors.toMap(FinanceHourlyRate::getResourceType, FinanceHourlyRate::getHourlyRate, (a, b) -> a));
 
         for (FinanceEntry row : financeRows) {
-            // ✅ CORRIGÉ : Utilisation de .equals() pour comparer des Strings
             if ("HOUR".equals(row.getRowType())) {
                 continue;
             }
@@ -412,11 +413,11 @@ public class FinanceService {
     }
 
     private void recomputeSummaryRows(Long projectId, Long organisationId) {
+        // ✅ MODIFIÉ : Utiliser le nouveau tri
         List<FinanceEntry> rows = securityUtils.isPlatformUser()
-                ? financeEntryRepository.findAllByProjectIdOrderByWbsCodeAsc(projectId)
-                : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(projectId, organisationId);
+                ? financeEntryRepository.findAllByProjectIdOrderByDisplayOrderAscWbsCodeAsc(projectId)
+                : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByDisplayOrderAscWbsCodeAsc(projectId, organisationId);
 
-        // ✅ CORRIGÉ : Utilisation de .equals() pour comparer des Strings
         List<FinanceEntry> summaryRows = rows.stream()
                 .filter(r -> "SUMMARY".equals(r.getRowType()))
                 .sorted((a, b) -> Integer.compare(

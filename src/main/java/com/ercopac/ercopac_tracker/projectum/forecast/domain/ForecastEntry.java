@@ -21,7 +21,9 @@ public class ForecastEntry {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
+ // APRÈS :
+    @Column(name = "period_key", nullable = false, length = 10)
+    private String periodKey;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "organisation_id", nullable = false)
     private Organisation organisation;
@@ -37,8 +39,6 @@ public class ForecastEntry {
     @Column(name = "wbs_code", nullable = false, length = 100)
     private String wbsCode;
 
-    @Column(name = "period_key", nullable = false, length = 7)
-    private String periodKey; // YYYY-MM
 
     @Column(nullable = false, precision = 18, scale = 2)
     private BigDecimal amount = BigDecimal.ZERO;

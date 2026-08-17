@@ -33,7 +33,7 @@ public class ForecastController {
     public ResponseEntity<List<ForecastRowDto>> getForecastGrid(
             @PathVariable Long projectId,
             @RequestParam(defaultValue = "12") int periods,
-            @RequestParam(defaultValue = "month") String periodType) { // ✅ AJOUTÉ
+            @RequestParam(defaultValue = "month") String periodType) {
         return ResponseEntity.ok(forecastService.getForecastGrid(projectId, periods, periodType));
     }
 
@@ -49,22 +49,39 @@ public class ForecastController {
     @PreAuthorize(FORECAST_READ)
     public ResponseEntity<List<String>> getPeriods(
             @RequestParam(defaultValue = "12") int periods,
-            @RequestParam(defaultValue = "month") String periodType) { // ✅ AJOUTÉ
+            @RequestParam(defaultValue = "month") String periodType) {
         return ResponseEntity.ok(forecastService.getPeriods(periods, periodType));
     }
 
+    // ✅ CORRECTION : PUT pour mettre à jour une cellule de forecast
     @PutMapping
     @PreAuthorize(FORECAST_WRITE)
-    public ResponseEntity<Void> upsertForecast(@PathVariable Long projectId,
-                                               @Valid @RequestBody UpsertForecastEntryRequest request) {
+    public ResponseEntity<Void> upsertForecast(
+            @PathVariable Long projectId,
+            @Valid @RequestBody UpsertForecastEntryRequest request) {
         forecastService.upsertForecast(projectId, request);
+        return ResponseEntity.ok().build();
+    }
+
+    // ✅ NOUVEAU : PATCH pour mettre à jour le lien WBS Schedule
+    @PatchMapping("/linked-wbs")
+    @PreAuthorize(FORECAST_WRITE)
+    public ResponseEntity<Void> updateLinkedScheduleWbs(
+            @PathVariable Long projectId,
+            @RequestBody Map<String, Object> request) {
+        
+        Long financeEntryId = ((Number) request.get("financeEntryId")).longValue();
+        String linkedScheduleWbs = (String) request.get("linkedScheduleWbs");
+        
+        forecastService.updateLinkedScheduleWbs(financeEntryId, linkedScheduleWbs);
         return ResponseEntity.ok().build();
     }
 
     @PatchMapping("/level")
     @PreAuthorize(FORECAST_WRITE)
-    public ResponseEntity<Void> updateWbsLevel(@PathVariable Long projectId,
-                                               @RequestBody Map<String, Object> request) {
+    public ResponseEntity<Void> updateWbsLevel(
+            @PathVariable Long projectId,
+            @RequestBody Map<String, Object> request) {
         Long financeEntryId = ((Number) request.get("financeEntryId")).longValue();
         Integer level = ((Number) request.get("level")).intValue();
         forecastService.updateWbsLevel(financeEntryId, level);
