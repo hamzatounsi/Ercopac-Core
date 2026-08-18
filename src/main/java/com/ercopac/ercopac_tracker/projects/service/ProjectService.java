@@ -20,8 +20,11 @@ import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Optional;
+import java.util.List;
 
 @Service
 public class ProjectService {
@@ -60,7 +63,7 @@ public class ProjectService {
                         .filter(Customer::isActive)
                         .map(customer -> new ProjectFormOptionsResponse.CustomerOption(
                                 customer.getId(), customer.getCustomerCode(), customer.getName())).toList(),
-                usersForRole(organisationId, Role.PROJECT_MANAGER),
+                projectManagerCandidates(organisationId),
                 usersForRole(organisationId, Role.SALES_MANAGER)
         );
     }
@@ -146,6 +149,33 @@ public class ProjectService {
         return toDashboardDto(saved);
     }
 
+    /** Lead-only ownership operation. The organisation scope always comes from the authenticated user. */
+    @Transactional
+    public ProjectDashboardRowDto assignProjectManager(Long projectId, Long projectManagerId) {
+        if (!securityUtils.hasAnyRole("PROJECT_MANAGER_LEAD")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only a Project Manager Lead can assign project managers.");
+        }
+        if (projectManagerId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Project manager ID is required.");
+        }
+        Long organisationId = requireCurrentOrganisationId();
+        AppUser lead = userRepository.findByIdAndOrganisation_Id(securityUtils.getCurrentUserId(), organisationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authenticated user not found."));
+        if (!lead.isActive() || lead.getRole() != Role.PROJECT_MANAGER_LEAD) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only a Project Manager Lead can assign project managers.");
+        }
+        Project project = projectRepository.findByIdAndOrganisationId(projectId, organisationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found."));
+        AppUser manager = userRepository.findByIdAndOrganisation_Id(projectManagerId, organisationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project manager not found."));
+        if (!manager.isActive() || !manager.getRole().isProjectManagerRole()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selected user is not an eligible Project Manager.");
+        }
+        project.setProjectManagerId(manager.getId());
+        project.setProjectManagerName(manager.getFullName());
+        return toDashboardDto(projectRepository.save(project));
+    }
+
     @Transactional
     public void archiveProject(Long id) {
         Project project = getAccessibleProjectById(id);
@@ -189,11 +219,20 @@ public class ProjectService {
     }
 
     private void applyOwnership(Project project, UpsertProjectRequest request, Long organisationId) {
-        Long projectManagerId = securityUtils.hasAnyRole("PROJECT_MANAGER")
-                ? securityUtils.getCurrentUserId()
-                : request.getProjectManagerId();
+        Long projectManagerId;
+        if (securityUtils.hasAnyRole("PROJECT_MANAGER")) {
+            projectManagerId = securityUtils.getCurrentUserId();
+        } else if (securityUtils.hasAnyRole("PROJECT_MANAGER_LEAD")) {
+            projectManagerId = request.getProjectManagerId();
+        } else {
+            // Ownership assignment is lead-only. Non-PM project editors cannot smuggle a manager ID into a general update.
+            if (request.getProjectManagerId() != null) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only a Project Manager Lead can assign project managers.");
+            }
+            projectManagerId = project.getProjectManagerId();
+        }
         if (projectManagerId != null) {
-            AppUser user = eligibleUser(projectManagerId, organisationId, Role.PROJECT_MANAGER);
+            AppUser user = eligibleProjectManager(projectManagerId, organisationId);
             project.setProjectManagerId(user.getId());
             project.setProjectManagerName(user.getFullName());
         } else { project.setProjectManagerId(null); project.setProjectManagerName(null); }
@@ -210,9 +249,24 @@ public class ProjectService {
         return user;
     }
 
+    private AppUser eligibleProjectManager(Long userId, Long organisationId) {
+        AppUser user = userRepository.findByIdAndOrganisation_Id(userId, organisationId)
+                .orElseThrow(() -> new IllegalArgumentException("Selected user is not available for this organisation"));
+        if (!user.isActive() || !user.getRole().isProjectManagerRole()) {
+            throw new IllegalArgumentException("Selected user is not eligible for the Project Manager role");
+        }
+        return user;
+    }
+
     private java.util.List<ProjectFormOptionsResponse.UserOption> usersForRole(Long organisationId, Role role) {
         return userRepository.findByOrganisation_IdAndRoleOrderByFullNameAsc(organisationId, role).stream()
                 .filter(AppUser::isActive).map(this::toUserOption).toList();
+    }
+
+    private List<ProjectFormOptionsResponse.UserOption> projectManagerCandidates(Long organisationId) {
+        return userRepository.findByOrganisation_IdAndRoleInAndActiveTrueOrderByFullNameAsc(
+                organisationId, List.of(Role.PROJECT_MANAGER, Role.PROJECT_MANAGER_LEAD))
+                .stream().map(this::toUserOption).toList();
     }
 
     private ProjectFormOptionsResponse.UserOption toUserOption(AppUser user) {

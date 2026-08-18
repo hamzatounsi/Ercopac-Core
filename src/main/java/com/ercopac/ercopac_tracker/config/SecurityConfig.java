@@ -42,10 +42,12 @@ public class SecurityConfig {
         private static final String[] MANAGER_ROLES = {
                         "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
                         "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
+                        "PROJECT_MANAGER_LEAD", "ROLE_PROJECT_MANAGER_LEAD",
                         "DEPARTMENT_MANAGER", "ROLE_DEPARTMENT_MANAGER"
         };
 
         private static final String[] EMPLOYEE_ROLES = { "EMPLOYEE", "ROLE_EMPLOYEE" };
+        private static final String[] COMPANY_DASHBOARD_ROLES = { "MANAGER", "ROLE_MANAGER" };
 
         public SecurityConfig(JwtAuthFilter jwtAuthFilter, CorsConfigurationSource corsConfigurationSource) {
                 this.jwtAuthFilter = jwtAuthFilter;
@@ -93,6 +95,9 @@ public class SecurityConfig {
 
                                                 .requestMatchers("/api/org-admin/**")
                                                 .hasAnyAuthority(ORG_ADMIN_ONLY)
+
+                                                .requestMatchers("/api/company-dashboard/**")
+                                                .hasAnyAuthority(COMPANY_DASHBOARD_ROLES)
 
                                                 .requestMatchers("/api/admin/**")
                                                 .hasAnyAuthority(ORG_ADMIN_ROLES)
