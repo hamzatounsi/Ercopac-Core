@@ -34,10 +34,11 @@ public class PermissionChecker {
             return false;
         }
 
+        Role effectiveRole = user.getRole() == Role.PROJECT_MANAGER_LEAD ? Role.PROJECT_MANAGER : user.getRole();
         return permissionRepository
                 .findByOrganisation_IdAndRoleAndModule(
                         user.getOrganisation().getId(),
-                        user.getRole(),
+                        effectiveRole,
                         module
                 )
                 .map(RolePermission::isCanRead)
@@ -55,10 +56,11 @@ public class PermissionChecker {
             return false;
         }
 
+        Role effectiveRole = user.getRole() == Role.PROJECT_MANAGER_LEAD ? Role.PROJECT_MANAGER : user.getRole();
         return permissionRepository
                 .findByOrganisation_IdAndRoleAndModule(
                         user.getOrganisation().getId(),
-                        user.getRole(),
+                        effectiveRole,
                         module
                 )
                 .map(RolePermission::isCanWrite)

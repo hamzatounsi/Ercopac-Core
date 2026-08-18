@@ -290,6 +290,8 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
         }
         String code = switch (role) {
             case PROJECT_MANAGER -> "PROJECT_MANAGER";
+            case PROJECT_MANAGER_LEAD -> "PROJECT_MANAGER_LEAD";
+            case MANAGER -> "MANAGER";
             case SALES_MANAGER -> "SALES_REPRESENTATIVE";
             case DEPARTMENT_MANAGER -> "DEPARTMENT_MANAGER";
             case EMPLOYEE -> department.getCode() + "_SPECIALIST";
@@ -297,6 +299,8 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
         };
         String label = switch (role) {
             case PROJECT_MANAGER -> "Project Manager";
+            case PROJECT_MANAGER_LEAD -> "Project Manager Lead";
+            case MANAGER -> "Manager";
             case SALES_MANAGER -> "Sales Representative";
             case DEPARTMENT_MANAGER -> "Department Manager";
             case EMPLOYEE -> department.getLabel() + " Specialist";

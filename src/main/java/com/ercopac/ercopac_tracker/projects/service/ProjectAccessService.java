@@ -26,6 +26,11 @@ public class ProjectAccessService {
                     .toList();
         }
         Long organisationId = requireOrganisationId();
+        if (securityUtils.hasAnyRole("PROJECT_MANAGER_LEAD")) {
+            return applicationType == null
+                    ? projectRepository.findAllByOrganisationId(organisationId)
+                    : projectRepository.findAllByOrganisationIdAndApplicationType(organisationId, applicationType);
+        }
         if (securityUtils.hasAnyRole("PROJECT_MANAGER")) {
             return applicationType == null
                     ? projectRepository.findAllByOrganisationIdAndProjectManagerId(organisationId, securityUtils.getCurrentUserId())

@@ -371,9 +371,10 @@ public class AdminService {
     private int roleLimit(Organisation organisation, Role role) {
         return switch (role) {
             case ORG_ADMIN -> organisation.getOrgAdminLicenceLimit();
-            case PROJECT_MANAGER -> organisation.getProjectManagerLicenceLimit();
+            case PROJECT_MANAGER, PROJECT_MANAGER_LEAD -> organisation.getProjectManagerLicenceLimit();
             case DEPARTMENT_MANAGER -> organisation.getDepartmentManagerLicenceLimit();
             case EMPLOYEE -> organisation.getEmployeeLicenceLimit();
+            case MANAGER -> Integer.MAX_VALUE;
             case PLATFORM_OWNER -> 0;
             case SALES_MANAGER -> organisation.getSalesManagerLicenceLimit();
             case CLIENT -> organisation.getClientLicenceLimit();
@@ -396,6 +397,8 @@ public class AdminService {
         return switch (role) {
             case ORG_ADMIN -> "Organisation Admin";
             case PROJECT_MANAGER -> "Project Manager";
+            case PROJECT_MANAGER_LEAD -> "Project Manager Lead";
+            case MANAGER -> "Manager";
             case DEPARTMENT_MANAGER -> "Department Manager";
             case EMPLOYEE -> "Employee";
             case SALES_MANAGER -> "Sales Manager";

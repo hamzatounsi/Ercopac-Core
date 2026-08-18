@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ActionItemRepository extends JpaRepository<ActionItem, Long> {
+    List<ActionItem> findAllByOrganisationIdOrderByDueDateAscIdAsc(Long organisationId);
 
     List<ActionItem> findAllByProjectIdOrderByIdAsc(Long projectId);
 

@@ -4,6 +4,7 @@ import com.ercopac.ercopac_tracker.gm_dashboard.dto.ProjectDashboardRowDto;
 import com.ercopac.ercopac_tracker.projects.dto.ProjectDetailsResponse;
 import com.ercopac.ercopac_tracker.projects.dto.ProjectFormOptionsResponse;
 import com.ercopac.ercopac_tracker.projects.dto.UpsertProjectRequest;
+import com.ercopac.ercopac_tracker.projects.dto.AssignProjectManagerRequest;
 import com.ercopac.ercopac_tracker.projects.service.ProjectService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -52,6 +53,13 @@ public class ProjectController {
             @RequestBody UpsertProjectRequest request
     ) {
         return ResponseEntity.ok(projectService.updateProject(id, request));
+    }
+
+    @PatchMapping("/{id}/project-manager")
+    @PreAuthorize("hasAnyAuthority('PROJECT_MANAGER_LEAD', 'ROLE_PROJECT_MANAGER_LEAD')")
+    public ResponseEntity<ProjectDashboardRowDto> assignProjectManager(
+            @PathVariable Long id, @RequestBody AssignProjectManagerRequest request) {
+        return ResponseEntity.ok(projectService.assignProjectManager(id, request.getProjectManagerId()));
     }
 
     @PatchMapping("/{id}/archive")
