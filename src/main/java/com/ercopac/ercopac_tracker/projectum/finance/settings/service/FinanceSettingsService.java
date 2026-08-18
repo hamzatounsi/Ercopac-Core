@@ -189,8 +189,12 @@ public class FinanceSettingsService {
             entry.setDescription(template.getDescription());
             entry.setLevel(template.getLevel());
             entry.setRowType(template.getType() == null ? null : template.getType().name());
+            entry.setIsSummary("SUMMARY".equalsIgnoreCase(template.getType() != null ? template.getType().name() : ""));
             entry.setOwnerName(resolveOwnerDisplay(template.getOwnerKey()));
             entry.setResourceTypeCode(template.getResourceType());
+            
+            // ✅ NOUVEAU : Sauvegarder l'ordre du template
+            entry.setDisplayOrder(template.getSortOrder() != null ? template.getSortOrder() : 0);
 
             if (isNew) {
                 entry.setSales(BigDecimal.ZERO);
@@ -253,7 +257,7 @@ public class FinanceSettingsService {
 
             FinanceWbsTemplateRow row = new FinanceWbsTemplateRow();
             row.setOrganisation(organisation);
-            row.setProject(project); // ✅ Lien avec le projet
+            row.setProject(project);
             row.setSortOrder(startSort + index);
             row.setLevel(dto.getLevel() == null ? detectLevel(dto.getCodeTemplate()) : dto.getLevel());
             row.setCodeTemplate(dto.getCodeTemplate().trim());
@@ -274,8 +278,6 @@ public class FinanceSettingsService {
 
         return getSettings(projectId);
     }
-
-    // ─── Helper Methods ──────────────────────────────────────────────────────
 
     private FinanceWbsTemplateRowDto toDto(FinanceWbsTemplateRow row) {
         FinanceWbsTemplateRowDto dto = new FinanceWbsTemplateRowDto();

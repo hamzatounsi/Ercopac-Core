@@ -35,15 +35,16 @@ public class FinanceEntry {
 
     @Column(name = "row_type", length = 30)
     private String rowType;
- // Ajoute ce champ dans FinanceEntry.java
+
     @Column(name = "linked_schedule_wbs", length = 100)
     private String linkedScheduleWbs;
 
-    public String getLinkedScheduleWbs() { return linkedScheduleWbs; }
-    public void setLinkedScheduleWbs(String linkedScheduleWbs) { this.linkedScheduleWbs = linkedScheduleWbs; }
-    // ✅ AJOUTÉ : Champ is_summary requis par la base de données
     @Column(name = "is_summary", nullable = false)
     private Boolean isSummary = false;
+
+    // ✅ NOUVEAU : Pour préserver l'ordre du template WBS
+    @Column(name = "display_order")
+    private Integer displayOrder;
 
     @Column(name = "sales", precision = 18, scale = 2)
     private BigDecimal sales = BigDecimal.ZERO;
@@ -97,9 +98,15 @@ public class FinanceEntry {
     public String getRowType() { return rowType; }
     public void setRowType(String rowType) { this.rowType = rowType; }
 
-    // ✅ GETTER ET SETTER AJOUTÉS
+    public String getLinkedScheduleWbs() { return linkedScheduleWbs; }
+    public void setLinkedScheduleWbs(String linkedScheduleWbs) { this.linkedScheduleWbs = linkedScheduleWbs; }
+
     public Boolean getIsSummary() { return isSummary; }
     public void setIsSummary(Boolean isSummary) { this.isSummary = isSummary; }
+
+    // ✅ GETTERS/SETTERS POUR DISPLAY ORDER
+    public Integer getDisplayOrder() { return displayOrder; }
+    public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
 
     public BigDecimal getSales() { return sales; }
     public void setSales(BigDecimal sales) { this.sales = sales; }
