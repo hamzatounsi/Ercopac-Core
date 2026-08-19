@@ -76,6 +76,13 @@ public class ForecastController {
         forecastService.updateLinkedScheduleWbs(financeEntryId, linkedScheduleWbs);
         return ResponseEntity.ok().build();
     }
+    // ✅ ENDPOINT DE DEBUG
+    @GetMapping("/debug/{entryId}")
+    public ResponseEntity<Map<String, Object>> debugRow(
+            @PathVariable Long projectId,
+            @PathVariable Long entryId) {
+        return ResponseEntity.ok(forecastService.debugForecastRow(projectId, entryId));
+    }
 
     @PatchMapping("/level")
     @PreAuthorize(FORECAST_WRITE)

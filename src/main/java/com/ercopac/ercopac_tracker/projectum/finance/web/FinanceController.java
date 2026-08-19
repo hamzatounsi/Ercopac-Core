@@ -44,6 +44,7 @@ public class FinanceController {
     public ResponseEntity<List<FinanceEntryDto>> getFinanceRows(@PathVariable Long projectId) {
         return ResponseEntity.ok(financeService.getProjectFinance(projectId));
     }
+    
 
     @GetMapping("/summary")
     @PreAuthorize(FINANCE_READ)
