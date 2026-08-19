@@ -89,7 +89,7 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                 select count(*) from public.users
                 where role is not null
                   and role not in (
-                    'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER',
+                    'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
                     'DEPARTMENT_MANAGER', 'EMPLOYEE',
                     'SALES_MANAGER', 'CLIENT'
                   )
@@ -101,7 +101,7 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
         jdbcTemplate.execute("""
                 alter table public.users add constraint users_role_check check (
                     role in (
-                        'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER',
+                        'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
                         'DEPARTMENT_MANAGER', 'EMPLOYEE',
                         'SALES_MANAGER', 'CLIENT'
                     )
@@ -111,7 +111,7 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
         jdbcTemplate.execute("""
                 alter table public.role_permissions add constraint role_permissions_role_check check (
                     role in (
-                        'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER',
+                        'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
                         'DEPARTMENT_MANAGER', 'EMPLOYEE',
                         'SALES_MANAGER', 'CLIENT'
                     )

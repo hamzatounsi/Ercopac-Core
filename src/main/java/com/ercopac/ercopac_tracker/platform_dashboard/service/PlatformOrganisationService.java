@@ -10,6 +10,7 @@ import com.ercopac.ercopac_tracker.platform_dashboard.dto.PlatformLicenceUsageDt
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
+import com.ercopac.ercopac_tracker.user.service.GenericResourceTypeService;
 import jakarta.transaction.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,15 +23,18 @@ public class PlatformOrganisationService {
     private final OrganisationRepository organisationRepo;
     private final UserRepository userRepo;
     private final PasswordEncoder encoder;
+    private final GenericResourceTypeService genericResourceTypeService;
 
     public PlatformOrganisationService(
             OrganisationRepository organisationRepo,
             UserRepository userRepo,
-            PasswordEncoder encoder
+            PasswordEncoder encoder,
+            GenericResourceTypeService genericResourceTypeService
     ) {
         this.organisationRepo = organisationRepo;
         this.userRepo = userRepo;
         this.encoder = encoder;
+        this.genericResourceTypeService = genericResourceTypeService;
     }
 
     @Transactional
@@ -97,6 +101,7 @@ public class PlatformOrganisationService {
         organisation.setFlagUnderReview(request.flagUnderReview);
 
         organisation = organisationRepo.save(organisation);
+        genericResourceTypeService.ensure(organisation);
 
         AppUser admin = new AppUser();
         admin.setFullName(request.adminFullName != null ? request.adminFullName.trim() : "Organisation Admin");
@@ -294,6 +299,8 @@ public class PlatformOrganisationService {
         return switch (role) {
             case ORG_ADMIN -> "Organisation Admin";
             case PROJECT_MANAGER -> "Project Manager";
+            case PROJECT_MANAGER_LEAD -> "Project Manager Lead";
+            case MANAGER -> "Manager";
             case DEPARTMENT_MANAGER -> "Department Manager";
             case EMPLOYEE -> "Employee";
             case SALES_MANAGER -> "Sales Manager";

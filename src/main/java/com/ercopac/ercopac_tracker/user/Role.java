@@ -4,6 +4,8 @@ public enum Role {
     PLATFORM_OWNER,
     ORG_ADMIN,
     PROJECT_MANAGER,
+    PROJECT_MANAGER_LEAD,
+    MANAGER,
     DEPARTMENT_MANAGER,
     EMPLOYEE,
     SALES_MANAGER,
@@ -15,6 +17,7 @@ public enum Role {
      */
     public boolean requiresResourceProfile() {
         return this == PROJECT_MANAGER
+                || this == PROJECT_MANAGER_LEAD
                 || this == DEPARTMENT_MANAGER
                 || this == EMPLOYEE
                 || this == SALES_MANAGER;
@@ -22,5 +25,9 @@ public enum Role {
 
     public boolean isPlatformRole() {
         return this == PLATFORM_OWNER;
+    }
+
+    public boolean isProjectManagerRole() {
+        return this == PROJECT_MANAGER || this == PROJECT_MANAGER_LEAD;
     }
 }

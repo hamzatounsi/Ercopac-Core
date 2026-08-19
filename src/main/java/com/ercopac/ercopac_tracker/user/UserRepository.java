@@ -42,6 +42,8 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
 
     List<AppUser> findByOrganisation_IdAndRoleOrderByFullNameAsc(Long organisationId, Role role);
 
+    List<AppUser> findByOrganisation_IdAndRoleInAndActiveTrueOrderByFullNameAsc(Long organisationId, Collection<Role> roles);
+
     List<AppUser> findByOrganisation_IdAndDepartmentCodeOrderByFullNameAsc(Long organisationId, String departmentCode);
 
     List<AppUser> findByOrganisation_IdOrderByFullNameAsc(Long organisationId);
@@ -56,6 +58,8 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     List<AppUser> findByOrganisation_IdAndActiveTrueOrderByFullNameAsc(Long organisationId);
 
     int countByOrganisation_IdAndRoleAndActiveTrue(Long organisationId, Role role);
+
+    long countByOrganisation_IdAndRoleInAndActiveTrue(Long organisationId, Collection<Role> roles);
 
     long countByOrganisation_IdAndDepartment1_Id(Long organisationId, Long departmentId);
 

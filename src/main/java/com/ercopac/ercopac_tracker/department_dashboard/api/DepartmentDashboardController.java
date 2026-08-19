@@ -18,7 +18,7 @@ import java.util.List;
 public class DepartmentDashboardController {
 
     private static final String DEPARTMENT_READ =
-            "hasAnyAuthority('PROJECT_MANAGER', 'ROLE_PROJECT_MANAGER', " +
+            "hasAnyAuthority('PROJECT_MANAGER', 'ROLE_PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'ROLE_PROJECT_MANAGER_LEAD', " +
                     "'DEPARTMENT_MANAGER', 'ROLE_DEPARTMENT_MANAGER') or " +
                     "@permissionChecker.canRead(authentication, " +
                     "T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).DEPARTMENT_DASHBOARD)";

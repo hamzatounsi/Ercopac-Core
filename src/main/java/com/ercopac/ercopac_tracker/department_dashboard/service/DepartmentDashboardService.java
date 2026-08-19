@@ -12,6 +12,8 @@ import com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentReposi
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
+import com.ercopac.ercopac_tracker.user.domain.Supplier;
+import com.ercopac.ercopac_tracker.user.repository.SupplierRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
@@ -37,17 +39,20 @@ public class DepartmentDashboardService {
     private final DepartmentHolidayService departmentHolidayService;
     private final ProjectTaskRepository projectTaskRepository;
     private final TaskResourceAssignmentRepository taskResourceAssignmentRepository;
+    private final SupplierRepository supplierRepository;
 
     public DepartmentDashboardService(UserRepository userRepository,
                                       ProjectRepository projectRepository,
                                       DepartmentHolidayService departmentHolidayService,
                                       ProjectTaskRepository projectTaskRepository,
-                                      TaskResourceAssignmentRepository taskResourceAssignmentRepository) {
+                                      TaskResourceAssignmentRepository taskResourceAssignmentRepository,
+                                      SupplierRepository supplierRepository) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.departmentHolidayService = departmentHolidayService;
         this.projectTaskRepository = projectTaskRepository;
         this.taskResourceAssignmentRepository = taskResourceAssignmentRepository;
+        this.supplierRepository = supplierRepository;
     }
 
     public List<DepartmentManagerDto> getManagers() {
@@ -114,6 +119,7 @@ public class DepartmentDashboardService {
                 .toList();
 
         List<DepartmentMemberDto> members = new ArrayList<>(realMembers);
+        members.addAll(toSupplierMembers(currentOrgId, departmentCode));
 
         long genericBaseId = -1L;
         for (String resourceType : getDepartmentResourceTypes(departmentCode)) {
@@ -133,6 +139,8 @@ public class DepartmentDashboardService {
                     "#6b7280"
             ));
         }
+        members.add(new DepartmentMemberDto(-999_999L, "Generic", null, null, departmentCode, "GENERIC",
+                "GENERIC", null, true, null, null, List.of(), "#6b7280"));
 
         List<Long> realMemberIds = realMembers.stream()
                 .map(DepartmentMemberDto::id)
@@ -262,6 +270,10 @@ public class DepartmentDashboardService {
 
             if (assignedUserId != null && membersById.containsKey(assignedUserId)) {
                 targetMemberIds.add(assignedUserId);
+            }
+            Long supplierMemberId = assignment.getSupplierId() == null ? null : -1_000_000L - assignment.getSupplierId();
+            if (supplierMemberId != null && membersById.containsKey(supplierMemberId)) {
+                targetMemberIds.add(supplierMemberId);
             }
         }
 
@@ -760,6 +772,18 @@ public class DepartmentDashboardService {
         };
     }
 
+    private List<DepartmentMemberDto> toSupplierMembers(Long organisationId, String departmentCode) {
+        return supplierRepository.findByOrganisation_IdAndActiveTrueOrderByNameAsc(organisationId).stream()
+                .filter(supplier -> supplier.getDepartmentsCsv() == null || supplier.getDepartmentsCsv().isBlank()
+                        || Arrays.stream(supplier.getDepartmentsCsv().split(",")).map(String::trim)
+                        .anyMatch(code -> code.equalsIgnoreCase(departmentCode)))
+                .map(supplier -> new DepartmentMemberDto(-1_000_000L - supplier.getId(), supplier.getName(),
+                        supplier.getCode(), null, departmentCode,
+                        supplier.getResourceTypes().stream().map(type -> type.getCode()).findFirst().orElse("SUPPLIER"),
+                        "SUPPLIER", null, false, null, null, List.of(), "#7c3aed"))
+                .toList();
+    }
+
     public MyDepartmentResponseDto getOverviewByDepartment(
         String departmentCode,
             String timelineViewValue,
@@ -778,7 +802,7 @@ public class DepartmentDashboardService {
         // managers must use /overview with a same-organisation managerId.
         if (currentUser.getRole() == Role.DEPARTMENT_MANAGER) {
             departmentCode = currentUser.getDepartmentCode();
-        } else if (currentUser.getRole() == Role.PROJECT_MANAGER) {
+        } else if (currentUser.getRole().isProjectManagerRole()) {
             throw new AccessDeniedException("Project managers must select a department manager.");
         }
 
@@ -791,6 +815,7 @@ public class DepartmentDashboardService {
                 .toList();
 
         List<DepartmentMemberDto> members = new ArrayList<>(realMembers);
+        members.addAll(toSupplierMembers(currentOrgId, departmentCode));
 
         long genericBaseId = -1L;
         for (String resourceType : getDepartmentResourceTypes(departmentCode)) {

@@ -45,6 +45,8 @@ public class OrganisationAdminService {
     private static final List<Role> ASSIGNABLE_ROLES = List.of(
             Role.ORG_ADMIN,
             Role.PROJECT_MANAGER,
+            Role.PROJECT_MANAGER_LEAD,
+            Role.MANAGER,
             Role.DEPARTMENT_MANAGER,
             Role.EMPLOYEE,
             Role.SALES_MANAGER,
@@ -645,15 +647,20 @@ public class OrganisationAdminService {
     private void enforceRoleCapacity(Organisation organisation, Role role) {
         int limit = switch (role) {
             case ORG_ADMIN -> organisation.getOrgAdminLicenceLimit();
-            case PROJECT_MANAGER -> organisation.getProjectManagerLicenceLimit();
+            case PROJECT_MANAGER, PROJECT_MANAGER_LEAD -> organisation.getProjectManagerLicenceLimit();
             case DEPARTMENT_MANAGER -> organisation.getDepartmentManagerLicenceLimit();
             case EMPLOYEE -> organisation.getEmployeeLicenceLimit();
+            case MANAGER -> Integer.MAX_VALUE;
             case PLATFORM_OWNER -> 0;
             case SALES_MANAGER -> organisation.getSalesManagerLicenceLimit();
             case CLIENT -> organisation.getClientLicenceLimit();
         };
 
-        if (userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role) >= limit) {
+        long used = role.isProjectManagerRole()
+                ? userRepository.countByOrganisation_IdAndRoleInAndActiveTrue(
+                        organisation.getId(), List.of(Role.PROJECT_MANAGER, Role.PROJECT_MANAGER_LEAD))
+                : userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role);
+        if (used >= limit) {
             throw conflict("No active " + roleLabel(role) + " licence is available.");
         }
     }
@@ -826,6 +833,8 @@ public class OrganisationAdminService {
         return switch (role) {
             case ORG_ADMIN -> "Organisation Admin";
             case PROJECT_MANAGER -> "Project Manager";
+            case PROJECT_MANAGER_LEAD -> "Project Manager Lead";
+            case MANAGER -> "Manager";
             case DEPARTMENT_MANAGER -> "Department Manager";
             case EMPLOYEE -> "Employee";
             case PLATFORM_OWNER -> "Platform Owner";
@@ -838,6 +847,8 @@ public class OrganisationAdminService {
         return switch (role) {
             case ORG_ADMIN -> "Manages this organisation's profile, users, departments, and security configuration.";
             case PROJECT_MANAGER -> "Manages the organisation portfolio and operational project data.";
+            case PROJECT_MANAGER_LEAD -> "Manages Project Managers and the full organisation project portfolio.";
+            case MANAGER -> "Read-only executive visibility of company performance.";
             case DEPARTMENT_MANAGER -> "Manages delivery, resources, and workload for one department.";
             case EMPLOYEE -> "Works with personal assignments and tasks.";
             case PLATFORM_OWNER -> "Manages the SaaS platform.";

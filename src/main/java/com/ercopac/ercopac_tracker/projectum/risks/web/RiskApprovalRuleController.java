@@ -21,13 +21,13 @@ public class RiskApprovalRuleController {
     }
 
     @GetMapping
-@PreAuthorize("hasAnyRole('PROJECT_MANAGER','PLATFORM_OWNER')")
+@PreAuthorize("hasAnyRole('PROJECT_MANAGER','PROJECT_MANAGER_LEAD','PLATFORM_OWNER')")
     public ResponseEntity<List<RiskApprovalRuleDto>> getRules(@PathVariable Long projectId) {
         return ResponseEntity.ok(ruleService.getRules(projectId));
     }
 
     @PostMapping
-@PreAuthorize("hasAnyRole('PROJECT_MANAGER','PLATFORM_OWNER')")
+@PreAuthorize("hasAnyRole('PROJECT_MANAGER','PROJECT_MANAGER_LEAD','PLATFORM_OWNER')")
     public ResponseEntity<RiskApprovalRuleDto> create(
             @PathVariable Long projectId,
             @Valid @RequestBody UpsertRiskApprovalRuleRequest request) {
@@ -35,7 +35,7 @@ public class RiskApprovalRuleController {
     }
 
     @PutMapping("/{ruleId}")
-@PreAuthorize("hasAnyRole('PROJECT_MANAGER','PLATFORM_OWNER')")
+@PreAuthorize("hasAnyRole('PROJECT_MANAGER','PROJECT_MANAGER_LEAD','PLATFORM_OWNER')")
     public ResponseEntity<RiskApprovalRuleDto> update(
             @PathVariable Long projectId,
             @PathVariable Long ruleId,
@@ -44,7 +44,7 @@ public class RiskApprovalRuleController {
     }
 
     @DeleteMapping("/{ruleId}")
-@PreAuthorize("hasAnyRole('PROJECT_MANAGER','PLATFORM_OWNER')")
+@PreAuthorize("hasAnyRole('PROJECT_MANAGER','PROJECT_MANAGER_LEAD','PLATFORM_OWNER')")
     public ResponseEntity<Void> delete(
             @PathVariable Long projectId,
             @PathVariable Long ruleId) {

@@ -24,17 +24,19 @@ public class ResourceConfigService {
     private final OrganisationRepository organisationRepository;
     private final DepartmentRepository departmentRepository;
     private final ResourceTypeRepository resourceTypeRepository;
+    private final GenericResourceTypeService genericResourceTypeService;
 
     public ResourceConfigService(
             SecurityUtils securityUtils,
             OrganisationRepository organisationRepository,
             DepartmentRepository departmentRepository,
-            ResourceTypeRepository resourceTypeRepository
+            ResourceTypeRepository resourceTypeRepository, GenericResourceTypeService genericResourceTypeService
     ) {
         this.securityUtils = securityUtils;
         this.organisationRepository = organisationRepository;
         this.departmentRepository = departmentRepository;
         this.resourceTypeRepository = resourceTypeRepository;
+        this.genericResourceTypeService = genericResourceTypeService;
     }
 
     @Transactional(readOnly = true)
@@ -69,9 +71,11 @@ public class ResourceConfigService {
         return toDepartmentDto(departmentRepository.save(department));
     }
 
-    @Transactional(readOnly = true)
     public List<ResourceTypeConfigDto> getResourceTypes() {
         Long organisationId = requireOrganisationId();
+        Organisation organisation = organisationRepository.findById(organisationId)
+                .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
+        genericResourceTypeService.ensure(organisation);
 
         return resourceTypeRepository.findByOrganisation_IdOrderByCodeAsc(organisationId)
                 .stream()
@@ -110,6 +114,12 @@ public class ResourceConfigService {
                 .orElseThrow(() -> new IllegalArgumentException("Resource type not found"));
 
         String code = normalizeUpper(request.code());
+        if (GenericResourceTypeService.CODE.equals(type.getCode())) {
+            code = GenericResourceTypeService.CODE;
+            type.setLabel("Generic");
+            type.setActive(true);
+            type.setAssignable(true);
+        }
         if (code != null && !code.equals(type.getCode())) {
             if (resourceTypeRepository.existsByCodeAndOrganisation_Id(code, organisationId)) {
                 throw new IllegalArgumentException("Resource type code already exists");
@@ -132,8 +142,10 @@ public class ResourceConfigService {
         ResourceType type = resourceTypeRepository.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Resource type not found"));
 
-        type.setActive(false);
-        resourceTypeRepository.save(type);
+        if (GenericResourceTypeService.CODE.equals(type.getCode())) {
+            type.setActive(true); type.setAssignable(true); resourceTypeRepository.save(type); return;
+        }
+        type.setActive(false); resourceTypeRepository.save(type);
     }
 
     private void applyResourceTypeFields(ResourceType type, SaveResourceTypeRequest request, Long organisationId) {

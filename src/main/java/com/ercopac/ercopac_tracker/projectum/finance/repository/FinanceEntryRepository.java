@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface FinanceEntryRepository extends JpaRepository<FinanceEntry, Long> {
+    List<FinanceEntry> findAllByOrganisationId(Long organisationId);
 
     // --- Anciennes méthodes (gardées pour compatibilité) ---
     List<FinanceEntry> findAllByProjectIdOrderByWbsCodeAsc(Long projectId);
