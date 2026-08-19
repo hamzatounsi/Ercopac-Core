@@ -19,10 +19,12 @@ public class ForecastController {
     private final ForecastService forecastService;
 
     private static final String FORECAST_READ =
-        "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FORECAST)";
+            "@permissionChecker.canRead(authentication, " +
+            "T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FORECAST)";
 
     private static final String FORECAST_WRITE =
-        "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FORECAST)";
+            "@permissionChecker.canWrite(authentication, " +
+            "T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FORECAST)";
 
     public ForecastController(ForecastService forecastService) {
         this.forecastService = forecastService;
@@ -34,7 +36,10 @@ public class ForecastController {
             @PathVariable Long projectId,
             @RequestParam(defaultValue = "12") int periods,
             @RequestParam(defaultValue = "month") String periodType) {
-        return ResponseEntity.ok(forecastService.getForecastGrid(projectId, periods, periodType));
+
+        return ResponseEntity.ok(
+                forecastService.getForecastGrid(projectId, periods, periodType)
+        );
     }
 
     @GetMapping("/summary")
@@ -42,7 +47,10 @@ public class ForecastController {
     public ResponseEntity<ForecastSummaryDto> getForecastSummary(
             @PathVariable Long projectId,
             @RequestParam(defaultValue = "12") int periods) {
-        return ResponseEntity.ok(forecastService.getSummary(projectId, periods));
+
+        return ResponseEntity.ok(
+                forecastService.getSummary(projectId, periods)
+        );
     }
 
     @GetMapping("/periods")
@@ -50,48 +58,86 @@ public class ForecastController {
     public ResponseEntity<List<String>> getPeriods(
             @RequestParam(defaultValue = "12") int periods,
             @RequestParam(defaultValue = "month") String periodType) {
-        return ResponseEntity.ok(forecastService.getPeriods(periods, periodType));
+
+        return ResponseEntity.ok(
+                forecastService.getPeriods(periods, periodType)
+        );
     }
 
-    // ✅ CORRECTION : PUT pour mettre à jour une cellule de forecast
+    /**
+     * Create or update a forecast cell.
+     */
     @PutMapping
     @PreAuthorize(FORECAST_WRITE)
     public ResponseEntity<Void> upsertForecast(
             @PathVariable Long projectId,
             @Valid @RequestBody UpsertForecastEntryRequest request) {
+
         forecastService.upsertForecast(projectId, request);
         return ResponseEntity.ok().build();
     }
 
-    // ✅ NOUVEAU : PATCH pour mettre à jour le lien WBS Schedule
+    /**
+     * Link a Finance row to a Schedule/WBS task.
+     */
     @PatchMapping("/linked-wbs")
     @PreAuthorize(FORECAST_WRITE)
     public ResponseEntity<Void> updateLinkedScheduleWbs(
             @PathVariable Long projectId,
             @RequestBody Map<String, Object> request) {
-        
-        Long financeEntryId = ((Number) request.get("financeEntryId")).longValue();
-        String linkedScheduleWbs = (String) request.get("linkedScheduleWbs");
-        
-        forecastService.updateLinkedScheduleWbs(financeEntryId, linkedScheduleWbs);
+
+        Object financeEntryIdValue = request.get("financeEntryId");
+
+        if (!(financeEntryIdValue instanceof Number)) {
+            throw new IllegalArgumentException("financeEntryId is required");
+        }
+
+        Long financeEntryId = ((Number) financeEntryIdValue).longValue();
+
+        String linkedScheduleWbs =
+                request.get("linkedScheduleWbs") != null
+                        ? request.get("linkedScheduleWbs").toString()
+                        : null;
+
+        forecastService.updateLinkedScheduleWbs(
+                financeEntryId,
+                linkedScheduleWbs
+        );
+
         return ResponseEntity.ok().build();
     }
-    // ✅ ENDPOINT DE DEBUG
-    @GetMapping("/debug/{entryId}")
-    public ResponseEntity<Map<String, Object>> debugRow(
-            @PathVariable Long projectId,
-            @PathVariable Long entryId) {
-        return ResponseEntity.ok(forecastService.debugForecastRow(projectId, entryId));
-    }
 
+    /**
+     * Update the WBS level of a Finance/Forecast row.
+     */
     @PatchMapping("/level")
     @PreAuthorize(FORECAST_WRITE)
     public ResponseEntity<Void> updateWbsLevel(
             @PathVariable Long projectId,
             @RequestBody Map<String, Object> request) {
-        Long financeEntryId = ((Number) request.get("financeEntryId")).longValue();
-        String linkedScheduleWbs = (String) request.get("linkedScheduleWbs");
-        
-        forecastService.updateLinkedScheduleWbs(financeEntryId, linkedScheduleWbs);
+
+        Object financeEntryIdValue = request.get("financeEntryId");
+        Object levelValue = request.get("level");
+
+        if (!(financeEntryIdValue instanceof Number)) {
+            throw new IllegalArgumentException("financeEntryId is required");
+        }
+
+        if (!(levelValue instanceof Number)) {
+            throw new IllegalArgumentException("level is required");
+        }
+
+        Long financeEntryId =
+                ((Number) financeEntryIdValue).longValue();
+
+        Integer level =
+                ((Number) levelValue).intValue();
+
+        forecastService.updateWbsLevel(
+                financeEntryId,
+                level
+        );
+
         return ResponseEntity.ok().build();
-    }}
+    }
+}
