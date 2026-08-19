@@ -125,6 +125,58 @@ public class FinanceService {
         return dto;
     }
 
+    @Transactional
+    public void importFinanceDataFromExcel(Long projectId, List<UpsertFinanceEntryRequest> rows) {
+        Project project = getAccessibleProject(projectId);
+        
+        // Charger toutes les entrées Finance existantes pour ce projet
+        List<FinanceEntry> existingEntries = financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(
+            projectId, project.getOrganisation().getId());
+        
+        Map<String, FinanceEntry> entriesByWbs = existingEntries.stream()
+            .collect(Collectors.toMap(FinanceEntry::getWbsCode, e -> e));
+        
+        int updatedCount = 0;
+        int skippedCount = 0;
+        
+        for (UpsertFinanceEntryRequest rowData : rows) {
+            String wbsCode = rowData.getWbsCode();
+            
+            // ✅ Chercher l'entrée existante
+            FinanceEntry entry = entriesByWbs.get(wbsCode);
+            
+            if (entry != null) {
+                // ✅ METTRE À JOUR uniquement les valeurs financières
+                if (rowData.getBudget() != null) {
+                    entry.setBudget(rowData.getBudget());
+                }
+                if (rowData.getActualCost() != null) {
+                    entry.setActualCost(rowData.getActualCost());
+                }
+                if (rowData.getCommitment() != null) {
+                    entry.setCommitment(rowData.getCommitment());
+                }
+                if (rowData.getSales() != null) {
+                    entry.setSales(rowData.getSales());
+                }
+                if (rowData.getForecast() != null) {
+                    entry.setForecast(rowData.getForecast());
+                }
+                
+                financeEntryRepository.save(entry);
+                updatedCount++;
+            } else {
+                // ️ WBS n'existe pas - on ignore (ou on pourrait lancer une erreur)
+                skippedCount++;
+                System.out.println("WBS " + wbsCode + " not found - skipped");
+            }
+        }
+        
+        // Recalculer les lignes SUMMARY
+        recomputeSummaryRows(projectId, project.getOrganisation().getId());
+        
+        System.out.println("Import completed: " + updatedCount + " updated, " + skippedCount + " skipped");
+    }
     public FinanceEntryDto createEntry(Long projectId, UpsertFinanceEntryRequest request) {
         Project project = getAccessibleProject(projectId);
         FinanceEntry entry = new FinanceEntry();

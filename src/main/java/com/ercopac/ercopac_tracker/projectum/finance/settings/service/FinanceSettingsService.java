@@ -22,7 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
-
+import com.ercopac.ercopac_tracker.user.ResourceType;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 @Service
 @Transactional
 public class FinanceSettingsService {
@@ -35,7 +36,7 @@ public class FinanceSettingsService {
     private final SecurityUtils securityUtils;
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
-
+    private final ResourceTypeRepository resourceTypeRepository;
     public FinanceSettingsService(
             FinanceSettingsRepository financeSettingsRepository,
             FinanceWbsTemplateRowRepository templateRowRepository,
@@ -44,7 +45,8 @@ public class FinanceSettingsService {
             OrganisationRepository organisationRepository,
             SecurityUtils securityUtils,
             DepartmentRepository departmentRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            ResourceTypeRepository resourceTypeRepository
     ) {
         this.financeSettingsRepository = financeSettingsRepository;
         this.templateRowRepository = templateRowRepository;
@@ -53,7 +55,8 @@ public class FinanceSettingsService {
         this.organisationRepository = organisationRepository;
         this.securityUtils = securityUtils;
         this.departmentRepository = departmentRepository;
-        this.userRepository = userRepository;
+        this.userRepository = userRepository; // ✅ MANQUAIT
+        this.resourceTypeRepository = resourceTypeRepository;
     }
 
     @Transactional(readOnly = true)
@@ -103,17 +106,15 @@ public class FinanceSettingsService {
         if (projectId != null) {
             project = projectRepository.findById(projectId)
                     .orElseThrow(() -> new IllegalArgumentException("Project not found"));
-            // Supprime les anciennes lignes de CE projet uniquement
             templateRowRepository.deleteAllByProjectId(projectId);
         } else {
-            // Supprime les lignes globales
             templateRowRepository.deleteAllByOrganisationId(orgId);
         }
 
         for (FinanceWbsTemplateRowDto dto : request.getTemplateRows()) {
             FinanceWbsTemplateRow row = new FinanceWbsTemplateRow();
             row.setOrganisation(organisation);
-            row.setProject(project); // ✅ Lien avec le projet (null si global)
+            row.setProject(project);
             row.setSortOrder(dto.getSortOrder() == null ? 0 : dto.getSortOrder());
             row.setLevel(dto.getLevel());
             row.setCodeTemplate(dto.getCodeTemplate());
@@ -126,7 +127,15 @@ public class FinanceSettingsService {
                 row.setDepartment(dept);
             }
             
-            row.setResourceType(blankToNull(dto.getResourceType()));
+            // ✅ CORRECTION : Sauvegarder le resource_type correctement
+            if (dto.getResourceType() != null && !dto.getResourceType().isBlank()) {
+                // Extraire le code si c'est au format "Project Manager (PROJEC"
+                String resourceTypeCode = extractResourceTypeCode(dto.getResourceType());
+                row.setResourceType(resourceTypeCode);
+                System.out.println("💾 TEMPLATE - Saving ResourceType: " + resourceTypeCode);
+            } else {
+                row.setResourceType(null);
+            }
             
             if (dto.getOwnerId() != null) {
                 AppUser owner = userRepository.findById(dto.getOwnerId())
@@ -153,16 +162,16 @@ public class FinanceSettingsService {
         return getSettings(projectId);
     }
 
+   
+
     @Transactional
     public ApplyFinanceTemplateResultDto applyTemplate(Long projectId, ApplyFinanceTemplateRequest request) {
         Long orgId = requireOrganisationId();
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found"));
 
-        // Utiliser le template spécifique au projet
         List<FinanceWbsTemplateRow> templateRows = templateRowRepository.findAllByProjectIdOrderBySortOrderAscIdAsc(projectId);
         
-        // Si le projet n'a pas de template, on ne peut pas appliquer (isolation stricte)
         if (templateRows.isEmpty()) {
             throw new IllegalArgumentException("No finance WBS template configured for this specific project. Please define one first.");
         }
@@ -171,6 +180,20 @@ public class FinanceSettingsService {
         Map<String, FinanceEntry> existingByWbs = existingRows.stream()
                 .collect(Collectors.toMap(FinanceEntry::getWbsCode, e -> e, (a, b) -> a));
 
+        // ✅ 1. Identifier les codes WBS qui DOIVENT exister
+        Set<String> expectedWbsCodes = new HashSet<>();
+        for (FinanceWbsTemplateRow template : templateRows) {
+            expectedWbsCodes.add(buildFinalWbsCode(template.getCodeTemplate(), project.getCode()));
+        }
+
+        // ✅ 2. SUPPRIMER les entrées qui ne sont plus dans le template
+        for (FinanceEntry existing : existingRows) {
+            if (!expectedWbsCodes.contains(existing.getWbsCode())) {
+                financeEntryRepository.delete(existing);
+            }
+        }
+
+        // ✅ 3. Créer ou mettre à jour les entrées du template
         int generatedRows = 0;
         for (FinanceWbsTemplateRow template : templateRows) {
             String finalWbsCode = buildFinalWbsCode(template.getCodeTemplate(), project.getCode());
@@ -191,9 +214,39 @@ public class FinanceSettingsService {
             entry.setRowType(template.getType() == null ? null : template.getType().name());
             entry.setIsSummary("SUMMARY".equalsIgnoreCase(template.getType() != null ? template.getType().name() : ""));
             entry.setOwnerName(resolveOwnerDisplay(template.getOwnerKey()));
-            entry.setResourceTypeCode(template.getResourceType());
             
-            // ✅ NOUVEAU : Sauvegarder l'ordre du template
+         // ✅ CORRECTION : Sauvegarder le RESOURCE TYPE CODE correctement
+            String resourceTypeCode = null;
+
+            // Cas 1: Le template a une chaîne de resource type
+            if (template.getResourceType() != null && !template.getResourceType().isBlank()) {
+                String rawValue = template.getResourceType().trim();
+                
+                // Chercher le code exact dans la base de données
+                List<ResourceType> allTypes = resourceTypeRepository.findByOrganisation_IdAndActiveTrue(orgId);
+                ResourceType matched = allTypes.stream()
+                    .filter(rt -> rt.getCode().equalsIgnoreCase(rawValue) || 
+                                 rt.getLabel().equalsIgnoreCase(rawValue))
+                    .findFirst()
+                    .orElse(null);
+                
+                if (matched != null) {
+                    resourceTypeCode = matched.getCode();
+                    System.out.println("✅ Matched Resource Type: " + resourceTypeCode + " (from: " + rawValue + ")");
+                } else {
+                    // Fallback: extraire le code entre parenthèses si format "Project Manager (PROJEC"
+                    resourceTypeCode = extractResourceTypeCode(rawValue);
+                    System.out.println("⚠️ Fallback extraction: " + resourceTypeCode + " (from: " + rawValue + ")");
+                }
+            }
+
+            entry.setResourceTypeCode(resourceTypeCode);
+            System.out.println("💾 SAVING - WBS: " + finalWbsCode + ", ResourceTypeCode: " + resourceTypeCode);
+            
+            entry.setResourceTypeCode(resourceTypeCode);
+            System.out.println("💾 SAVING - WBS: " + finalWbsCode + ", ResourceTypeCode: " + resourceTypeCode);
+            
+            // ✅ Sauvegarder l'ordre du template
             entry.setDisplayOrder(template.getSortOrder() != null ? template.getSortOrder() : 0);
 
             if (isNew) {
@@ -214,12 +267,37 @@ public class FinanceSettingsService {
             generatedRows++;
         }
 
+        System.out.println("✅ Template applied successfully - " + generatedRows + " rows generated");
+        
         ApplyFinanceTemplateResultDto result = new ApplyFinanceTemplateResultDto();
         result.setProjectsProcessed(1);
         result.setRowsGenerated(generatedRows);
         return result;
     }
 
+    // ✅ NOUVELLE MÉTHODE : Extraire le code du Resource Type
+    private String extractResourceTypeCode(String resourceTypeDisplay) {
+        if (resourceTypeDisplay == null || resourceTypeDisplay.isBlank()) {
+            return null;
+        }
+        
+        System.out.println("🔍 Extracting code from: " + resourceTypeDisplay);
+        
+        // Si le format est "Project Manager (PROJEC", extraire "PROJEC"
+        if (resourceTypeDisplay.contains("(")) {
+            int startIndex = resourceTypeDisplay.indexOf("(") + 1;
+            int endIndex = resourceTypeDisplay.indexOf(")");
+            if (endIndex > startIndex) {
+                String code = resourceTypeDisplay.substring(startIndex, endIndex).trim();
+                System.out.println("✅ Extracted code: " + code);
+                return code;
+            }
+        }
+        
+        // Sinon, retourner la chaîne complète (au cas où c'est déjà le code)
+        System.out.println("✅ Using full string as code: " + resourceTypeDisplay.trim());
+        return resourceTypeDisplay.trim();
+    }
     public FinanceSettingsDto importWbsTemplate(Long projectId, ImportFinanceWbsTemplateRequest request) {
         Long orgId = requireOrganisationId();
         Organisation organisation = organisationRepository.findById(orgId)
