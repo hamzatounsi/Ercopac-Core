@@ -1,6 +1,11 @@
 name: Deploy Backend to Production
 
 on:
+  push:
+    branches:
+      - main
+
+  # Keep this so you can still deploy manually if needed
   workflow_dispatch:
 
 permissions:
