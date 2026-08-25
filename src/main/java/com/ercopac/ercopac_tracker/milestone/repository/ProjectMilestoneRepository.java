@@ -12,7 +12,6 @@ public interface ProjectMilestoneRepository extends JpaRepository<ProjectMilesto
     
     List<ProjectMilestone> findByProjectIdOrderByMilestoneDateAsc(Long projectId);
     
-    // ✅ CORRECTION : Utilisation d'une @Query pour traverser la relation Project -> Organisation
     @Query("SELECT pm FROM ProjectMilestone pm WHERE pm.projectId = :projectId AND pm.project.organisation.id = :organisationId ORDER BY pm.milestoneDate ASC")
     List<ProjectMilestone> findByProjectIdAndOrganisationIdOrderByMilestoneDateAsc(@Param("projectId") Long projectId, @Param("organisationId") Long organisationId);
     
@@ -39,4 +38,13 @@ public interface ProjectMilestoneRepository extends JpaRepository<ProjectMilesto
     );
     
     void deleteByProjectId(Long projectId);
+
+    // ✅ THIS IS THE ONLY CORRECT METHOD FOR THE DASHBOARD
+    List<ProjectMilestone> findByProjectIdInAndMilestoneDateBetween(
+            List<Long> projectIds, 
+            LocalDate startDate, 
+            LocalDate endDate
+    );
+    
+    // ❌ DO NOT PUT findByProjectIdInAndPlannedStartBetween HERE! It will crash the app.
 }

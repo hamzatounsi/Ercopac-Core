@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -28,21 +29,46 @@ public interface ProjectTaskRepository extends JpaRepository<ProjectTask, Long> 
     long countByDepartmentCodeAndOrganisationId(String departmentCode, Long organisationId);
     List<ProjectTask> findByProjectIdOrderByDisplayOrderAsc(Long projectId);
     List<ProjectTask> findByAssignedUser_DepartmentCodeAndAssignedUser_Organisation_Id(
-    String departmentCode,
-    Long organisationId
+        String departmentCode,
+        Long organisationId
     );
     void deleteByProjectId(Long projectId);
     void flush();
+    
     @Query(value = """
-    	    UPDATE project_tasks pt
-    	    SET duration_days = (
-    	        SELECT COALESCE(SUM(c.duration_days), 0)
-    	        FROM project_tasks c
-    	        WHERE c.parent_id = pt.id
-    	    )
-    	    WHERE pt.project_id = :projectId
-    	    AND pt.task_type = 'SUMMARY'
-    	    """, nativeQuery = true)
-    	@Modifying
-    	void updateSummaryDurations(@Param("projectId") Long projectId);
+        UPDATE project_tasks pt
+        SET duration_days = (
+            SELECT COALESCE(SUM(c.duration_days), 0)
+            FROM project_tasks c
+            WHERE c.parent_id = pt.id
+        )
+        WHERE pt.project_id = :projectId
+        AND pt.task_type = 'SUMMARY'
+        """, nativeQuery = true)
+    @Modifying
+    void updateSummaryDurations(@Param("projectId") Long projectId);
+
+    // ✅ NEW METHOD: Fetches tasks marked as MILESTONE within a specific date range, 
+    // and eagerly loads the milestoneType to get the color and letter code.
+    @Query("SELECT t FROM ProjectTask t JOIN FETCH t.milestoneType " +
+           "WHERE t.taskType = :taskType " +
+           "AND t.projectId IN :projectIds " +
+           "AND t.baselineStart BETWEEN :startDate AND :endDate")
+    List<ProjectTask> findByTaskTypeAndProjectIdInAndBaselineStartBetween(
+        @Param("taskType") String taskType,
+        @Param("projectIds") List<Long> projectIds,
+        @Param("startDate") LocalDate startDate,
+        @Param("endDate") LocalDate endDate
+    );
+    // ✅ THE BULLETPROOF QUERY
+    @Query("SELECT t FROM ProjectTask t LEFT JOIN FETCH t.milestoneType " +
+           "WHERE UPPER(t.taskType) = 'MILESTONE' " +
+           "AND t.projectId IN :projectIds " +
+           "AND (t.baselineStart BETWEEN :startDate AND :endDate " +
+           "     OR t.plannedStart BETWEEN :startDate AND :endDate)")
+    List<ProjectTask> findMilestoneTasksByDateRange(
+        @Param("projectIds") List<Long> projectIds,
+        @Param("startDate") LocalDate startDate,
+        @Param("endDate") LocalDate endDate
+    );
 }

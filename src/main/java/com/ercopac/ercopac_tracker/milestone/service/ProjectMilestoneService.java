@@ -62,6 +62,44 @@ public class ProjectMilestoneService {
         return milestones.stream().map(this::toDto).collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public List<ProjectMilestoneDto> getMilestonesByDateRange(List<Long> projectIds, LocalDate startDate, LocalDate endDate) {
+        // ✅ Call the new bulletproof method
+        List<ProjectTask> milestoneTasks = taskRepository.findMilestoneTasksByDateRange(projectIds, startDate, endDate);
+        
+        System.out.println("DEBUG: Found " + milestoneTasks.size() + " milestone tasks for projects " + projectIds);
+        
+        return milestoneTasks.stream().map(this::mapTaskToMilestoneDto).collect(Collectors.toList());
+    }
+
+    // ✅ ADD THIS NEW HELPER METHOD:
+    private ProjectMilestoneDto mapTaskToMilestoneDto(ProjectTask task) {
+        ProjectMilestoneDto dto = new ProjectMilestoneDto();
+        dto.setId(task.getId());
+        dto.setProjectId(task.getProjectId());
+        dto.setTaskId(task.getId());
+        dto.setMilestoneTypeId(task.getMilestoneTypeId());
+        
+        // Use baselineStart, fallback to plannedStart for the date
+        dto.setMilestoneDate(task.getBaselineStart() != null ? task.getBaselineStart() : task.getPlannedStart());
+        
+        // Enrich with Project Info
+        if (task.getProject() != null) {
+            dto.setProjectCode(task.getProject().getCode());
+            dto.setProjectName(task.getProject().getName());
+        }
+        
+        // Enrich with Milestone Type info (This is where the COLOR and LETTER come from!)
+        if (task.getMilestoneType() != null) {
+            dto.setMilestoneTypeCode(task.getMilestoneType().getCode());
+            dto.setMilestoneTypeLabel(task.getMilestoneType().getLabel());
+            dto.setMilestoneTypeColor(task.getMilestoneType().getColor());
+            dto.setMilestoneTypeLetterCode(task.getMilestoneType().getLetterCode());
+        }
+        
+        return dto;
+    }
+
     public ProjectMilestoneDto createMilestone(ProjectMilestoneDto dto) {
         Project project = projectRepository.findById(dto.getProjectId())
             .orElseThrow(() -> new IllegalArgumentException("Project not found"));
@@ -106,19 +144,16 @@ public class ProjectMilestoneService {
         dto.setPmCode(milestone.getPmCode());
         dto.setNotes(milestone.getNotes());
 
-        // Enrich with project info
         if (milestone.getProject() != null) {
             dto.setProjectCode(milestone.getProject().getCode());
             dto.setProjectName(milestone.getProject().getName());
         }
 
-        // Enrich with task info
         if (milestone.getTask() != null) {
             dto.setTaskWbsCode(milestone.getTask().getWbsCode());
             dto.setTaskName(milestone.getTask().getName());
         }
 
-        // Enrich with milestone type info
         if (milestone.getMilestoneType() != null) {
             dto.setMilestoneTypeCode(milestone.getMilestoneType().getCode());
             dto.setMilestoneTypeLabel(milestone.getMilestoneType().getLabel());

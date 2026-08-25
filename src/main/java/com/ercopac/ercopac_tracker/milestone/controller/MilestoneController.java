@@ -32,7 +32,6 @@ public class MilestoneController {
     }
 
     // ========== MILESTONE TYPES ==========
-
     @GetMapping("/types")
     @PreAuthorize(MILESTONES_READ)
     public ResponseEntity<List<MilestoneTypeDto>> getAllMilestoneTypes() {
@@ -59,7 +58,6 @@ public class MilestoneController {
     }
 
     // ========== PROJECT MILESTONES ==========
-
     @GetMapping("/projects/{projectId}")
     @PreAuthorize(MILESTONES_READ)
     public ResponseEntity<List<ProjectMilestoneDto>> getMilestonesByProject(@PathVariable Long projectId) {
@@ -73,6 +71,16 @@ public class MilestoneController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         return ResponseEntity.ok(projectMilestoneService.getMilestonesForPMCalendar(pmId, startDate, endDate));
+    }
+
+    // ✅ NEW ENDPOINT FOR DASHBOARD
+    @GetMapping("/range")
+    @PreAuthorize(MILESTONES_READ)
+    public ResponseEntity<List<ProjectMilestoneDto>> getMilestonesByDateRange(
+            @RequestParam List<Long> projectIds,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        return ResponseEntity.ok(projectMilestoneService.getMilestonesByDateRange(projectIds, startDate, endDate));
     }
 
     @PostMapping("/projects/{projectId}")

@@ -5,9 +5,9 @@ import java.time.LocalDate;
 public class ProjectMilestoneDto {
     private Long id;
     private Long projectId;
+    private Long taskId;
     private String projectCode;
     private String projectName;
-    private Long taskId;
     private String taskWbsCode;
     private String taskName;
     private Long milestoneTypeId;
@@ -20,19 +20,17 @@ public class ProjectMilestoneDto {
     private String pmCode;
     private String notes;
 
-    public ProjectMilestoneDto() {}
-
-    // Getters and Setters
+    // Generate Getters and Setters for ALL fields above
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getProjectId() { return projectId; }
     public void setProjectId(Long projectId) { this.projectId = projectId; }
+    public Long getTaskId() { return taskId; }
+    public void setTaskId(Long taskId) { this.taskId = taskId; }
     public String getProjectCode() { return projectCode; }
     public void setProjectCode(String projectCode) { this.projectCode = projectCode; }
     public String getProjectName() { return projectName; }
     public void setProjectName(String projectName) { this.projectName = projectName; }
-    public Long getTaskId() { return taskId; }
-    public void setTaskId(Long taskId) { this.taskId = taskId; }
     public String getTaskWbsCode() { return taskWbsCode; }
     public void setTaskWbsCode(String taskWbsCode) { this.taskWbsCode = taskWbsCode; }
     public String getTaskName() { return taskName; }

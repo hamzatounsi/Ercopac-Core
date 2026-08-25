@@ -123,14 +123,43 @@ public class ProjectTask {
 
     @Column(name = "wbs_code", length = 50)
     private String wbsCode;
+    // ── MILESTONE TYPE RELATIONSHIP ──────────────────────────────
+    @Column(name = "milestone_type_id")
+    private Long milestoneTypeId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "milestone_type_id", insertable = false, updatable = false)
+    private com.ercopac.ercopac_tracker.milestone.domain.MilestoneType milestoneType;
     @Column(name = "customer_milestone")
     private Boolean customerMilestone = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_user_id")
     private AppUser assignedUser;
+    // ── MISSING GETTERS/SETTERS ──────────────────────────────────
+    public Project getProject() {
+        return project;
+    }
 
+    public void setProject(Project project) {
+        this.project = project;
+    }
+
+    public Long getMilestoneTypeId() {
+        return milestoneTypeId;
+    }
+
+    public void setMilestoneTypeId(Long milestoneTypeId) {
+        this.milestoneTypeId = milestoneTypeId;
+    }
+
+    public com.ercopac.ercopac_tracker.milestone.domain.MilestoneType getMilestoneType() {
+        return milestoneType;
+    }
+
+    public void setMilestoneType(com.ercopac.ercopac_tracker.milestone.domain.MilestoneType milestoneType) {
+        this.milestoneType = milestoneType;
+    }
     // ── PROPER FK REFERENCES (new) ──────────────────────────────
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "resource_type_id")
