@@ -6,22 +6,28 @@ import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.domain.ProjectApplicationType;
 import com.ercopac.ercopac_tracker.projects.service.ProjectAccessService;
 import com.ercopac.ercopac_tracker.projects.service.ProjectProgressService;
+import com.ercopac.ercopac_tracker.user.AppUser; // ✅ Importer AppUser
+import com.ercopac.ercopac_tracker.user.UserRepository; // ✅ Importer UserRepository
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class GmDashboardService {
 
     private final ProjectAccessService projectAccessService;
     private final ProjectProgressService projectProgressService;
+    private final UserRepository userRepository; // ✅ Ajouter ce champ
 
     public GmDashboardService(ProjectAccessService projectAccessService,
-                              ProjectProgressService projectProgressService) {
+                              ProjectProgressService projectProgressService,
+                              UserRepository userRepository) { // ✅ Ajouter au constructeur
         this.projectAccessService = projectAccessService;
         this.projectProgressService = projectProgressService;
+        this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
@@ -58,6 +64,16 @@ public class GmDashboardService {
                     dto.setApplicationType(
                         p.getApplicationType() != null ? p.getApplicationType().name() : "PROJECTUM"
                     );
+                    
+                    // ✅ RÉCUPÉRER LE DÉPARTEMENT DU PM DEPUIS AppUser
+                    if (p.getProjectManagerId() != null) {
+                        Optional<AppUser> pmOpt = userRepository.findById(p.getProjectManagerId());
+                        if (pmOpt.isPresent()) {
+                            AppUser pm = pmOpt.get();
+                            dto.setPmDepartmentCode(pm.getDepartmentCode()); // ← Utilise la méthode getDepartmentCode() de AppUser
+                        }
+                    }
+                    
                     return dto;
                 })
                 .toList();
