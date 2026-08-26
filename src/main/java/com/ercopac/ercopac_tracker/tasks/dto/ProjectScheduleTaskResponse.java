@@ -8,6 +8,8 @@ public class ProjectScheduleTaskResponse {
 
     private Long id;
     private Long projectId;
+    private String projectCode;
+    private String projectName;
     private String name;
     private String description;
     private Integer durationDays;
@@ -66,6 +68,18 @@ public class ProjectScheduleTaskResponse {
 
     public ProjectScheduleTaskResponse setProjectId(Long projectId) {
         this.projectId = projectId;
+        return this;
+    }
+
+    public String getProjectCode() { return projectCode; }
+    public ProjectScheduleTaskResponse setProjectCode(String projectCode) {
+        this.projectCode = projectCode;
+        return this;
+    }
+
+    public String getProjectName() { return projectName; }
+    public ProjectScheduleTaskResponse setProjectName(String projectName) {
+        this.projectName = projectName;
         return this;
     }
 

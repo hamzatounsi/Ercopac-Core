@@ -131,7 +131,7 @@ public class ProjectTaskService {
         } else {
         // Assigned user — sync department from user
         if (request.getAssignedUserId() != null) {
-            userRepository.findById(request.getAssignedUserId()).ifPresent(user -> {
+            userRepository.findByIdAndOrganisation_Id(request.getAssignedUserId(), project.getOrganisation().getId()).ifPresent(user -> {
                 task.setAssignedUser(user);
                 if (user.getDepartment() != null) {
                     task.setDepartment(user.getDepartment());
@@ -597,14 +597,59 @@ public class ProjectTaskService {
         Long userId = securityUtils.getCurrentUserId();
         Long organisationId = securityUtils.getCurrentOrganisationId();
 
-        return projectTaskRepository.findByAssignedUser_IdAndOrganisationId(userId, organisationId)
-                .stream()
+        Map<Long, ProjectTask> assignedTasks = new LinkedHashMap<>();
+        projectTaskRepository.findByAssignedUser_IdAndOrganisationId(userId, organisationId)
+                .forEach(task -> assignedTasks.put(task.getId(), task));
+        taskResourceAssignmentRepository.findDistinctTasksForAssignedUser(userId, organisationId)
+                .forEach(task -> assignedTasks.put(task.getId(), task));
+
+        return assignedTasks.values().stream()
                 .sorted(Comparator
                         .comparing(ProjectTask::getPlannedStart, Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(ProjectTask::getDisplayOrder, Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(ProjectTask::getId))
-                .map(this::mapToResponse)
+                .map(task -> mapToEmployeeResponse(task, organisationId))
                 .toList();
+    }
+
+    /**
+     * The employee workspace intentionally needs a resilient schedule view,
+     * not the complete Gantt payload. In particular, old projects can contain
+     * dependency/resource configuration that is no longer valid; resolving it
+     * must not prevent an employee from seeing their assigned work.
+     */
+    private ProjectScheduleTaskResponse mapToEmployeeResponse(ProjectTask task, Long organisationId) {
+        Project project = projectRepository.findByIdAndOrganisationId(task.getProjectId(), organisationId).orElse(null);
+
+        return new ProjectScheduleTaskResponse()
+                .setId(task.getId())
+                .setProjectId(task.getProjectId())
+                .setProjectCode(project != null ? project.getCode() : null)
+                .setProjectName(project != null ? project.getName() : null)
+                .setParentId(task.getParentId())
+                .setName(task.getName())
+                .setDescription(task.getDescription())
+                .setTaskType(task.getTaskType())
+                .setWbsCode(task.getWbsCode())
+                .setBaselineStart(task.getBaselineStart())
+                .setBaselineEnd(task.getBaselineEnd())
+                .setPlannedStart(task.getPlannedStart())
+                .setPlannedEnd(task.getPlannedEnd())
+                .setActualStart(task.getActualStart())
+                .setActualEnd(task.getActualEnd())
+                .setDurationDays(task.getDurationDays())
+                .setPercentComplete(task.getPercentComplete())
+                .setAllocationPercent(task.getAllocationPercent())
+                .setPriority(task.getPriority())
+                .setScheduleMode(task.getScheduleMode())
+                .setStatus(task.getStatus())
+                .setColor(task.getColor())
+                .setActive(task.getActive())
+                .setDisplayOrder(task.getDisplayOrder())
+                .setOutlineLevel(task.getOutlineLevel())
+                .setCustomerMilestone(task.getCustomerMilestone())
+                .setAssignedUserId(task.getAssignedUser() != null ? task.getAssignedUser().getId() : null)
+                .setAssignedUserName(task.getAssignedUser() != null ? task.getAssignedUser().getFullName() : null);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -954,6 +999,8 @@ public class ProjectTaskService {
         return new ProjectScheduleTaskResponse()
                 .setId(task.getId())
                 .setProjectId(task.getProjectId())
+                .setProjectCode(task.getProject() != null ? task.getProject().getCode() : null)
+                .setProjectName(task.getProject() != null ? task.getProject().getName() : null)
                 .setParentId(task.getParentId())
                 .setWbsCode(task.getWbsCode())
                 .setOutlineLevel(task.getOutlineLevel())
