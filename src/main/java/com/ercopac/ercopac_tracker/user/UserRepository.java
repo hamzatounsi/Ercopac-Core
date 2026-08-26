@@ -48,6 +48,8 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
 
     List<AppUser> findByOrganisation_IdOrderByFullNameAsc(Long organisationId);
 
+    Optional<AppUser> findByOrganisation_IdAndFullNameIgnoreCase(Long organisationId, String fullName);
+
     // FIXED: was using String resourceType, now uses resourceType.code
     @Query("SELECT u FROM AppUser u WHERE u.organisation.id = :organisationId AND LOWER(u.resourceType.code) = LOWER(:resourceTypeCode) AND u.active = true ORDER BY u.fullName ASC")
     List<AppUser> findByOrganisationIdAndResourceTypeCodeAndActiveTrue(

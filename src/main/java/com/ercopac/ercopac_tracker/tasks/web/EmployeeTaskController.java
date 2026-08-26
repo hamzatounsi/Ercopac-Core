@@ -20,7 +20,7 @@ public class EmployeeTaskController {
         this.projectTaskService = projectTaskService;
     }
 
-    @GetMapping("/mine")
+    @GetMapping({"", "/mine"})
     @PreAuthorize("hasAnyAuthority('EMPLOYEE','ROLE_EMPLOYEE')")
     public ResponseEntity<List<ProjectScheduleTaskResponse>> getMyTasks() {
         return ResponseEntity.ok(projectTaskService.getMyAssignedTasks());

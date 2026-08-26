@@ -20,6 +20,8 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     List<Project> findAllByOrganisationId(Long organisationId);
 
+    List<Project> findAllByIdInAndOrganisationIdOrderByNameAsc(List<Long> ids, Long organisationId);
+
     List<Project> findAllByOrganisationIdAndProjectManagerId(Long organisationId, Long projectManagerId);
 
     List<Project> findAllByOrganisationIdAndProjectManagerIdAndApplicationType(
