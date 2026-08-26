@@ -29,10 +29,15 @@ public class UpdateProjectTaskRequest {
     private Integer outlineLevel;
     private Boolean customerMilestone;
     private Long assignedUserId;
- 
+    private Long milestoneTypeId;
     public Long getParentId() { return parentId; }
     public void setParentId(Long parentId) { this.parentId = parentId; }
- 
+    
+
+    // ✅ ADD THESE TWO METHODS:
+    public Long getMilestoneTypeId() { return milestoneTypeId; }
+    public void setMilestoneTypeId(Long milestoneTypeId) { this.milestoneTypeId = milestoneTypeId; }
+
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
  
