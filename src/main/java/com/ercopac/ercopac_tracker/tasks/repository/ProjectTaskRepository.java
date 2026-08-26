@@ -1,6 +1,7 @@
 package com.ercopac.ercopac_tracker.tasks.repository;
 
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
+import com.ercopac.ercopac_tracker.tasks.domain.TaskResourceAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -22,6 +23,17 @@ public interface ProjectTaskRepository extends JpaRepository<ProjectTask, Long> 
     boolean existsByProjectIdAndWbsCode(Long projectId, String wbsCode);
     List<ProjectTask> findByAssignedUser_Id(Long userId);
     List<ProjectTask> findByAssignedUser_IdAndOrganisationId(Long userId, Long organisationId);
+    long countByProjectIdAndAssignedUser_IdAndOrganisationId(Long projectId, Long userId, Long organisationId);
+
+    @Query("select count(t) from ProjectTask t where t.projectId = :projectId and t.organisationId = :organisationId " +
+           "and (t.assignedUser.id = :userId or exists (select a.id from TaskResourceAssignment a where a.task.id = t.id and a.assignedUserId = :userId))")
+    long countAssignedToUserInProject(@Param("projectId") Long projectId, @Param("userId") Long userId,
+                                      @Param("organisationId") Long organisationId);
+
+    @Query("select distinct t.projectId from ProjectTask t where t.assignedUser.id = :userId and t.organisationId = :organisationId")
+    List<Long> findDistinctProjectIdsByAssignedUserIdAndOrganisationId(
+        @Param("userId") Long userId,
+        @Param("organisationId") Long organisationId);
     List<ProjectTask> findByAssignedUser_IdInAndOrganisationId(Collection<Long> userIds, Long organisationId);
     List<ProjectTask> findByDepartmentCodeAndOrganisationIdOrderByDisplayOrderAscIdAsc(String departmentCode, Long organisationId);
     List<ProjectTask> findByDepartment_IdAndOrganisationIdOrderByDisplayOrderAscIdAsc(Long departmentId, Long organisationId);

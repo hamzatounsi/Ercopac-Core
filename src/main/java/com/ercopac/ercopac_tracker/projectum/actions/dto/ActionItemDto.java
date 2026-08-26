@@ -21,6 +21,7 @@ public class ActionItemDto {
     // ✅ NOUVEAUX CHAMPS pour le frontend employé
     private Long projectId;
     private String projectCode;
+    private String projectName;
 
     // Getters et Setters
     public Long getId() { return id; }
@@ -68,4 +69,7 @@ public class ActionItemDto {
 
     public String getProjectCode() { return projectCode; }
     public void setProjectCode(String projectCode) { this.projectCode = projectCode; }
+
+    public String getProjectName() { return projectName; }
+    public void setProjectName(String projectName) { this.projectName = projectName; }
 }
