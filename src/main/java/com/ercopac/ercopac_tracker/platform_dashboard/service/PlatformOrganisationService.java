@@ -285,7 +285,10 @@ public class PlatformOrganisationService {
     }
 
     private PlatformLicenceUsageDto usage(Organisation organisation, Role role, int allocated) {
-        long used = userRepo.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role);
+        long used = role == Role.SALES_MANAGER
+                ? userRepo.countByOrganisation_IdAndRoleInAndActiveTrue(organisation.getId(),
+                        List.of(Role.SALES_MANAGER_LEAD, Role.SALES_MANAGER, Role.SYSTEM_ENGINEER))
+                : userRepo.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role);
         return new PlatformLicenceUsageDto(
                 role.name(),
                 roleLabel(role),
@@ -303,7 +306,9 @@ public class PlatformOrganisationService {
             case MANAGER -> "Manager";
             case DEPARTMENT_MANAGER -> "Department Manager";
             case EMPLOYEE -> "Employee";
+            case SALES_MANAGER_LEAD -> "Sales Manager Lead";
             case SALES_MANAGER -> "Sales Manager";
+            case SYSTEM_ENGINEER -> "System Engineer";
             case CLIENT -> "Client";
             case PLATFORM_OWNER -> "Platform Owner";
         };

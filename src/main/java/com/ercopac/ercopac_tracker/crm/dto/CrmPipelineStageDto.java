@@ -5,6 +5,7 @@ public class CrmPipelineStageDto {
     private String name;
     private String color;
     private Integer displayOrder;
+    private Integer probability;
     private boolean won;
     private boolean lost;
     private int opportunityCount; // computed
@@ -19,6 +20,8 @@ public class CrmPipelineStageDto {
     public void setColor(String color) { this.color = color; }
     public Integer getDisplayOrder() { return displayOrder; }
     public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
+    public Integer getProbability() { return probability; }
+    public void setProbability(Integer probability) { this.probability = probability; }
     public boolean isWon() { return won; }
     public void setWon(boolean won) { this.won = won; }
     public boolean isLost() { return lost; }

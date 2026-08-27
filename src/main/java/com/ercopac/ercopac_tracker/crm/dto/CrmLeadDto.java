@@ -6,6 +6,11 @@ public class CrmLeadDto {
     private Long id;
     private String fullName;
     private String company;
+    private Long accountId;
+    private String accountName;
+    private String jobTitle;
+    private String mobile;
+    private String rating;
     private String email;
     private String phone;
     private String source;
@@ -26,6 +31,16 @@ public class CrmLeadDto {
     public void setFullName(String fullName) { this.fullName = fullName; }
     public String getCompany() { return company; }
     public void setCompany(String company) { this.company = company; }
+    public Long getAccountId() { return accountId; }
+    public void setAccountId(Long value) { accountId = value; }
+    public String getAccountName() { return accountName; }
+    public void setAccountName(String value) { accountName = value; }
+    public String getJobTitle() { return jobTitle; }
+    public void setJobTitle(String value) { jobTitle = value; }
+    public String getMobile() { return mobile; }
+    public void setMobile(String value) { mobile = value; }
+    public String getRating() { return rating; }
+    public void setRating(String value) { rating = value; }
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
     public String getPhone() { return phone; }
