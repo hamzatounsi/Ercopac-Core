@@ -64,7 +64,7 @@ public class ProjectMilestoneService {
 
     @Transactional(readOnly = true)
     public List<ProjectMilestoneDto> getMilestonesByDateRange(List<Long> projectIds, LocalDate startDate, LocalDate endDate) {
-        // ✅ Call the new bulletproof method
+
         List<ProjectTask> milestoneTasks = taskRepository.findMilestoneTasksByDateRange(projectIds, startDate, endDate);
         
         System.out.println("DEBUG: Found " + milestoneTasks.size() + " milestone tasks for projects " + projectIds);
