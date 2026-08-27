@@ -70,7 +70,8 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                     department_code = null,
                     resource_type_id = null,
                     internal_user = false
-                where role in ('PLATFORM_OWNER', 'ORG_ADMIN', 'CLIENT')
+                where role in ('PLATFORM_OWNER', 'ORG_ADMIN', 'CLIENT',
+                    'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER')
                 """);
 
         // Role permissions use the same enum values and must be migrated
@@ -91,7 +92,7 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                   and role not in (
                     'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
                     'DEPARTMENT_MANAGER', 'EMPLOYEE',
-                    'SALES_MANAGER', 'CLIENT'
+                    'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT'
                   )
                 """, Integer.class);
         if (unsupportedRoles != null && unsupportedRoles > 0) {
@@ -103,7 +104,7 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                     role in (
                         'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
                         'DEPARTMENT_MANAGER', 'EMPLOYEE',
-                        'SALES_MANAGER', 'CLIENT'
+                        'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT'
                     )
                 )
                 """);
@@ -113,7 +114,7 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                     role in (
                         'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
                         'DEPARTMENT_MANAGER', 'EMPLOYEE',
-                        'SALES_MANAGER', 'CLIENT'
+                        'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT'
                     )
                 )
                 """);
@@ -123,7 +124,7 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                 add constraint admin_licence_assignments_licence_type_check check (
                     licence_type in (
                         'ORG_ADMIN', 'PROJECT_MANAGER', 'DEPARTMENT_MANAGER',
-                        'EMPLOYEE', 'SALES_MANAGER', 'CLIENT'
+                        'EMPLOYEE', 'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT'
                     )
                 )
                 """);

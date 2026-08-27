@@ -9,6 +9,8 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "crm_opportunities")
@@ -27,6 +29,10 @@ public class CrmOpportunity {
 
     @Column(name = "account_name", length = 150)
     private String accountName;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id")
+    private CrmAccount account;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "stage_id")
@@ -51,6 +57,58 @@ public class CrmOpportunity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "lead_id")
     private CrmLead lead;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "crm_opportunity_team",
+            joinColumns = @JoinColumn(name = "opportunity_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id"))
+    private Set<AppUser> teamMembers = new LinkedHashSet<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supply_category_id")
+    private CrmSupplyCategory supplyCategory;
+
+    @Column(name = "opportunity_type", length = 20)
+    private String opportunityType;
+
+    @Column(length = 20)
+    private String pipeline;
+
+    @Column(name = "quote_number", length = 80)
+    private String quoteNumber;
+
+    @Column(name = "quote_requested_date")
+    private LocalDate quoteRequestedDate;
+
+    @Column(name = "quote_submitted_date")
+    private LocalDate quoteSubmittedDate;
+
+    @Column(name = "shipment_date")
+    private LocalDate shipmentDate;
+
+    @Column(name = "next_step", length = 500)
+    private String nextStep;
+
+    @Column(length = 8000)
+    private String description;
+
+    @Column(name = "material_value", precision = 15, scale = 2)
+    private BigDecimal materialValue;
+
+    @Column(name = "services_value", precision = 15, scale = 2)
+    private BigDecimal servicesValue;
+
+    @Column(name = "ercopac_material_value", precision = 15, scale = 2)
+    private BigDecimal ercopacMaterialValue;
+
+    @Column(name = "third_party_material_value", precision = 15, scale = 2)
+    private BigDecimal thirdPartyMaterialValue;
+
+    @Column(name = "ercopac_resale_value", precision = 15, scale = 2)
+    private BigDecimal ercopacResaleValue;
+
+    @Column(name = "resale_value", precision = 15, scale = 2)
+    private BigDecimal resaleValue;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id")
@@ -83,6 +141,8 @@ public class CrmOpportunity {
     public void setName(String name) { this.name = name; }
     public String getAccountName() { return accountName; }
     public void setAccountName(String accountName) { this.accountName = accountName; }
+    public CrmAccount getAccount() { return account; }
+    public void setAccount(CrmAccount value) { account = value; }
     public CrmPipelineStage getStage() { return stage; }
     public void setStage(CrmPipelineStage stage) { this.stage = stage; }
     public BigDecimal getValue() { return value; }
@@ -97,6 +157,38 @@ public class CrmOpportunity {
     public void setOwner(AppUser owner) { this.owner = owner; }
     public CrmLead getLead() { return lead; }
     public void setLead(CrmLead lead) { this.lead = lead; }
+    public Set<AppUser> getTeamMembers() { return teamMembers; }
+    public void setTeamMembers(Set<AppUser> teamMembers) { this.teamMembers = teamMembers; }
+    public CrmSupplyCategory getSupplyCategory() { return supplyCategory; }
+    public void setSupplyCategory(CrmSupplyCategory value) { supplyCategory = value; }
+    public String getOpportunityType() { return opportunityType; }
+    public void setOpportunityType(String value) { opportunityType = value; }
+    public String getPipeline() { return pipeline; }
+    public void setPipeline(String value) { pipeline = value; }
+    public String getQuoteNumber() { return quoteNumber; }
+    public void setQuoteNumber(String value) { quoteNumber = value; }
+    public LocalDate getQuoteRequestedDate() { return quoteRequestedDate; }
+    public void setQuoteRequestedDate(LocalDate value) { quoteRequestedDate = value; }
+    public LocalDate getQuoteSubmittedDate() { return quoteSubmittedDate; }
+    public void setQuoteSubmittedDate(LocalDate value) { quoteSubmittedDate = value; }
+    public LocalDate getShipmentDate() { return shipmentDate; }
+    public void setShipmentDate(LocalDate value) { shipmentDate = value; }
+    public String getNextStep() { return nextStep; }
+    public void setNextStep(String value) { nextStep = value; }
+    public String getDescription() { return description; }
+    public void setDescription(String value) { description = value; }
+    public BigDecimal getMaterialValue() { return materialValue; }
+    public void setMaterialValue(BigDecimal value) { materialValue = value; }
+    public BigDecimal getServicesValue() { return servicesValue; }
+    public void setServicesValue(BigDecimal value) { servicesValue = value; }
+    public BigDecimal getErcopacMaterialValue() { return ercopacMaterialValue; }
+    public void setErcopacMaterialValue(BigDecimal value) { ercopacMaterialValue = value; }
+    public BigDecimal getThirdPartyMaterialValue() { return thirdPartyMaterialValue; }
+    public void setThirdPartyMaterialValue(BigDecimal value) { thirdPartyMaterialValue = value; }
+    public BigDecimal getErcopacResaleValue() { return ercopacResaleValue; }
+    public void setErcopacResaleValue(BigDecimal value) { ercopacResaleValue = value; }
+    public BigDecimal getResaleValue() { return resaleValue; }
+    public void setResaleValue(BigDecimal value) { resaleValue = value; }
     public Project getProject() { return project; }
     public void setProject(Project project) { this.project = project; }
     public boolean isWon() { return won; }

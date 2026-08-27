@@ -28,6 +28,12 @@ public class CrmPipelineStage {
     @Column(name = "display_order", nullable = false)
     private Integer displayOrder = 0;
 
+    // The database has pre-supervisor-template installations with populated
+    // pipeline rows.  A database default lets Hibernate add this field without
+    // failing while PostgreSQL backfills those rows during an in-place upgrade.
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private Integer probability = 0;
+
     @Column(name = "is_won", nullable = false)
     private boolean won = false;
 
@@ -45,11 +51,12 @@ public class CrmPipelineStage {
 
     public CrmPipelineStage() {}
 
-    public CrmPipelineStage(Organisation org, String name, String color, int order, boolean won, boolean lost) {
+    public CrmPipelineStage(Organisation org, String name, String color, int order, int probability, boolean won, boolean lost) {
         this.organisation = org;
         this.name = name;
         this.color = color;
         this.displayOrder = order;
+        this.probability = probability;
         this.won = won;
         this.lost = lost;
     }
@@ -63,6 +70,8 @@ public class CrmPipelineStage {
     public void setColor(String color) { this.color = color; }
     public Integer getDisplayOrder() { return displayOrder; }
     public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
+    public Integer getProbability() { return probability; }
+    public void setProbability(Integer probability) { this.probability = probability; }
     public boolean isWon() { return won; }
     public void setWon(boolean won) { this.won = won; }
     public boolean isLost() { return lost; }

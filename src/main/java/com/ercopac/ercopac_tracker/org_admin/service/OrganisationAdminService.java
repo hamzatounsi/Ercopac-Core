@@ -49,7 +49,9 @@ public class OrganisationAdminService {
             Role.MANAGER,
             Role.DEPARTMENT_MANAGER,
             Role.EMPLOYEE,
+            Role.SALES_MANAGER_LEAD,
             Role.SALES_MANAGER,
+            Role.SYSTEM_ENGINEER,
             Role.CLIENT
     );
 
@@ -652,14 +654,17 @@ public class OrganisationAdminService {
             case EMPLOYEE -> organisation.getEmployeeLicenceLimit();
             case MANAGER -> Integer.MAX_VALUE;
             case PLATFORM_OWNER -> 0;
-            case SALES_MANAGER -> organisation.getSalesManagerLicenceLimit();
+            case SALES_MANAGER_LEAD, SALES_MANAGER, SYSTEM_ENGINEER -> organisation.getSalesManagerLicenceLimit();
             case CLIENT -> organisation.getClientLicenceLimit();
         };
 
         long used = role.isProjectManagerRole()
                 ? userRepository.countByOrganisation_IdAndRoleInAndActiveTrue(
                         organisation.getId(), List.of(Role.PROJECT_MANAGER, Role.PROJECT_MANAGER_LEAD))
-                : userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role);
+                : role.isCrmRole()
+                    ? userRepository.countByOrganisation_IdAndRoleInAndActiveTrue(
+                            organisation.getId(), List.of(Role.SALES_MANAGER_LEAD, Role.SALES_MANAGER, Role.SYSTEM_ENGINEER))
+                    : userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role);
         if (used >= limit) {
             throw conflict("No active " + roleLabel(role) + " licence is available.");
         }
@@ -838,7 +843,9 @@ public class OrganisationAdminService {
             case DEPARTMENT_MANAGER -> "Department Manager";
             case EMPLOYEE -> "Employee";
             case PLATFORM_OWNER -> "Platform Owner";
+            case SALES_MANAGER_LEAD -> "Sales Manager Lead";
             case SALES_MANAGER -> "Sales Manager";
+            case SYSTEM_ENGINEER -> "System Engineer";
             case CLIENT -> "Client";
         };
     }
@@ -852,7 +859,9 @@ public class OrganisationAdminService {
             case DEPARTMENT_MANAGER -> "Manages delivery, resources, and workload for one department.";
             case EMPLOYEE -> "Works with personal assignments and tasks.";
             case PLATFORM_OWNER -> "Manages the SaaS platform.";
-            case SALES_MANAGER -> "Manages customer support tickets and client communication.";
+            case SALES_MANAGER_LEAD -> "Leads the organisation CRM, sales team, pipeline configuration, and targets.";
+            case SALES_MANAGER -> "Manages accounts, contacts, opportunities, and normal CRM operations.";
+            case SYSTEM_ENGINEER -> "Reviews CRM accounts, contacts, opportunities, and reports without changing business data.";
             case CLIENT -> "Submits and follows support tickets for their organisation.";
         };
     }

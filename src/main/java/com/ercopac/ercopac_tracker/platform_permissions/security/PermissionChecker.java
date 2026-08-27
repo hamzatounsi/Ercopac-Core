@@ -34,6 +34,10 @@ public class PermissionChecker {
             return false;
         }
 
+        if (module == PermissionModule.CRM && user.getRole().isCrmRole()) {
+            return true;
+        }
+
         Role effectiveRole = user.getRole() == Role.PROJECT_MANAGER_LEAD ? Role.PROJECT_MANAGER : user.getRole();
         return permissionRepository
                 .findByOrganisation_IdAndRoleAndModule(
@@ -56,6 +60,15 @@ public class PermissionChecker {
             return false;
         }
 
+        if (module == PermissionModule.CRM) {
+            if (user.getRole() == Role.SYSTEM_ENGINEER) {
+                return false;
+            }
+            if (user.getRole().isSalesManagerRole()) {
+                return true;
+            }
+        }
+
         Role effectiveRole = user.getRole() == Role.PROJECT_MANAGER_LEAD ? Role.PROJECT_MANAGER : user.getRole();
         return permissionRepository
                 .findByOrganisation_IdAndRoleAndModule(
@@ -65,6 +78,10 @@ public class PermissionChecker {
                 )
                 .map(RolePermission::isCanWrite)
                 .orElse(false);
+    }
+
+    public boolean canAccessCrmManagerView(Authentication authentication) {
+        return getCurrentUser(authentication).getRole() == Role.SALES_MANAGER_LEAD;
     }
 
     private AppUser getCurrentUser(Authentication authentication) {
