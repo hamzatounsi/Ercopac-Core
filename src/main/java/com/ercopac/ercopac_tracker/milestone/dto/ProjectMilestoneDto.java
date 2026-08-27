@@ -16,6 +16,7 @@ public class ProjectMilestoneDto {
     private String milestoneTypeColor;
     private String milestoneTypeLetterCode;
     private LocalDate milestoneDate;
+    
     private String status;
     private String pmCode;
     private String notes;
