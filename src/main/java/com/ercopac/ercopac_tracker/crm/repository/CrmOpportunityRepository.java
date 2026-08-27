@@ -11,6 +11,8 @@ import java.util.Optional;
 public interface CrmOpportunityRepository extends JpaRepository<CrmOpportunity, Long> {
  
     List<CrmOpportunity> findByOrganisation_IdOrderByCreatedAtDesc(Long orgId);
+
+    List<CrmOpportunity> findByOrganisation_IdAndOpportunityTypeIgnoreCaseOrderByCreatedAtDesc(Long orgId, String opportunityType);
  
     List<CrmOpportunity> findByOrganisation_IdAndWonFalseAndLostFalseOrderByCreatedAtDesc(
             Long orgId);
@@ -19,6 +21,31 @@ public interface CrmOpportunityRepository extends JpaRepository<CrmOpportunity, 
             Long orgId, Long ownerId);
 
     Optional<CrmOpportunity> findByIdAndOrganisation_Id(Long id, Long orgId);
+
+    List<CrmOpportunity> findByOrganisation_IdAndAccount_IdOrderByCreatedAtDesc(Long orgId, Long accountId);
+
+    List<CrmOpportunity> findByOrganisation_IdAndLead_IdOrderByCreatedAtDesc(Long orgId, Long leadId);
+
+    @Query("SELECT o FROM CrmOpportunity o WHERE o.organisation.id = :orgId " +
+           "AND (:ownerId IS NULL OR o.owner.id = :ownerId) " +
+           "AND (:accountId IS NULL OR o.account.id = :accountId) " +
+           "AND (:leadId IS NULL OR o.lead.id = :leadId) " +
+           "AND (:stageId IS NULL OR o.stage.id = :stageId) " +
+           "ORDER BY o.createdAt DESC")
+    List<CrmOpportunity> findFiltered(@Param("orgId") Long orgId,
+                                      @Param("ownerId") Long ownerId,
+                                      @Param("accountId") Long accountId,
+                                      @Param("leadId") Long leadId,
+                                      @Param("stageId") Long stageId);
+
+    long countByOrganisation_IdAndAccount_Id(Long orgId, Long accountId);
+
+    boolean existsByOrganisation_IdAndStage_Id(Long orgId, Long stageId);
+
+    boolean existsByOrganisation_IdAndSupplyCategory_Id(Long orgId, Long categoryId);
+
+    @Query("select coalesce(sum(o.value),0) from CrmOpportunity o where o.organisation.id=:orgId and o.account.id=:accountId")
+    java.math.BigDecimal sumValueByAccount(@Param("orgId") Long orgId, @Param("accountId") Long accountId);
  
     // Closing this month
     List<CrmOpportunity> findByOrganisation_IdAndClosingDateBetweenOrderByClosingDateAsc(

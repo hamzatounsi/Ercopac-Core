@@ -8,19 +8,21 @@ public enum Role {
     MANAGER,
     DEPARTMENT_MANAGER,
     EMPLOYEE,
+    SALES_MANAGER_LEAD,
     SALES_MANAGER,
+    SYSTEM_ENGINEER,
     CLIENT;
 
     /**
-     * Internal operational users participate in department capacity and need
-     * a tenant-owned department and resource type.
+     * Delivery/workforce users participate in department capacity and need a
+     * tenant-owned department and resource type. CRM roles consume a sales
+     * licence, but are not project resources.
      */
     public boolean requiresResourceProfile() {
         return this == PROJECT_MANAGER
                 || this == PROJECT_MANAGER_LEAD
                 || this == DEPARTMENT_MANAGER
-                || this == EMPLOYEE
-                || this == SALES_MANAGER;
+                || this == EMPLOYEE;
     }
 
     public boolean isPlatformRole() {
@@ -29,5 +31,13 @@ public enum Role {
 
     public boolean isProjectManagerRole() {
         return this == PROJECT_MANAGER || this == PROJECT_MANAGER_LEAD;
+    }
+
+    public boolean isCrmRole() {
+        return this == SALES_MANAGER_LEAD || this == SALES_MANAGER || this == SYSTEM_ENGINEER;
+    }
+
+    public boolean isSalesManagerRole() {
+        return this == SALES_MANAGER_LEAD || this == SALES_MANAGER;
     }
 }

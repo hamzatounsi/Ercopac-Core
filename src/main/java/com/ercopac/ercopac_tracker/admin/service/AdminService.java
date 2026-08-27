@@ -75,10 +75,14 @@ public class AdminService {
                     Role role = mapLicenceToRole(type.name());
                     int limit = roleLimit(organisation, role);
                     long used = userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role);
+                    long usedForLimit = role.isCrmRole()
+                            ? userRepository.countByOrganisation_IdAndRoleInAndActiveTrue(organisation.getId(),
+                                    List.of(Role.SALES_MANAGER_LEAD, Role.SALES_MANAGER, Role.SYSTEM_ENGINEER))
+                            : used;
                     boolean unlimited = limit == Integer.MAX_VALUE;
                     return new AdminLicenceUsageDto(
                             role.name(), roleLabel(role), unlimited ? 0 : limit, used,
-                            unlimited ? 0 : Math.max(0, limit - used), unlimited
+                            unlimited ? 0 : Math.max(0, limit - usedForLimit), unlimited
                     );
                 })
                 .toList();
@@ -360,7 +364,11 @@ public class AdminService {
         if (limit == Integer.MAX_VALUE) {
             return;
         }
-        if (userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role) >= limit) {
+        long used = role.isCrmRole()
+                ? userRepository.countByOrganisation_IdAndRoleInAndActiveTrue(organisation.getId(),
+                        List.of(Role.SALES_MANAGER_LEAD, Role.SALES_MANAGER, Role.SYSTEM_ENGINEER))
+                : userRepository.countByOrganisation_IdAndRoleAndActiveTrue(organisation.getId(), role);
+        if (used >= limit) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "No active licence is available for role " + role.name() + "."
@@ -376,7 +384,7 @@ public class AdminService {
             case EMPLOYEE -> organisation.getEmployeeLicenceLimit();
             case MANAGER -> Integer.MAX_VALUE;
             case PLATFORM_OWNER -> 0;
-            case SALES_MANAGER -> organisation.getSalesManagerLicenceLimit();
+            case SALES_MANAGER_LEAD, SALES_MANAGER, SYSTEM_ENGINEER -> organisation.getSalesManagerLicenceLimit();
             case CLIENT -> organisation.getClientLicenceLimit();
         };
     }
@@ -401,7 +409,9 @@ public class AdminService {
             case MANAGER -> "Manager";
             case DEPARTMENT_MANAGER -> "Department Manager";
             case EMPLOYEE -> "Employee";
+            case SALES_MANAGER_LEAD -> "Sales Manager Lead";
             case SALES_MANAGER -> "Sales Manager";
+            case SYSTEM_ENGINEER -> "System Engineer";
             case CLIENT -> "Client";
             case PLATFORM_OWNER -> "Platform Owner";
         };

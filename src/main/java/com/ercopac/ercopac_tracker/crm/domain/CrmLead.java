@@ -33,6 +33,19 @@ public class CrmLead {
     @Column(length = 150)
     private String company;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id")
+    private CrmAccount account;
+
+    @Column(name = "job_title", length = 150)
+    private String jobTitle;
+
+    @Column(length = 40)
+    private String mobile;
+
+    @Column(length = 40)
+    private String rating;
+
     @Column(length = 180)
     private String email;
 
@@ -81,6 +94,14 @@ public class CrmLead {
     public void setFullName(String fullName) { this.fullName = fullName; }
     public String getCompany() { return company; }
     public void setCompany(String company) { this.company = company; }
+    public CrmAccount getAccount() { return account; }
+    public void setAccount(CrmAccount value) { account = value; }
+    public String getJobTitle() { return jobTitle; }
+    public void setJobTitle(String value) { jobTitle = value; }
+    public String getMobile() { return mobile; }
+    public void setMobile(String value) { mobile = value; }
+    public String getRating() { return rating; }
+    public void setRating(String value) { rating = value; }
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
     public String getPhone() { return phone; }

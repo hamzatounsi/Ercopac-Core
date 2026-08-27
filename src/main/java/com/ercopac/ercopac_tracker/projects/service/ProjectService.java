@@ -64,7 +64,7 @@ public class ProjectService {
                         .map(customer -> new ProjectFormOptionsResponse.CustomerOption(
                                 customer.getId(), customer.getCustomerCode(), customer.getName())).toList(),
                 projectManagerCandidates(organisationId),
-                usersForRole(organisationId, Role.SALES_MANAGER)
+                salesManagerCandidates(organisationId)
         );
     }
 
@@ -237,7 +237,7 @@ public class ProjectService {
             project.setProjectManagerName(user.getFullName());
         } else { project.setProjectManagerId(null); project.setProjectManagerName(null); }
         if (request.getSalesManagerId() != null) {
-            project.setSalesManagerName(eligibleUser(request.getSalesManagerId(), organisationId, Role.SALES_MANAGER).getFullName());
+            project.setSalesManagerName(eligibleSalesManager(request.getSalesManagerId(), organisationId).getFullName());
         } else { project.setSalesManagerName(null); }
         // Keep historical program-manager values intact; new and edited projects no longer collect this field.
     }
@@ -258,6 +258,15 @@ public class ProjectService {
         return user;
     }
 
+    private AppUser eligibleSalesManager(Long userId, Long organisationId) {
+        AppUser user = userRepository.findByIdAndOrganisation_Id(userId, organisationId)
+                .orElseThrow(() -> new IllegalArgumentException("Selected user is not available for this organisation"));
+        if (!user.isActive() || !user.getRole().isSalesManagerRole()) {
+            throw new IllegalArgumentException("Selected user is not eligible for the Sales Manager role");
+        }
+        return user;
+    }
+
     private java.util.List<ProjectFormOptionsResponse.UserOption> usersForRole(Long organisationId, Role role) {
         return userRepository.findByOrganisation_IdAndRoleOrderByFullNameAsc(organisationId, role).stream()
                 .filter(AppUser::isActive).map(this::toUserOption).toList();
@@ -266,6 +275,12 @@ public class ProjectService {
     private List<ProjectFormOptionsResponse.UserOption> projectManagerCandidates(Long organisationId) {
         return userRepository.findByOrganisation_IdAndRoleInAndActiveTrueOrderByFullNameAsc(
                 organisationId, List.of(Role.PROJECT_MANAGER, Role.PROJECT_MANAGER_LEAD))
+                .stream().map(this::toUserOption).toList();
+    }
+
+    private List<ProjectFormOptionsResponse.UserOption> salesManagerCandidates(Long organisationId) {
+        return userRepository.findByOrganisation_IdAndRoleInAndActiveTrueOrderByFullNameAsc(
+                organisationId, List.of(Role.SALES_MANAGER, Role.SALES_MANAGER_LEAD))
                 .stream().map(this::toUserOption).toList();
     }
 

@@ -162,28 +162,25 @@ class OrganisationAdminServiceTest {
     }
 
     @Test
-    void salesManagerAndClientCanBeCreatedOnlyWithinTheCurrentOrganisation() {
+    void crmRolesUseTheSharedSalesSeatWithoutRequiringAResourceProfile() {
         when(passwordEncoder.encode("temporary-password")).thenReturn("encoded-password");
         when(userRepository.save(org.mockito.ArgumentMatchers.any(AppUser.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Department department = new Department("SALES", "Sales", organisation);
-        ReflectionTestUtils.setField(department, "id", 31L);
-        ResourceType resourceType = new ResourceType("SALES_REPRESENTATIVE", "Sales Representative", organisation);
-        ReflectionTestUtils.setField(resourceType, "id", 41L);
-        when(departmentRepository.findByIdAndOrganisation_Id(31L, 10L)).thenReturn(Optional.of(department));
-        when(resourceTypeRepository.findByIdAndOrganisation_Id(41L, 10L)).thenReturn(Optional.of(resourceType));
-
-        createOrganisationUser("sales@example.com", "SALES_MANAGER", 31L, 41L);
+        createOrganisationUser("sales-lead@example.com", "SALES_MANAGER_LEAD");
+        createOrganisationUser("sales@example.com", "SALES_MANAGER");
+        createOrganisationUser("engineer@example.com", "SYSTEM_ENGINEER");
         createOrganisationUser("client@example.com", "CLIENT");
 
         ArgumentCaptor<AppUser> users = ArgumentCaptor.forClass(AppUser.class);
-        verify(userRepository, org.mockito.Mockito.times(2)).save(users.capture());
+        verify(userRepository, org.mockito.Mockito.times(4)).save(users.capture());
 
         assertThat(users.getAllValues())
                 .extracting(AppUser::getRole, AppUser::getOrganisation, AppUser::isActive, AppUser::isInternalUser)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(Role.SALES_MANAGER, organisation, true, true),
+                        org.assertj.core.groups.Tuple.tuple(Role.SALES_MANAGER_LEAD, organisation, true, false),
+                        org.assertj.core.groups.Tuple.tuple(Role.SALES_MANAGER, organisation, true, false),
+                        org.assertj.core.groups.Tuple.tuple(Role.SYSTEM_ENGINEER, organisation, true, false),
                         org.assertj.core.groups.Tuple.tuple(Role.CLIENT, organisation, true, false)
                 );
     }

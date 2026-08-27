@@ -88,6 +88,8 @@ class AdminServiceTenantTest {
                 org.mockito.ArgumentMatchers.any(Role.class)
         )).thenReturn(0);
         when(userRepository.countByOrganisation_IdAndRoleAndActiveTrue(10L, Role.SALES_MANAGER)).thenReturn(2);
+        when(userRepository.countByOrganisation_IdAndRoleInAndActiveTrue(10L,
+                java.util.List.of(Role.SALES_MANAGER_LEAD, Role.SALES_MANAGER, Role.SYSTEM_ENGINEER))).thenReturn(2L);
         when(userRepository.countByOrganisation_IdAndRoleAndActiveTrue(10L, Role.CLIENT)).thenReturn(1);
 
         var usage = service.getLicenceUsage();
@@ -95,7 +97,7 @@ class AdminServiceTenantTest {
         assertThat(usage).extracting(item -> item.role())
                 .containsExactlyInAnyOrder(
                         "ORG_ADMIN", "PROJECT_MANAGER", "DEPARTMENT_MANAGER",
-                        "EMPLOYEE", "SALES_MANAGER", "CLIENT"
+                        "EMPLOYEE", "SALES_MANAGER_LEAD", "SALES_MANAGER", "SYSTEM_ENGINEER", "CLIENT"
                 )
                 .doesNotContain("PLATFORM_OWNER");
         assertThat(usage.stream().filter(item -> item.role().equals("SALES_MANAGER")).findFirst().orElseThrow())
