@@ -61,16 +61,42 @@ public class ActionService {
             throw new IllegalStateException("User not authenticated");
         }
 
-        List<ActionItem> actions = actionItemRepository.findMyActiveActions(userId, orgId);
+        String fullName = userRepository.findByIdAndOrganisation_Id(userId, orgId)
+                .map(user -> user.getFullName())
+                .orElse("");
+        List<ActionItem> actions = actionItemRepository.findMyActions(userId, fullName, orgId);
         
         return actions.stream().map(item -> {
             ActionItemDto dto = toDto(item);
             if (item.getProject() != null) {
                 dto.setProjectId(item.getProject().getId());
                 dto.setProjectCode(item.getProject().getCode());
+                dto.setProjectName(item.getProject().getName());
             }
             return dto;
         }).toList();
+    }
+
+    /** Allows an employee to move only an action that is assigned to them. */
+    public ActionItemDto updateMyActionStatus(Long actionId, String status) {
+        if (status == null || !List.of("todo", "doing", "review", "blocked", "done").contains(status)) {
+            throw new IllegalArgumentException("Unsupported action status");
+        }
+
+        Long organisationId = securityUtils.getCurrentOrganisationId();
+        Long userId = securityUtils.getCurrentUserId();
+        String fullName = userRepository.findByIdAndOrganisation_Id(userId, organisationId)
+                .map(user -> user.getFullName())
+                .orElse("");
+
+        ActionItem item = actionItemRepository.findAssignedToUser(actionId, userId, fullName, organisationId)
+                .orElseThrow(() -> new IllegalArgumentException("Action not assigned to current employee"));
+        item.setStatus(status);
+        ActionItemDto dto = toDto(actionItemRepository.save(item));
+        dto.setProjectId(item.getProject().getId());
+        dto.setProjectCode(item.getProject().getCode());
+        dto.setProjectName(item.getProject().getName());
+        return dto;
     }
     @Transactional(readOnly = true)
     public ActionSummaryDto getSummary(Long projectId) {
@@ -180,6 +206,9 @@ public class ActionService {
                 ActionAssignee assignee = new ActionAssignee();
                 assignee.setActionItem(item);
                 assignee.setAssigneeName(name.trim());
+                userRepository.findByOrganisation_IdAndFullNameIgnoreCase(
+                                item.getOrganisation().getId(), name.trim())
+                        .ifPresent(assignee::setAssigneeUser);
                 item.getAssignees().add(assignee);
             }
         }
