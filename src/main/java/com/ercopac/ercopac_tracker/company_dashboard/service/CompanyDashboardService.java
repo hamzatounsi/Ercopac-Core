@@ -66,7 +66,7 @@ public class CompanyDashboardService {
         return new CompanyDashboardDto(organisationName, projects.size(), active.size(), onSchedule, atRisk, delayed,
                 averageProgress, totalBudget, actualCost, forecastCost, openRisks.size(), highRisks, openActions.size(), overdueActions,
                 projects.stream().sorted(Comparator.comparing(Project::getName, Comparator.nullsLast(String::compareToIgnoreCase))).limit(8)
-                        .map(p -> new CompanyDashboardDto.ProjectRow(p.getName(), p.getCode(), p.getProjectManagerName(), p.getProjectPhase(),
+                        .map(p -> new CompanyDashboardDto.ProjectRow(p.getId(), p.getName(), p.getCode(), p.getProjectManagerName(), p.getProjectPhase(),
                                 p.getProgress() == null ? 0 : p.getProgress(), health(p, today), p.getProjectBudget())).toList(),
                 openRisks.stream().sorted(Comparator.comparing(RiskItem::getProbability, Comparator.nullsLast(Comparator.reverseOrder()))).limit(6)
                         .map(r -> new CompanyDashboardDto.RiskRow(r.getDescription(), projectName(projectById, r), r.getImpact(), r.getProbability(), r.getState())).toList(), alerts);
