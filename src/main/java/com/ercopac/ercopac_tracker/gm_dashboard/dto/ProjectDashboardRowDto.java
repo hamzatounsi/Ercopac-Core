@@ -36,10 +36,7 @@ public class ProjectDashboardRowDto {
     private Boolean archived;
     private String timeHealth;
     private String applicationType;
-    private String pmDepartmentCode; // Le département du chef de projet
 
-    public String getPmDepartmentCode() { return pmDepartmentCode; }
-    public void setPmDepartmentCode(String pmDepartmentCode) { this.pmDepartmentCode = pmDepartmentCode; }
     public String getApplicationType() {
         return applicationType;
     }

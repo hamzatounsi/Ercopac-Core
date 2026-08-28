@@ -111,7 +111,6 @@ public class ProjectTaskService {
         task.setScheduleMode(request.getScheduleMode());
         task.setStatus(request.getStatus());
         task.setColor(request.getColor());
-        task.setMilestoneTypeId(request.getMilestoneTypeId());
 
         // parentId set directly from request
         if (request.getParentId() != null) {

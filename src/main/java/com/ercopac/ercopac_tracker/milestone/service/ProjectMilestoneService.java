@@ -64,7 +64,7 @@ public class ProjectMilestoneService {
 
     @Transactional(readOnly = true)
     public List<ProjectMilestoneDto> getMilestonesByDateRange(List<Long> projectIds, LocalDate startDate, LocalDate endDate) {
-        // ✅ Call the new bulletproof method
+
         List<ProjectTask> milestoneTasks = taskRepository.findMilestoneTasksByDateRange(projectIds, startDate, endDate);
         
         System.out.println("DEBUG: Found " + milestoneTasks.size() + " milestone tasks for projects " + projectIds);
@@ -79,12 +79,10 @@ public class ProjectMilestoneService {
         dto.setProjectId(task.getProjectId());
         dto.setTaskId(task.getId());
         dto.setMilestoneTypeId(task.getMilestoneTypeId());
-        dto.setTaskWbsCode(task.getWbsCode());
-     // ✅ Use actualStart first, fallback to baselineStart, then plannedStart
-        dto.setMilestoneDate(
-            task.getActualStart() != null ? task.getActualStart() : 
-            (task.getBaselineStart() != null ? task.getBaselineStart() : task.getPlannedStart())
-        );
+        
+        // Use baselineStart, fallback to plannedStart for the date
+        dto.setMilestoneDate(task.getBaselineStart() != null ? task.getBaselineStart() : task.getPlannedStart());
+        
         // Enrich with Project Info
         if (task.getProject() != null) {
             dto.setProjectCode(task.getProject().getCode());
