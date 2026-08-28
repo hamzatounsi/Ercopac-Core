@@ -45,7 +45,9 @@ public class PlatformPermissionService {
                 Role.PROJECT_MANAGER.name(),
                 Role.DEPARTMENT_MANAGER.name(),
                 Role.EMPLOYEE.name(),
+                Role.SALES_MANAGER_LEAD.name(),
                 Role.SALES_MANAGER.name(),
+                Role.SYSTEM_ENGINEER.name(),
                 Role.CLIENT.name()
         );
     }
@@ -77,14 +79,15 @@ public class PlatformPermissionService {
                 .filter(module -> !SCHEDULE_MODULES.contains(module))
                 .map(module -> {
                     RolePermission p = existing.get(module);
+                    boolean fixedCrmRole = module == PermissionModule.CRM && role.isCrmRole();
 
                     return new RolePermissionDto(
                             module.name(),
                             label(module),
                             group(module),
                             icon(module),
-                            p != null && p.isCanRead(),
-                            p != null && p.isCanWrite()
+                            fixedCrmRole || p != null && p.isCanRead(),
+                            fixedCrmRole ? role.isSalesManagerRole() : p != null && p.isCanWrite()
                     );
                 })
                 .forEach(result::add);
@@ -121,6 +124,11 @@ public class PlatformPermissionService {
             }
 
             PermissionModule module = PermissionModule.valueOf(dto.module);
+
+            if (module == PermissionModule.CRM && role.isCrmRole()) {
+                saveSinglePermission(organisation, organisationId, role, module, true, role.isSalesManagerRole());
+                continue;
+            }
 
             saveSinglePermission(
                     organisation,

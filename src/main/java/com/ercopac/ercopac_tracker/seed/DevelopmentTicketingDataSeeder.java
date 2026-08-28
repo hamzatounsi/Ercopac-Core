@@ -292,7 +292,9 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
             case PROJECT_MANAGER -> "PROJECT_MANAGER";
             case PROJECT_MANAGER_LEAD -> "PROJECT_MANAGER_LEAD";
             case MANAGER -> "MANAGER";
+            case SALES_MANAGER_LEAD -> "SALES_MANAGER_LEAD";
             case SALES_MANAGER -> "SALES_REPRESENTATIVE";
+            case SYSTEM_ENGINEER -> "SYSTEM_ENGINEER";
             case DEPARTMENT_MANAGER -> "DEPARTMENT_MANAGER";
             case EMPLOYEE -> department.getCode() + "_SPECIALIST";
             default -> throw new IllegalStateException("Unexpected resource role");
@@ -301,7 +303,9 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
             case PROJECT_MANAGER -> "Project Manager";
             case PROJECT_MANAGER_LEAD -> "Project Manager Lead";
             case MANAGER -> "Manager";
+            case SALES_MANAGER_LEAD -> "Sales Manager Lead";
             case SALES_MANAGER -> "Sales Representative";
+            case SYSTEM_ENGINEER -> "System Engineer";
             case DEPARTMENT_MANAGER -> "Department Manager";
             case EMPLOYEE -> department.getLabel() + " Specialist";
             default -> throw new IllegalStateException("Unexpected resource role");
@@ -323,7 +327,9 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
                 PermissionModule.PLANNING, PermissionModule.TASKS, PermissionModule.RESOURCES
         ), true);
         grant(organisation, Role.EMPLOYEE, List.of(PermissionModule.EMPLOYEE_DASHBOARD, PermissionModule.TASKS), false);
+        grant(organisation, Role.SALES_MANAGER_LEAD, List.of(PermissionModule.CRM), true);
         grant(organisation, Role.SALES_MANAGER, List.of(PermissionModule.CRM), true);
+        grant(organisation, Role.SYSTEM_ENGINEER, List.of(PermissionModule.CRM), false);
     }
 
     private void grant(Organisation organisation, Role role, List<PermissionModule> modules, boolean canWrite) {
