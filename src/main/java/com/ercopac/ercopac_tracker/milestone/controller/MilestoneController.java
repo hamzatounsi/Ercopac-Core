@@ -1,105 +1,74 @@
-package com.ercopac.ercopac_tracker.milestone.controller;
+package com.ercopac.ercopac_tracker.milestone.controller; // ⚠️ Adaptez le package si nécessaire
 
-import com.ercopac.ercopac_tracker.milestone.dto.MilestoneTypeDto;
-import com.ercopac.ercopac_tracker.milestone.dto.ProjectMilestoneDto;
-import com.ercopac.ercopac_tracker.milestone.service.MilestoneTypeService;
-import com.ercopac.ercopac_tracker.milestone.service.ProjectMilestoneService;
-import org.springframework.format.annotation.DateTimeFormat;
+import com.ercopac.ercopac_tracker.milestone.domain.MilestoneType;
+import com.ercopac.ercopac_tracker.milestone.domain.ProjectMilestone;
+import com.ercopac.ercopac_tracker.milestone.repository.MilestoneTypeRepository;
+import com.ercopac.ercopac_tracker.milestone.repository.ProjectMilestoneRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
-@RequestMapping("/api/milestones")
+@RequestMapping("/api/milestones") // ⚠️ Adaptez le chemin si votre contrôleur utilise un autre @RequestMapping
 public class MilestoneController {
 
-    private static final String MILESTONES_READ =
-            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).TASKS)";
+    // ✅ 1. Injection CORRECTE des repositories (pas de "Object" !)
+    @Autowired
+    private ProjectMilestoneRepository milestoneRepository;
 
-    private static final String MILESTONES_WRITE =
-            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).TASKS)";
+    @Autowired
+    private MilestoneTypeRepository milestoneTypeRepository;
 
-    private final MilestoneTypeService milestoneTypeService;
-    private final ProjectMilestoneService projectMilestoneService;
-
-    public MilestoneController(MilestoneTypeService milestoneTypeService,
-                               ProjectMilestoneService projectMilestoneService) {
-        this.milestoneTypeService = milestoneTypeService;
-        this.projectMilestoneService = projectMilestoneService;
+    // ✅ 2. Endpoint de diagnostic
+    @GetMapping("/debug")
+    public ResponseEntity<Map<String, Object>> debugMilestones() {
+        Map<String, Object> debug = new HashMap<>();
+        
+        // A. Vérifier le nombre total de milestones
+        List<ProjectMilestone> allMilestones = milestoneRepository.findAll();
+        debug.put("totalMilestones", allMilestones.size());
+        
+        // B. Vérifier les IDs spécifiques (20, 24, 72, 76)
+        List<Map<String, Object>> sampleData = new ArrayList<>();
+        for (ProjectMilestone m : allMilestones) {
+            if (m.getId() != null && List.of(20L, 24L, 72L, 76L).contains(m.getId())) {
+                Map<String, Object> data = new HashMap<>();
+                data.put("id", m.getId());
+                data.put("milestoneTypeId", m.getMilestoneTypeId());
+                data.put("milestoneDate", m.getMilestoneDate());
+                data.put("projectId", m.getProjectId());
+                sampleData.add(data);
+            }
+        }
+        debug.put("sampleMilestones", sampleData);
+        
+        // C. Vérifier le nombre de types de milestones en base
+        Long milestoneTypeCount = milestoneTypeRepository.count();
+        debug.put("totalMilestoneTypes", milestoneTypeCount);
+        
+        // D. Vérifier le contenu de la table milestone_types (échantillon de 5)
+        List<Map<String, Object>> typesSample = new ArrayList<>();
+        List<MilestoneType> allTypes = milestoneTypeRepository.findAll();
+        for (int i = 0; i < Math.min(5, allTypes.size()); i++) {
+            MilestoneType mt = allTypes.get(i);
+            Map<String, Object> typeData = new HashMap<>();
+            typeData.put("id", mt.getId());
+            typeData.put("code", mt.getCode());
+            typeData.put("label", mt.getLabel());
+            typeData.put("color", mt.getColor());
+            typesSample.add(typeData);
+        }
+        debug.put("milestoneTypesSample", typesSample);
+        
+        return ResponseEntity.ok(debug);
     }
 
-    // ========== MILESTONE TYPES ==========
-    @GetMapping("/types")
-    @PreAuthorize(MILESTONES_READ)
-    public ResponseEntity<List<MilestoneTypeDto>> getAllMilestoneTypes() {
-        return ResponseEntity.ok(milestoneTypeService.getAllMilestoneTypes());
-    }
-
-    @PostMapping("/types")
-    @PreAuthorize(MILESTONES_WRITE)
-    public ResponseEntity<MilestoneTypeDto> createMilestoneType(@RequestBody MilestoneTypeDto dto) {
-        return ResponseEntity.ok(milestoneTypeService.createMilestoneType(dto));
-    }
-
-    @PutMapping("/types/{id}")
-    @PreAuthorize(MILESTONES_WRITE)
-    public ResponseEntity<MilestoneTypeDto> updateMilestoneType(@PathVariable Long id, @RequestBody MilestoneTypeDto dto) {
-        return ResponseEntity.ok(milestoneTypeService.updateMilestoneType(id, dto));
-    }
-
-    @DeleteMapping("/types/{id}")
-    @PreAuthorize(MILESTONES_WRITE)
-    public ResponseEntity<Void> deleteMilestoneType(@PathVariable Long id) {
-        milestoneTypeService.deleteMilestoneType(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    // ========== PROJECT MILESTONES ==========
-    @GetMapping("/projects/{projectId}")
-    @PreAuthorize(MILESTONES_READ)
-    public ResponseEntity<List<ProjectMilestoneDto>> getMilestonesByProject(@PathVariable Long projectId) {
-        return ResponseEntity.ok(projectMilestoneService.getMilestonesByProject(projectId));
-    }
-
-    @GetMapping("/calendar")
-    @PreAuthorize(MILESTONES_READ)
-    public ResponseEntity<List<ProjectMilestoneDto>> getMilestonesForCalendar(
-            @RequestParam Long pmId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        return ResponseEntity.ok(projectMilestoneService.getMilestonesForPMCalendar(pmId, startDate, endDate));
-    }
-
-    // ✅ NEW ENDPOINT FOR DASHBOARD
-    @GetMapping("/range")
-    @PreAuthorize(MILESTONES_READ)
-    public ResponseEntity<List<ProjectMilestoneDto>> getMilestonesByDateRange(
-            @RequestParam List<Long> projectIds,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        return ResponseEntity.ok(projectMilestoneService.getMilestonesByDateRange(projectIds, startDate, endDate));
-    }
-
-    @PostMapping("/projects/{projectId}")
-    @PreAuthorize(MILESTONES_WRITE)
-    public ResponseEntity<ProjectMilestoneDto> createMilestone(@PathVariable Long projectId, @RequestBody ProjectMilestoneDto dto) {
-        dto.setProjectId(projectId);
-        return ResponseEntity.ok(projectMilestoneService.createMilestone(dto));
-    }
-
-    @PutMapping("/{id}")
-    @PreAuthorize(MILESTONES_WRITE)
-    public ResponseEntity<ProjectMilestoneDto> updateMilestone(@PathVariable Long id, @RequestBody ProjectMilestoneDto dto) {
-        return ResponseEntity.ok(projectMilestoneService.updateMilestone(id, dto));
-    }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize(MILESTONES_WRITE)
-    public ResponseEntity<Void> deleteMilestone(@PathVariable Long id) {
-        projectMilestoneService.deleteMilestone(id);
-        return ResponseEntity.noContent().build();
-    }
+    // ... Gardez ici le reste de vos méthodes existantes (getMilestones, etc.) ...
 }
