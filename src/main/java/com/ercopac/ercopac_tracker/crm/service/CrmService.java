@@ -3,6 +3,8 @@ package com.ercopac.ercopac_tracker.crm.service;
 import com.ercopac.ercopac_tracker.crm.domain.*;
 import com.ercopac.ercopac_tracker.crm.dto.*;
 import com.ercopac.ercopac_tracker.crm.repository.*;
+import com.ercopac.ercopac_tracker.admin.domain.ProjectCategory;
+import com.ercopac.ercopac_tracker.admin.repository.ProjectCategoryRepository;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
@@ -10,6 +12,7 @@ import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.PageRequest;
@@ -47,27 +50,32 @@ public class CrmService {
     private final CrmActivityRepository activityRepo;
     private final CrmAccountRepository accountRepo;
     private final CrmSupplyCategoryRepository categoryRepo;
+    private final ProjectCategoryRepository projectCategoryRepo;
     private final CrmOpportunityNoteRepository noteRepo;
     private final CrmOpportunityAttachmentRepository attachmentRepo;
     private final CrmOpportunityHistoryRepository historyRepo;
     private final CrmOpportunityStageHistoryRepository stageHistoryRepo;
     private final CrmSalesTargetRepository targetRepo;
+    private final CrmNotificationPreferenceRepository notificationPreferenceRepo;
     private final OrganisationRepository organisationRepo;
     private final UserRepository userRepo;
     private final SecurityUtils security;
     private final Path attachmentRoot;
 
+    @Autowired
     public CrmService(CrmPipelineStageRepository stageRepo,
                       CrmLeadRepository leadRepo,
                       CrmOpportunityRepository opportunityRepo,
                       CrmActivityRepository activityRepo,
                       CrmAccountRepository accountRepo,
                       CrmSupplyCategoryRepository categoryRepo,
+                      ProjectCategoryRepository projectCategoryRepo,
                       CrmOpportunityNoteRepository noteRepo,
                       CrmOpportunityAttachmentRepository attachmentRepo,
                       CrmOpportunityHistoryRepository historyRepo,
                       CrmOpportunityStageHistoryRepository stageHistoryRepo,
                       CrmSalesTargetRepository targetRepo,
+                      CrmNotificationPreferenceRepository notificationPreferenceRepo,
                       OrganisationRepository organisationRepo,
                       UserRepository userRepo,
                       SecurityUtils security,
@@ -78,15 +86,64 @@ public class CrmService {
         this.activityRepo = activityRepo;
         this.accountRepo = accountRepo;
         this.categoryRepo = categoryRepo;
+        this.projectCategoryRepo = projectCategoryRepo;
         this.noteRepo = noteRepo;
         this.attachmentRepo = attachmentRepo;
         this.historyRepo = historyRepo;
         this.stageHistoryRepo = stageHistoryRepo;
         this.targetRepo = targetRepo;
+        this.notificationPreferenceRepo = notificationPreferenceRepo;
         this.organisationRepo = organisationRepo;
         this.userRepo = userRepo;
         this.security = security;
         this.attachmentRoot = Paths.get(attachmentPath).toAbsolutePath().normalize();
+    }
+
+    /** Compatibility seam for existing focused service tests. */
+    CrmService(CrmPipelineStageRepository stageRepo,
+               CrmLeadRepository leadRepo,
+               CrmOpportunityRepository opportunityRepo,
+               CrmActivityRepository activityRepo,
+               CrmAccountRepository accountRepo,
+               CrmSupplyCategoryRepository categoryRepo,
+               CrmOpportunityNoteRepository noteRepo,
+               CrmOpportunityAttachmentRepository attachmentRepo,
+               CrmOpportunityHistoryRepository historyRepo,
+               CrmOpportunityStageHistoryRepository stageHistoryRepo,
+               CrmSalesTargetRepository targetRepo,
+               OrganisationRepository organisationRepo,
+               UserRepository userRepo,
+               SecurityUtils security,
+               String attachmentPath) {
+        this(stageRepo, leadRepo, opportunityRepo, activityRepo, accountRepo, categoryRepo, null,
+                noteRepo, attachmentRepo, historyRepo, stageHistoryRepo, targetRepo, null,
+                organisationRepo, userRepo, security, attachmentPath);
+    }
+
+    @Transactional(readOnly = true)
+    public CrmNotificationPreferenceDto getNotificationPreferences(Long requestedOrganisationId) {
+        Long organisationId = tenant(requestedOrganisationId);
+        AppUser user = currentUser();
+        return notificationPreferenceRepo.findByOrganisation_IdAndUser_Id(organisationId, user.getId())
+                .map(this::toNotificationPreferenceDto)
+                .orElse(new CrmNotificationPreferenceDto(true, true, false));
+    }
+
+    public CrmNotificationPreferenceDto saveNotificationPreferences(Long requestedOrganisationId, CrmNotificationPreferenceDto dto) {
+        Organisation organisation = organisation(requestedOrganisationId);
+        AppUser user = currentUser();
+        CrmNotificationPreference entity = notificationPreferenceRepo
+                .findByOrganisation_IdAndUser_Id(organisation.getId(), user.getId())
+                .orElseGet(CrmNotificationPreference::new);
+        entity.setOrganisation(organisation); entity.setUser(user);
+        entity.setEmailNotifications(dto.emailNotifications());
+        entity.setStageChangeAlerts(dto.stageChangeAlerts());
+        entity.setClosingDateReminders(dto.closingDateReminders());
+        return toNotificationPreferenceDto(notificationPreferenceRepo.save(entity));
+    }
+
+    private CrmNotificationPreferenceDto toNotificationPreferenceDto(CrmNotificationPreference entity) {
+        return new CrmNotificationPreferenceDto(entity.isEmailNotifications(), entity.isStageChangeAlerts(), entity.isClosingDateReminders());
     }
 
     private Long tenant(Long requestedOrganisationId) {
@@ -138,9 +195,10 @@ public class CrmService {
                 .orElseThrow(() -> notFound("Pipeline stage not found."));
     }
 
-    private CrmSupplyCategory category(Long organisationId, Long id) {
-        return categoryRepo.findByIdAndOrganisation_Id(id, organisationId)
-                .orElseThrow(() -> notFound("Supply category not found."));
+    private ProjectCategory category(Long organisationId, Long id) {
+        return projectCategoryRepo.findByIdAndOrganisation_Id(id, organisationId)
+                .filter(ProjectCategory::isActive)
+                .orElseThrow(() -> badRequest("The selected organisation category is unavailable."));
     }
 
     // Accounts
@@ -262,97 +320,26 @@ public class CrmService {
         stageRepo.delete(entity);
     }
 
-    public List<CrmSupplyCategoryDto> getSupplyCategories(Long requestedOrganisationId) {
+    public List<CrmSupplyCategoryDto> getOrganisationCategories(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
-        seedConfiguration(organisationId);
-        return categoryRepo.findByOrganisation_IdAndActiveTrueOrderByDisplayOrderAscNameAsc(organisationId)
+        migrateLegacySupplyCategories(organisationId);
+        return projectCategoryRepo.findByOrganisation_IdAndActiveTrueOrderByNameAsc(organisationId)
                 .stream().map(this::toCategoryDto).toList();
-    }
-
-    public CrmSupplyCategoryDto createSupplyCategory(Long requestedOrganisationId, CrmSupplyCategoryDto dto) {
-        Organisation organisation = organisation(requestedOrganisationId);
-        requireText(dto.name(), "Category name is required.");
-        if (categoryRepo.existsByOrganisation_IdAndNameIgnoreCase(organisation.getId(), dto.name().trim())) {
-            throw conflict("A supply category with this name already exists.");
-        }
-        CrmSupplyCategory entity = new CrmSupplyCategory();
-        entity.setOrganisation(organisation);
-        mapCategory(entity, dto);
-        return toCategoryDto(categoryRepo.save(entity));
-    }
-
-    public CrmSupplyCategoryDto updateSupplyCategory(Long requestedOrganisationId, Long id, CrmSupplyCategoryDto dto) {
-        CrmSupplyCategory entity = category(tenant(requestedOrganisationId), id);
-        requireText(dto.name(), "Category name is required.");
-        mapCategory(entity, dto);
-        return toCategoryDto(categoryRepo.save(entity));
-    }
-
-    public void deleteSupplyCategory(Long requestedOrganisationId, Long id) {
-        Long organisationId = tenant(requestedOrganisationId);
-        CrmSupplyCategory entity = category(organisationId, id);
-        if (opportunityRepo.existsByOrganisation_IdAndSupplyCategory_Id(organisationId, id)) {
-            throw conflict("This supply category is used by an opportunity.");
-        }
-        categoryRepo.delete(entity);
     }
 
     private void seedConfiguration(Long organisationId) {
         Organisation organisation = organisation(organisationId);
         if (stageRepo.countByOrganisation_Id(organisationId) == 0) {
             stageRepo.saveAll(List.of(
-                    new CrmPipelineStage(organisation, "Make presentation", "#94a3b8", 0, 10, false, false),
-                    new CrmPipelineStage(organisation, "Problem setting", "#6366f1", 1, 20, false, false),
-                    new CrmPipelineStage(organisation, "Problem solving", "#06b6d4", 2, 40, false, false),
-                    new CrmPipelineStage(organisation, "Proposal/Quote", "#3b82f6", 3, 65, false, false),
-                    new CrmPipelineStage(organisation, "Negotiation/Revision", "#f59e0b", 4, 85, false, false),
-                    new CrmPipelineStage(organisation, "Closed won", "#0f7b4f", 5, 100, true, false),
+                    new CrmPipelineStage(organisation, "Make presentation", "#94a3b8", 0, 0, false, false),
+                    new CrmPipelineStage(organisation, "Problem setting", "#6366f1", 1, 0, false, false),
+                    new CrmPipelineStage(organisation, "Problem solving", "#06b6d4", 2, 0, false, false),
+                    new CrmPipelineStage(organisation, "Proposal/Quote", "#3b82f6", 3, 0, false, false),
+                    new CrmPipelineStage(organisation, "Negotiation/Revision", "#f59e0b", 4, 0, false, false),
+                    new CrmPipelineStage(organisation, "Closed won", "#0f7b4f", 5, 0, true, false),
                     new CrmPipelineStage(organisation, "Closed lost", "#c0392b", 6, 0, false, true),
                     new CrmPipelineStage(organisation, "Abandoned", "#64748b", 7, 0, false, true)
             ));
-        } else {
-            // Previous installations had the original five pipeline stages and
-            // acquired the probability column through Hibernate.  PostgreSQL
-            // backfills that new column with zero, so restore the documented
-            // defaults without touching organisation-specific stage names.
-            Map<String, Integer> defaults = Map.of(
-                    "make presentation", 10,
-                    "problem setting", 20,
-                    "problem solving", 40,
-                    "proposal/quote", 65,
-                    "negotiation/revision", 85,
-                    "closed won", 100,
-                    "closed lost", 0,
-                    "abandoned", 0
-            );
-            List<CrmPipelineStage> changed = stageRepo.findByOrganisation_IdOrderByDisplayOrderAsc(organisationId).stream()
-                    .filter(stage -> {
-                        Integer expected = defaults.get(stage.getName().trim().toLowerCase(Locale.ROOT));
-                        if (stage.isWon() && !Objects.equals(stage.getProbability(), 100)) {
-                            stage.setProbability(100);
-                            return true;
-                        }
-                        if (stage.isLost() && !Objects.equals(stage.getProbability(), 0)) {
-                            stage.setProbability(0);
-                            return true;
-                        }
-                        if (expected != null && Objects.equals(stage.getProbability(), 0) && expected > 0) {
-                            stage.setProbability(expected);
-                            return true;
-                        }
-                        return false;
-                    }).toList();
-            if (!changed.isEmpty()) stageRepo.saveAll(changed);
-        }
-        if (categoryRepo.countByOrganisation_Id(organisationId) == 0) {
-            String[] names = {"AS/RS", "Conveyor", "Shuttle system", "Pallet racking", "Drive-in racking",
-                    "Mezzanine", "Sorter", "Cold storage", "ETO custom", "Other"};
-            List<CrmSupplyCategory> values = new ArrayList<>();
-            for (int i = 0; i < names.length; i++) {
-                CrmSupplyCategory item = new CrmSupplyCategory();
-                item.setOrganisation(organisation); item.setName(names[i]); item.setDisplayOrder(i); values.add(item);
-            }
-            categoryRepo.saveAll(values);
         }
     }
 
@@ -360,27 +347,43 @@ public class CrmService {
         entity.setName(dto.getName().trim());
         entity.setColor(blank(dto.getColor()) == null ? "#64748b" : dto.getColor());
         entity.setDisplayOrder(dto.getDisplayOrder() == null ? 0 : Math.max(0, dto.getDisplayOrder()));
-        entity.setProbability(clamp(dto.getProbability() == null ? 0 : dto.getProbability()));
         entity.setWon(dto.isWon()); entity.setLost(dto.isLost());
-        if (entity.isWon()) entity.setProbability(100);
-        if (entity.isLost()) entity.setProbability(0);
     }
 
     private CrmPipelineStageDto toStageDto(CrmPipelineStage entity) {
         CrmPipelineStageDto dto = new CrmPipelineStageDto();
         dto.setId(entity.getId()); dto.setName(entity.getName()); dto.setColor(entity.getColor());
-        dto.setDisplayOrder(entity.getDisplayOrder()); dto.setProbability(entity.getProbability());
+        dto.setDisplayOrder(entity.getDisplayOrder());
         dto.setWon(entity.isWon()); dto.setLost(entity.isLost());
         return dto;
     }
 
-    private void mapCategory(CrmSupplyCategory entity, CrmSupplyCategoryDto dto) {
-        entity.setName(dto.name().trim());
-        entity.setDisplayOrder(dto.displayOrder() == null ? 0 : Math.max(0, dto.displayOrder()));
-        entity.setActive(dto.id() == null || dto.active());
+    private CrmSupplyCategoryDto toCategoryDto(ProjectCategory entity) {
+        return new CrmSupplyCategoryDto(entity.getId(), entity.getName(), 0, entity.isActive());
     }
-    private CrmSupplyCategoryDto toCategoryDto(CrmSupplyCategory entity) {
-        return new CrmSupplyCategoryDto(entity.getId(), entity.getName(), entity.getDisplayOrder(), entity.isActive());
+
+    /**
+     * One-time, idempotent bridge for opportunities saved before CRM reused
+     * organisation categories.  Legacy rows are converted into organisation
+     * categories and the opportunity is linked to that canonical category.
+     */
+    private void migrateLegacySupplyCategories(Long organisationId) {
+        List<CrmOpportunity> opportunities = opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId);
+        for (CrmOpportunity opportunity : opportunities) {
+            if (opportunity.getSupplyCategory() != null || opportunity.getLegacySupplyCategory() == null) continue;
+            String name = opportunity.getLegacySupplyCategory().getName();
+            ProjectCategory target = projectCategoryRepo.findByOrganisation_IdAndNameIgnoreCase(organisationId, name)
+                    .orElseGet(() -> {
+                        ProjectCategory created = new ProjectCategory();
+                        created.setOrganisation(opportunity.getOrganisation());
+                        created.setName(name);
+                        created.setCode("CRM-LEGACY-" + opportunity.getLegacySupplyCategory().getId());
+                        created.setDescription("Migrated from the legacy CRM supply category.");
+                        created.setActive(true);
+                        return projectCategoryRepo.save(created);
+                    });
+            opportunity.setSupplyCategory(target);
+        }
     }
 
     // Leads
@@ -476,12 +479,15 @@ public class CrmService {
     public List<CrmOpportunityDto> getOpportunities(Long requestedOrganisationId, Long ownerId, Long accountId,
                                                      Long leadId, Long stageId) {
         Long organisationId = tenant(requestedOrganisationId);
+        migrateLegacySupplyCategories(organisationId);
         return opportunityRepo.findFiltered(organisationId, ownerId, accountId, leadId, stageId)
                 .stream().map(this::toOpportunityDto).toList();
     }
 
     public CrmOpportunityDto getOpportunity(Long requestedOrganisationId, Long opportunityId) {
-        return toOpportunityDto(opportunity(tenant(requestedOrganisationId), opportunityId));
+        Long organisationId = tenant(requestedOrganisationId);
+        migrateLegacySupplyCategories(organisationId);
+        return toOpportunityDto(opportunity(organisationId, opportunityId));
     }
 
     public CrmOpportunityDto createOpportunity(Long requestedOrganisationId, CrmOpportunityDto dto) {
@@ -595,15 +601,14 @@ public class CrmService {
         entity.setResaleValue(nonNegative(dto.getResaleValue(), "Resale value"));
         BigDecimal calculated = sum(entity.getMaterialValue(), entity.getServicesValue());
         entity.setValue(calculated.signum() > 0 ? calculated : nonNegative(dto.getValue(), "Opportunity value"));
-        Long oldStageId = entity.getStage() == null ? null : entity.getStage().getId();
         CrmPipelineStage selectedStage = dto.getStageId() == null
                 ? (creating ? firstStage(organisationId) : entity.getStage()) : stage(organisationId, dto.getStageId());
-        if (selectedStage != null && (creating || !Objects.equals(oldStageId, selectedStage.getId()))) applyStage(entity, selectedStage);
-        else if (dto.getProbability() != null) entity.setProbability(clamp(dto.getProbability()));
+        if (selectedStage != null) applyStage(entity, selectedStage);
+        entity.setProbability(probability(dto.getProbability()));
     }
 
     private void applyStage(CrmOpportunity entity, CrmPipelineStage selected) {
-        entity.setStage(selected); entity.setProbability(clamp(selected.getProbability()));
+        entity.setStage(selected);
         entity.setWon(selected.isWon()); entity.setLost(selected.isLost());
     }
 
@@ -615,13 +620,14 @@ public class CrmService {
     private CrmOpportunityDto toOpportunityDto(CrmOpportunity entity) {
         CrmOpportunityDto dto = new CrmOpportunityDto();
         dto.setId(entity.getId()); dto.setName(entity.getName()); dto.setAccountName(entity.getAccountName());
-        if (entity.getAccount() != null) dto.setAccountId(entity.getAccount().getId());
+        if (entity.getAccount() != null) { dto.setAccountId(entity.getAccount().getId()); dto.setAccountCountry(entity.getAccount().getCountry()); }
         if (entity.getStage() != null) { dto.setStageId(entity.getStage().getId()); dto.setStageName(entity.getStage().getName()); dto.setStageColor(entity.getStage().getColor()); }
         dto.setValue(entity.getValue()); dto.setCurrency(entity.getCurrency()); dto.setProbability(entity.getProbability());
         dto.setClosingDate(entity.getClosingDate()); dto.setWon(entity.isWon()); dto.setLost(entity.isLost());
         if (entity.getOwner() != null) { dto.setOwnerId(entity.getOwner().getId()); dto.setOwnerName(entity.getOwner().getFullName()); }
         if (entity.getLead() != null) { dto.setLeadId(entity.getLead().getId()); dto.setContactName(entity.getLead().getFullName()); }
         if (entity.getSupplyCategory() != null) { dto.setSupplyCategoryId(entity.getSupplyCategory().getId()); dto.setSupplyCategoryName(entity.getSupplyCategory().getName()); }
+        else if (entity.getLegacySupplyCategory() != null) { dto.setSupplyCategoryName(entity.getLegacySupplyCategory().getName()); }
         dto.setOpportunityType(entity.getOpportunityType()); dto.setPipeline(entity.getPipeline()); dto.setQuoteNumber(entity.getQuoteNumber());
         dto.setQuoteRequestedDate(entity.getQuoteRequestedDate()); dto.setQuoteSubmittedDate(entity.getQuoteSubmittedDate());
         dto.setShipmentDate(entity.getShipmentDate()); dto.setNextStep(entity.getNextStep()); dto.setDescription(entity.getDescription());
@@ -797,6 +803,7 @@ public class CrmService {
 
     public CrmReportsDto getReports(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
+        migrateLegacySupplyCategories(organisationId);
         List<CrmOpportunity> values = opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId);
         BigDecimal total = values.stream().map(item -> zero(item.getValue())).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal weighted = values.stream().map(item -> zero(item.getValue())
@@ -805,9 +812,11 @@ public class CrmService {
         return new CrmReportsDto(values.size(), total, weighted,
                 breakdown(values, item -> item.getAccount() == null ? "Unspecified" : defaultValue(item.getAccount().getCountry(), "Unspecified")),
                 breakdown(values, item -> item.getStage() == null ? "Unassigned" : item.getStage().getName()),
-                breakdown(values, item -> item.getSupplyCategory() == null ? "Unspecified" : item.getSupplyCategory().getName()),
+                breakdown(values, item -> item.getSupplyCategory() == null ?
+                        (item.getLegacySupplyCategory() == null ? "Unspecified" : item.getLegacySupplyCategory().getName()) : item.getSupplyCategory().getName()),
                 values.stream().map(item -> zero(item.getMaterialValue())).reduce(BigDecimal.ZERO, BigDecimal::add),
-                values.stream().map(item -> zero(item.getServicesValue())).reduce(BigDecimal.ZERO, BigDecimal::add));
+                values.stream().map(item -> zero(item.getServicesValue())).reduce(BigDecimal.ZERO, BigDecimal::add),
+                values.stream().map(this::toOpportunityDto).toList());
     }
 
     @Transactional(readOnly = true)
@@ -933,6 +942,11 @@ public class CrmService {
         catch (Exception exception) { throw badRequest("Invalid " + label + "."); }
     }
     private int clamp(int value) { return Math.max(0, Math.min(100, value)); }
+    private int probability(Integer value) {
+        int probability = value == null ? 0 : value;
+        if (probability < 0 || probability > 100) throw badRequest("Probability must be between 0 and 100.");
+        return probability;
+    }
     private BigDecimal sum(BigDecimal left, BigDecimal right) { return zero(left).add(zero(right)); }
     private BigDecimal zero(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
     private BigDecimal nonNegative(BigDecimal value, String label) {
