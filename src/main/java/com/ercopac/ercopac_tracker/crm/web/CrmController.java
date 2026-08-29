@@ -34,6 +34,10 @@ public class CrmController {
     }
     @GetMapping("/users") @PreAuthorize(CRM_READ)
     public List<CrmUserDto> users(@PathVariable Long orgId) { return service.getCrmUsers(orgId); }
+    @GetMapping("/notification-preferences") @PreAuthorize(CRM_READ)
+    public CrmNotificationPreferenceDto notificationPreferences(@PathVariable Long orgId) { return service.getNotificationPreferences(orgId); }
+    @PutMapping("/notification-preferences") @PreAuthorize(CRM_READ)
+    public CrmNotificationPreferenceDto saveNotificationPreferences(@PathVariable Long orgId, @RequestBody CrmNotificationPreferenceDto dto) { return service.saveNotificationPreferences(orgId, dto); }
     @GetMapping("/opportunities/team-users") @PreAuthorize(CRM_READ)
     public List<CrmUserDto> opportunityTeamUsers(@PathVariable Long orgId) { return service.getOpportunityTeamUsers(orgId); }
 
@@ -59,14 +63,8 @@ public class CrmController {
     @DeleteMapping("/stages/{id}") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteStage(@PathVariable Long orgId, @PathVariable Long id) { service.deleteStage(orgId, id); }
 
-    @GetMapping("/supply-categories") @PreAuthorize(CRM_READ)
-    public List<CrmSupplyCategoryDto> categories(@PathVariable Long orgId) { return service.getSupplyCategories(orgId); }
-    @PostMapping("/supply-categories") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.CREATED)
-    public CrmSupplyCategoryDto createCategory(@PathVariable Long orgId, @RequestBody CrmSupplyCategoryDto dto) { return service.createSupplyCategory(orgId, dto); }
-    @PutMapping("/supply-categories/{id}") @PreAuthorize(CRM_WRITE)
-    public CrmSupplyCategoryDto updateCategory(@PathVariable Long orgId, @PathVariable Long id, @RequestBody CrmSupplyCategoryDto dto) { return service.updateSupplyCategory(orgId, id, dto); }
-    @DeleteMapping("/supply-categories/{id}") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteCategory(@PathVariable Long orgId, @PathVariable Long id) { service.deleteSupplyCategory(orgId, id); }
+    @GetMapping("/categories") @PreAuthorize(CRM_READ)
+    public List<CrmSupplyCategoryDto> categories(@PathVariable Long orgId) { return service.getOrganisationCategories(orgId); }
 
     @GetMapping("/leads") @PreAuthorize(CRM_READ)
     public List<CrmLeadDto> leads(@PathVariable Long orgId, @RequestParam(required = false) String search,

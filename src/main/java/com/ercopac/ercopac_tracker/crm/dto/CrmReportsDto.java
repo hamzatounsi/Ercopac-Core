@@ -11,7 +11,8 @@ public record CrmReportsDto(
         List<Breakdown> byStage,
         List<Breakdown> bySupplyCategory,
         BigDecimal materialValue,
-        BigDecimal servicesValue
+        BigDecimal servicesValue,
+        List<CrmOpportunityDto> opportunities
 ) {
     public record Breakdown(String key, long count, BigDecimal value) {}
 }

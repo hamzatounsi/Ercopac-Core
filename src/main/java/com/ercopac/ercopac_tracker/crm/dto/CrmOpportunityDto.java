@@ -9,6 +9,7 @@ public class CrmOpportunityDto {
     private Long id;
     private String name;
     private String accountName;
+    private String accountCountry;
     private Long accountId;
     private Long stageId;
     private String stageName;
@@ -51,6 +52,8 @@ public class CrmOpportunityDto {
     public void setName(String name) { this.name = name; }
     public String getAccountName() { return accountName; }
     public void setAccountName(String accountName) { this.accountName = accountName; }
+    public String getAccountCountry() { return accountCountry; }
+    public void setAccountCountry(String value) { accountCountry = value; }
     public Long getAccountId() { return accountId; }
     public void setAccountId(Long value) { accountId = value; }
     public Long getStageId() { return stageId; }
