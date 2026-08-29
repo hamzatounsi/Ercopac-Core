@@ -38,6 +38,6 @@ public enum Role {
     }
 
     public boolean isSalesManagerRole() {
-        return this == SALES_MANAGER_LEAD || this == SALES_MANAGER;
+        return this == SALES_MANAGER_LEAD || this == SALES_MANAGER || this == SYSTEM_ENGINEER;
     }
 }
