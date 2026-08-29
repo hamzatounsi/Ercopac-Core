@@ -44,12 +44,12 @@ class PermissionCheckerCrmTest {
     }
 
     @Test
-    void systemEngineerCanReadCrmButCannotMutateOrAccessManagerView() {
+    void systemEngineerHasSalesManagerCrmAccessButNotManagerView() {
         PermissionChecker checker = checkerFor(Role.SYSTEM_ENGINEER);
         Authentication authentication = authentication();
 
         assertTrue(checker.canRead(authentication, PermissionModule.CRM));
-        assertFalse(checker.canWrite(authentication, PermissionModule.CRM));
+        assertTrue(checker.canWrite(authentication, PermissionModule.CRM));
         assertFalse(checker.canAccessCrmManagerView(authentication));
     }
 

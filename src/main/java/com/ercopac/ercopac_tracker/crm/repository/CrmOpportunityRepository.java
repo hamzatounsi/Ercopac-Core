@@ -42,8 +42,6 @@ public interface CrmOpportunityRepository extends JpaRepository<CrmOpportunity, 
 
     boolean existsByOrganisation_IdAndStage_Id(Long orgId, Long stageId);
 
-    boolean existsByOrganisation_IdAndSupplyCategory_Id(Long orgId, Long categoryId);
-
     @Query("select coalesce(sum(o.value),0) from CrmOpportunity o where o.organisation.id=:orgId and o.account.id=:accountId")
     java.math.BigDecimal sumValueByAccount(@Param("orgId") Long orgId, @Param("accountId") Long accountId);
  

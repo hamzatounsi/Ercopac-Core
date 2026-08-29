@@ -3,6 +3,7 @@ package com.ercopac.ercopac_tracker.crm.domain;
 // Path: src/main/java/com/ercopac/ercopac_tracker/crm/domain/CrmOpportunity.java
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.admin.domain.ProjectCategory;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
@@ -64,9 +65,18 @@ public class CrmOpportunity {
             inverseJoinColumns = @JoinColumn(name = "user_id"))
     private Set<AppUser> teamMembers = new LinkedHashSet<>();
 
+    /**
+     * Organisation project categories are the single source of truth for CRM
+     * supply categories.  The legacy relation is retained below only so old
+     * records can be migrated safely without losing their displayed value.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_category_id")
+    private ProjectCategory supplyCategory;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supply_category_id")
-    private CrmSupplyCategory supplyCategory;
+    private CrmSupplyCategory legacySupplyCategory;
 
     @Column(name = "opportunity_type", length = 20)
     private String opportunityType;
@@ -159,8 +169,10 @@ public class CrmOpportunity {
     public void setLead(CrmLead lead) { this.lead = lead; }
     public Set<AppUser> getTeamMembers() { return teamMembers; }
     public void setTeamMembers(Set<AppUser> teamMembers) { this.teamMembers = teamMembers; }
-    public CrmSupplyCategory getSupplyCategory() { return supplyCategory; }
-    public void setSupplyCategory(CrmSupplyCategory value) { supplyCategory = value; }
+    public ProjectCategory getSupplyCategory() { return supplyCategory; }
+    public void setSupplyCategory(ProjectCategory value) { supplyCategory = value; }
+    public CrmSupplyCategory getLegacySupplyCategory() { return legacySupplyCategory; }
+    public void setLegacySupplyCategory(CrmSupplyCategory value) { legacySupplyCategory = value; }
     public String getOpportunityType() { return opportunityType; }
     public void setOpportunityType(String value) { opportunityType = value; }
     public String getPipeline() { return pipeline; }

@@ -11,6 +11,8 @@ public interface CrmAccountRepository extends JpaRepository<CrmAccount, Long> {
     List<CrmAccount> findByOrganisation_IdAndActiveTrueOrderByNameAsc(Long organisationId);
     Optional<CrmAccount> findByIdAndOrganisation_Id(Long id, Long organisationId);
     Optional<CrmAccount> findByOrganisation_IdAndNameIgnoreCase(Long organisationId, String name);
+    long countByOrganisation_IdAndIndustryReference_Id(Long organisationId, Long industryId);
+    List<CrmAccount> findByOrganisation_IdAndIndustryReference_Id(Long organisationId, Long industryId);
     @Query("select a from CrmAccount a where a.organisation.id=:orgId and a.active=true and " +
            "(lower(a.name) like lower(concat('%',:term,'%')) or lower(coalesce(a.industry,'')) like lower(concat('%',:term,'%')) " +
            "or lower(coalesce(a.country,'')) like lower(concat('%',:term,'%')))")
