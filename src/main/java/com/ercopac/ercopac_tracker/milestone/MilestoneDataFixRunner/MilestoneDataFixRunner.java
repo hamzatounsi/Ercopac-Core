@@ -1,4 +1,4 @@
-package com.ercopac.ercopac_tracker.milestone;
+package com.ercopac.ercopac_tracker.milestone.MilestoneDataFixRunner;
 
 import com.ercopac.ercopac_tracker.milestone.domain.MilestoneType;
 import com.ercopac.ercopac_tracker.milestone.domain.ProjectMilestone;
