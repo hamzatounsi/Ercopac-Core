@@ -39,7 +39,12 @@ public interface ProjectMilestoneRepository extends JpaRepository<ProjectMilesto
     
     void deleteByProjectId(Long projectId);
 
-   
+    // ✅ CORRIGÉ : Ajout de LEFT JOIN FETCH pour récupérer les couleurs et codes
+    @Query("SELECT pm FROM ProjectMilestone pm " +
+           "LEFT JOIN FETCH pm.milestoneType " +  // ← Charge les données de MilestoneType
+           "WHERE pm.projectId IN :projectIds " +
+           "AND pm.milestoneDate BETWEEN :startDate AND :endDate " +
+           "ORDER BY pm.milestoneDate ASC")
     List<ProjectMilestone> findByProjectIdInAndMilestoneDateBetween(
             @Param("projectIds") List<Long> projectIds, 
             @Param("startDate") LocalDate startDate, 
