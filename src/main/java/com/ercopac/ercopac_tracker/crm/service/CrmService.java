@@ -49,6 +49,7 @@ public class CrmService {
     private final CrmOpportunityRepository opportunityRepo;
     private final CrmActivityRepository activityRepo;
     private final CrmAccountRepository accountRepo;
+    private final CrmIndustryRepository industryRepo;
     private final CrmSupplyCategoryRepository categoryRepo;
     private final ProjectCategoryRepository projectCategoryRepo;
     private final CrmOpportunityNoteRepository noteRepo;
@@ -68,6 +69,7 @@ public class CrmService {
                       CrmOpportunityRepository opportunityRepo,
                       CrmActivityRepository activityRepo,
                       CrmAccountRepository accountRepo,
+                      CrmIndustryRepository industryRepo,
                       CrmSupplyCategoryRepository categoryRepo,
                       ProjectCategoryRepository projectCategoryRepo,
                       CrmOpportunityNoteRepository noteRepo,
@@ -85,6 +87,7 @@ public class CrmService {
         this.opportunityRepo = opportunityRepo;
         this.activityRepo = activityRepo;
         this.accountRepo = accountRepo;
+        this.industryRepo = industryRepo;
         this.categoryRepo = categoryRepo;
         this.projectCategoryRepo = projectCategoryRepo;
         this.noteRepo = noteRepo;
@@ -115,7 +118,7 @@ public class CrmService {
                UserRepository userRepo,
                SecurityUtils security,
                String attachmentPath) {
-        this(stageRepo, leadRepo, opportunityRepo, activityRepo, accountRepo, categoryRepo, null,
+        this(stageRepo, leadRepo, opportunityRepo, activityRepo, accountRepo, null, categoryRepo, null,
                 noteRepo, attachmentRepo, historyRepo, stageHistoryRepo, targetRepo, null,
                 organisationRepo, userRepo, security, attachmentPath);
     }
@@ -250,9 +253,70 @@ public class CrmService {
         accountRepo.delete(entity);
     }
 
+    @Transactional(readOnly = true)
+    public List<CrmIndustryDto> getIndustries(Long requestedOrganisationId, boolean includeInactive) {
+        Long organisationId = tenant(requestedOrganisationId);
+        List<CrmIndustry> industries = includeInactive
+                ? industryRepo.findByOrganisation_IdOrderByNameAsc(organisationId)
+                : industryRepo.findByOrganisation_IdAndActiveTrueOrderByNameAsc(organisationId);
+        return industries
+                .stream().map(this::toIndustryDto).toList();
+    }
+
+    public CrmIndustryDto createIndustry(Long requestedOrganisationId, CrmIndustryDto dto) {
+        Organisation organisation = organisation(requestedOrganisationId);
+        String name = requiredIndustryName(dto.name());
+        if (industryRepo.findByOrganisation_IdAndNameIgnoreCase(organisation.getId(), name).isPresent()) {
+            throw conflict("An industry with this name already exists.");
+        }
+        CrmIndustry entity = new CrmIndustry();
+        entity.setOrganisation(organisation); entity.setName(name); entity.setActive(dto.active());
+        return toIndustryDto(industryRepo.save(entity));
+    }
+
+    public CrmIndustryDto updateIndustry(Long requestedOrganisationId, Long industryId, CrmIndustryDto dto) {
+        Long organisationId = tenant(requestedOrganisationId);
+        CrmIndustry entity = industry(industryId, organisationId);
+        String name = requiredIndustryName(dto.name());
+        industryRepo.findByOrganisation_IdAndNameIgnoreCase(organisationId, name)
+                .filter(other -> !Objects.equals(other.getId(), industryId))
+                .ifPresent(other -> { throw conflict("An industry with this name already exists."); });
+        entity.setName(name); entity.setActive(dto.active());
+        accountRepo.findByOrganisation_IdAndIndustryReference_Id(organisationId, industryId)
+                .forEach(account -> account.setIndustry(name));
+        return toIndustryDto(industryRepo.save(entity));
+    }
+
+    public void deleteIndustry(Long requestedOrganisationId, Long industryId) {
+        Long organisationId = tenant(requestedOrganisationId);
+        CrmIndustry entity = industry(industryId, organisationId);
+        if (accountRepo.countByOrganisation_IdAndIndustryReference_Id(organisationId, industryId) > 0) {
+            throw conflict("This industry is used by one or more accounts and cannot be deleted.");
+        }
+        industryRepo.delete(entity);
+    }
+
+    private CrmIndustry industry(Long industryId, Long organisationId) {
+        return industryRepo.findByIdAndOrganisation_Id(industryId, organisationId)
+                .orElseThrow(() -> notFound("Industry not found."));
+    }
+
+    private String requiredIndustryName(String value) {
+        String name = blank(value);
+        if (name == null) throw badRequest("Industry name is required.");
+        if (name.length() > 120) throw badRequest("Industry name is too long.");
+        return name;
+    }
+
+    private CrmIndustryDto toIndustryDto(CrmIndustry entity) {
+        return new CrmIndustryDto(entity.getId(), entity.getName(), entity.isActive(), entity.getCreatedAt(), entity.getUpdatedAt());
+    }
+
     private void mapAccount(CrmAccount entity, CrmAccountDto dto) {
         entity.setName(dto.name().trim());
-        entity.setIndustry(blank(dto.industry()));
+        CrmIndustry industry = dto.industryId() == null ? null : industry(dto.industryId(), entity.getOrganisation().getId());
+        entity.setIndustryReference(industry);
+        entity.setIndustry(industry == null ? blank(dto.industry()) : industry.getName());
         entity.setCountry(blank(dto.country()));
         entity.setCity(blank(dto.city()));
         entity.setAddress(blank(dto.address()));
@@ -270,7 +334,8 @@ public class CrmService {
         long leads = leadRepo.countByOrganisation_IdAndAccount_IdAndActiveTrue(organisationId, entity.getId());
         long opportunities = opportunityRepo.countByOrganisation_IdAndAccount_Id(organisationId, entity.getId());
         BigDecimal pipeline = Optional.ofNullable(opportunityRepo.sumValueByAccount(organisationId, entity.getId())).orElse(BigDecimal.ZERO);
-        return new CrmAccountDto(entity.getId(), entity.getName(), entity.getIndustry(), entity.getCountry(), entity.getCity(),
+        return new CrmAccountDto(entity.getId(), entity.getName(), entity.getIndustry(),
+                entity.getIndustryReference() == null ? null : entity.getIndustryReference().getId(), entity.getCountry(), entity.getCity(),
                 entity.getAddress(), entity.getPhone(), entity.getWebsite(), entity.getEmployees(), entity.getAnnualRevenue(),
                 entity.getCurrency(), entity.getOwner() == null ? null : entity.getOwner().getId(),
                 entity.getOwner() == null ? null : entity.getOwner().getFullName(), entity.getNotes(), leads, opportunities,

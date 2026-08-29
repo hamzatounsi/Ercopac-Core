@@ -18,6 +18,7 @@ public class CrmAccount {
     @Column(nullable = false, length = 180)
     private String name;
     @Column(length = 120) private String industry;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "industry_id") private CrmIndustry industryReference;
     @Column(length = 100) private String country;
     @Column(length = 100) private String city;
     @Column(length = 300) private String address;
@@ -40,6 +41,8 @@ public class CrmAccount {
     public void setName(String value) { name = value; }
     public String getIndustry() { return industry; }
     public void setIndustry(String value) { industry = value; }
+    public CrmIndustry getIndustryReference() { return industryReference; }
+    public void setIndustryReference(CrmIndustry value) { industryReference = value; }
     public String getCountry() { return country; }
     public void setCountry(String value) { country = value; }
     public String getCity() { return city; }

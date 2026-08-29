@@ -54,6 +54,18 @@ public class CrmController {
     @DeleteMapping("/accounts/{id}") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteAccount(@PathVariable Long orgId, @PathVariable Long id) { service.deleteAccount(orgId, id); }
 
+    @GetMapping("/industries") @PreAuthorize(CRM_READ)
+    public List<CrmIndustryDto> industries(@PathVariable Long orgId,
+                                           @RequestParam(defaultValue = "false") boolean includeInactive) {
+        return service.getIndustries(orgId, includeInactive);
+    }
+    @PostMapping("/industries") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.CREATED)
+    public CrmIndustryDto createIndustry(@PathVariable Long orgId, @RequestBody CrmIndustryDto dto) { return service.createIndustry(orgId, dto); }
+    @PutMapping("/industries/{id}") @PreAuthorize(CRM_WRITE)
+    public CrmIndustryDto updateIndustry(@PathVariable Long orgId, @PathVariable Long id, @RequestBody CrmIndustryDto dto) { return service.updateIndustry(orgId, id, dto); }
+    @DeleteMapping("/industries/{id}") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteIndustry(@PathVariable Long orgId, @PathVariable Long id) { service.deleteIndustry(orgId, id); }
+
     @GetMapping("/stages") @PreAuthorize(CRM_READ)
     public List<CrmPipelineStageDto> stages(@PathVariable Long orgId) { return service.getStages(orgId); }
     @PostMapping("/stages") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.CREATED)

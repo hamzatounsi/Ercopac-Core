@@ -61,9 +61,6 @@ public class PermissionChecker {
         }
 
         if (module == PermissionModule.CRM) {
-            if (user.getRole() == Role.SYSTEM_ENGINEER) {
-                return false;
-            }
             if (user.getRole().isSalesManagerRole()) {
                 return true;
             }
