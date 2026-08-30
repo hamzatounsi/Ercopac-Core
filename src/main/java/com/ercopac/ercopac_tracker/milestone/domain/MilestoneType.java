@@ -12,8 +12,13 @@ public class MilestoneType {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 20, unique = true)
+    @Column(nullable = false, length = 20)
     private String code;
+
+    // Nullable for schema compatibility with the former organisation-wide types.
+    // New configuration records are always assigned to a project by the service.
+    @Column(name = "project_id")
+    private Long projectId;
 
     @Column(nullable = false, length = 100)
     private String label;
@@ -40,6 +45,8 @@ public class MilestoneType {
     
     public String getCode() { return code; }
     public void setCode(String code) { this.code = code; }
+    public Long getProjectId() { return projectId; }
+    public void setProjectId(Long projectId) { this.projectId = projectId; }
     
     public String getLabel() { return label; }
     public void setLabel(String label) { this.label = label; }

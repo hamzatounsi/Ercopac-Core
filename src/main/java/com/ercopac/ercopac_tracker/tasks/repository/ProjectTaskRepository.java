@@ -83,4 +83,8 @@ public interface ProjectTaskRepository extends JpaRepository<ProjectTask, Long> 
         @Param("startDate") LocalDate startDate,
         @Param("endDate") LocalDate endDate
     );
+
+    @Query("SELECT t FROM ProjectTask t LEFT JOIN FETCH t.milestoneType " +
+           "WHERE UPPER(t.taskType) = 'MILESTONE' AND t.projectId = :projectId ORDER BY t.baselineStart ASC, t.plannedStart ASC")
+    List<ProjectTask> findMilestoneTasksByProjectId(@Param("projectId") Long projectId);
 }

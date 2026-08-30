@@ -34,26 +34,26 @@ public class MilestoneController {
     // ========== MILESTONE TYPES ==========
     @GetMapping("/types")
     @PreAuthorize(MILESTONES_READ)
-    public ResponseEntity<List<MilestoneTypeDto>> getAllMilestoneTypes() {
-        return ResponseEntity.ok(milestoneTypeService.getAllMilestoneTypes());
+    public ResponseEntity<List<MilestoneTypeDto>> getAllMilestoneTypes(@RequestParam Long projectId) {
+        return ResponseEntity.ok(milestoneTypeService.getMilestoneTypes(projectId));
     }
 
-    @PostMapping("/types")
+    @PostMapping("/projects/{projectId}/types")
     @PreAuthorize(MILESTONES_WRITE)
-    public ResponseEntity<MilestoneTypeDto> createMilestoneType(@RequestBody MilestoneTypeDto dto) {
-        return ResponseEntity.ok(milestoneTypeService.createMilestoneType(dto));
+    public ResponseEntity<MilestoneTypeDto> createMilestoneType(@PathVariable Long projectId, @RequestBody MilestoneTypeDto dto) {
+        return ResponseEntity.ok(milestoneTypeService.createMilestoneType(projectId, dto));
     }
 
-    @PutMapping("/types/{id}")
+    @PutMapping("/projects/{projectId}/types/{id}")
     @PreAuthorize(MILESTONES_WRITE)
-    public ResponseEntity<MilestoneTypeDto> updateMilestoneType(@PathVariable Long id, @RequestBody MilestoneTypeDto dto) {
-        return ResponseEntity.ok(milestoneTypeService.updateMilestoneType(id, dto));
+    public ResponseEntity<MilestoneTypeDto> updateMilestoneType(@PathVariable Long projectId, @PathVariable Long id, @RequestBody MilestoneTypeDto dto) {
+        return ResponseEntity.ok(milestoneTypeService.updateMilestoneType(projectId, id, dto));
     }
 
-    @DeleteMapping("/types/{id}")
+    @DeleteMapping("/projects/{projectId}/types/{id}")
     @PreAuthorize(MILESTONES_WRITE)
-    public ResponseEntity<Void> deleteMilestoneType(@PathVariable Long id) {
-        milestoneTypeService.deleteMilestoneType(id);
+    public ResponseEntity<Void> deleteMilestoneType(@PathVariable Long projectId, @PathVariable Long id) {
+        milestoneTypeService.deleteMilestoneType(projectId, id);
         return ResponseEntity.noContent().build();
     }
 
@@ -83,23 +83,4 @@ public class MilestoneController {
         return ResponseEntity.ok(projectMilestoneService.getMilestonesByDateRange(projectIds, startDate, endDate));
     }
 
-    @PostMapping("/projects/{projectId}")
-    @PreAuthorize(MILESTONES_WRITE)
-    public ResponseEntity<ProjectMilestoneDto> createMilestone(@PathVariable Long projectId, @RequestBody ProjectMilestoneDto dto) {
-        dto.setProjectId(projectId);
-        return ResponseEntity.ok(projectMilestoneService.createMilestone(dto));
-    }
-
-    @PutMapping("/{id}")
-    @PreAuthorize(MILESTONES_WRITE)
-    public ResponseEntity<ProjectMilestoneDto> updateMilestone(@PathVariable Long id, @RequestBody ProjectMilestoneDto dto) {
-        return ResponseEntity.ok(projectMilestoneService.updateMilestone(id, dto));
-    }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize(MILESTONES_WRITE)
-    public ResponseEntity<Void> deleteMilestone(@PathVariable Long id) {
-        projectMilestoneService.deleteMilestone(id);
-        return ResponseEntity.noContent().build();
-    }
 }

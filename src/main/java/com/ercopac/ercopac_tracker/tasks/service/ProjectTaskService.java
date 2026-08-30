@@ -5,6 +5,8 @@ import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.projects.service.ProjectProgressService;
+import com.ercopac.ercopac_tracker.projects.service.ProjectAccessService;
+import com.ercopac.ercopac_tracker.milestone.repository.MilestoneTypeRepository;
 import com.ercopac.ercopac_tracker.planning.service.ProjectWorkingDayService;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
@@ -18,7 +20,6 @@ import com.ercopac.ercopac_tracker.tasks.dto.UpdateProjectTaskStructureRequest;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskDependencyRepository;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository;
-import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.user.ResourceTypeDto;
 import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
@@ -48,6 +49,8 @@ public class ProjectTaskService {
     private final TaskConsoleService               taskConsoleService;
     private final ResourceTypeRepository           resourceTypeRepository;
     private final DepartmentRepository             departmentRepository;
+    private final MilestoneTypeRepository          milestoneTypeRepository;
+    private final ProjectAccessService             projectAccessService;
     @Autowired
     private ProjectProgressService projectProgressService;
     @Autowired
@@ -63,7 +66,8 @@ public class ProjectTaskService {
             ProjectTaskHistoryService historyService,
             TaskConsoleService taskConsoleService,
             ResourceTypeRepository resourceTypeRepository,
-            DepartmentRepository departmentRepository ,SecurityUtils securityUtils) {   // ← added
+            DepartmentRepository departmentRepository, MilestoneTypeRepository milestoneTypeRepository,
+            ProjectAccessService projectAccessService, SecurityUtils securityUtils) {
         this.projectTaskRepository            = projectTaskRepository;
         this.projectRepository                = projectRepository;
         this.userRepository                   = userRepository;
@@ -74,6 +78,8 @@ public class ProjectTaskService {
         this.taskConsoleService               = taskConsoleService;
         this.resourceTypeRepository           = resourceTypeRepository;
         this.departmentRepository             = departmentRepository;
+        this.milestoneTypeRepository          = milestoneTypeRepository;
+        this.projectAccessService             = projectAccessService;
         this.securityUtils                     = securityUtils;
     }
 
@@ -111,6 +117,7 @@ public class ProjectTaskService {
         task.setScheduleMode(request.getScheduleMode());
         task.setStatus(request.getStatus());
         task.setColor(request.getColor());
+        applyMilestoneType(task, request.getMilestoneTypeId(), project);
 
         // parentId set directly from request
         if (request.getParentId() != null) {
@@ -843,7 +850,21 @@ public class ProjectTaskService {
             if (task.getPlannedStart() != null) task.setPlannedEnd(task.getPlannedStart());
             if (task.getBaselineStart() != null) task.setBaselineEnd(task.getBaselineStart());
             if (task.getActualStart() != null) task.setActualEnd(task.getActualStart());
+        } else {
+            task.setMilestoneTypeId(null);
         }
+    }
+
+    private void applyMilestoneType(ProjectTask task, Long milestoneTypeId, Project project) {
+        if (!"MILESTONE".equalsIgnoreCase(task.getTaskType())) return;
+        if (milestoneTypeId == null) {
+            task.setMilestoneTypeId(null);
+            return;
+        }
+        boolean belongsToProject = milestoneTypeRepository.findByIdAndProjectIdAndOrganisation_Id(
+                milestoneTypeId, project.getId(), project.getOrganisation().getId()).isPresent();
+        if (!belongsToProject) throw new IllegalArgumentException("The selected milestone does not belong to this project.");
+        task.setMilestoneTypeId(milestoneTypeId);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1024,6 +1045,7 @@ public class ProjectTaskService {
                 .setActive(task.getActive())
                 .setDisplayOrder(task.getDisplayOrder())
                 .setCustomerMilestone(task.getCustomerMilestone())
+                .setMilestoneTypeId(task.getMilestoneTypeId())
                 .setAssignedUserId(task.getAssignedUser() != null ? task.getAssignedUser().getId() : null)
                 .setAssignedUserName(task.getAssignedUser() != null ? task.getAssignedUser().getFullName() : null)
                 .setDependencies(depDtos)
@@ -1118,16 +1140,7 @@ public class ProjectTaskService {
     }
 
     private Project getAccessibleProject(Long projectId) {
-        if (securityUtils.isPlatformUser()) {
-            return projectRepository.findById(projectId)
-                    .filter(project -> project.getOrganisation() != null && project.getOrganisation().getId() != null)
-                    .orElseThrow(() -> new IllegalArgumentException("Project not found"));
-        }
-
-        Long orgId = securityUtils.getCurrentOrganisationId();
-        return projectRepository.findByIdAndOrganisationId(projectId, orgId)
-                .filter(project -> project.getOrganisation() != null && project.getOrganisation().getId() != null)
-                .orElseThrow(() -> new IllegalArgumentException("Project not accessible"));
+        return projectAccessService.getAccessibleProject(projectId);
     }
 
     private ProjectTask getProjectTask(Long projectId, Long taskId, Project project) {

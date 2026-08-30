@@ -1,6 +1,7 @@
 package com.ercopac.ercopac_tracker.projects.service;
 
 import com.ercopac.ercopac_tracker.gm_dashboard.dto.ProjectDashboardRowDto;
+import com.ercopac.ercopac_tracker.milestone.service.MilestoneTypeService;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.planning.domain.ProjectPlanning;
 import com.ercopac.ercopac_tracker.planning.repository.ProjectPlanningRepository;
@@ -36,6 +37,7 @@ public class ProjectService {
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
     private final ProjectAccessService projectAccessService;
+    private final MilestoneTypeService milestoneTypeService;
 
     public ProjectService(ProjectRepository projectRepository,
                           ProjectPlanningRepository projectPlanningRepository,
@@ -43,7 +45,8 @@ public class ProjectService {
                           ProjectCategoryRepository categoryRepository,
                           UserRepository userRepository,
                           CustomerRepository customerRepository,
-                          ProjectAccessService projectAccessService) {
+                          ProjectAccessService projectAccessService,
+                          MilestoneTypeService milestoneTypeService) {
         this.projectRepository = projectRepository;
         this.projectPlanningRepository = projectPlanningRepository;
         this.securityUtils = securityUtils;
@@ -51,6 +54,7 @@ public class ProjectService {
         this.userRepository = userRepository;
         this.customerRepository = customerRepository;
         this.projectAccessService = projectAccessService;
+        this.milestoneTypeService = milestoneTypeService;
     }
 
     public ProjectFormOptionsResponse getFormOptions() {
@@ -130,6 +134,7 @@ public class ProjectService {
         }
 
         Project saved = projectRepository.save(project);
+        milestoneTypeService.ensureDefaultMilestoneTypes(saved);
         return toDashboardDto(saved);
     }
 

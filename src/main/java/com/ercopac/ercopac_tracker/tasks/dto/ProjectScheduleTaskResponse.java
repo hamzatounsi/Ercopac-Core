@@ -39,6 +39,7 @@ public class ProjectScheduleTaskResponse {
     private Integer displayOrder;
     private Integer outlineLevel;
     private Boolean customerMilestone;
+    private Long milestoneTypeId;
 
     private String predecessorLabel;
     private List<TaskDependencyDto> dependencies;
@@ -304,6 +305,11 @@ public class ProjectScheduleTaskResponse {
 
     public ProjectScheduleTaskResponse setCustomerMilestone(Boolean customerMilestone) {
         this.customerMilestone = customerMilestone;
+        return this;
+    }
+    public Long getMilestoneTypeId() { return milestoneTypeId; }
+    public ProjectScheduleTaskResponse setMilestoneTypeId(Long milestoneTypeId) {
+        this.milestoneTypeId = milestoneTypeId;
         return this;
     }
 
