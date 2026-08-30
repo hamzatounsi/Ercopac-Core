@@ -5,6 +5,7 @@ import com.ercopac.ercopac_tracker.milestone.dto.ProjectMilestoneDto;
 import com.ercopac.ercopac_tracker.milestone.repository.ProjectMilestoneRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
+import com.ercopac.ercopac_tracker.projects.service.ProjectAccessService;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
@@ -23,29 +24,25 @@ public class ProjectMilestoneService {
     private final ProjectRepository projectRepository;
     private final ProjectTaskRepository taskRepository;
     private final SecurityUtils securityUtils;
+    private final ProjectAccessService projectAccessService;
 
     public ProjectMilestoneService(ProjectMilestoneRepository milestoneRepository,
                                    ProjectRepository projectRepository,
                                    ProjectTaskRepository taskRepository,
-                                   SecurityUtils securityUtils) {
+                                   SecurityUtils securityUtils,
+                                   ProjectAccessService projectAccessService) {
         this.milestoneRepository = milestoneRepository;
         this.projectRepository = projectRepository;
         this.taskRepository = taskRepository;
         this.securityUtils = securityUtils;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional(readOnly = true)
     public List<ProjectMilestoneDto> getMilestonesByProject(Long projectId) {
-        Long orgId = securityUtils.getCurrentOrganisationId();
-        List<ProjectMilestone> milestones;
-        
-        if (securityUtils.isPlatformUser()) {
-            milestones = milestoneRepository.findByProjectIdOrderByMilestoneDateAsc(projectId);
-        } else {
-            milestones = milestoneRepository.findByProjectIdAndOrganisationIdOrderByMilestoneDateAsc(projectId, orgId);
-        }
-        
-        return milestones.stream().map(this::toDto).collect(Collectors.toList());
+        projectAccessService.getAccessibleProject(projectId);
+        return taskRepository.findMilestoneTasksByProjectId(projectId).stream()
+                .map(this::mapTaskToMilestoneDto).collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
@@ -65,10 +62,10 @@ public class ProjectMilestoneService {
     @Transactional(readOnly = true)
     public List<ProjectMilestoneDto> getMilestonesByDateRange(List<Long> projectIds, LocalDate startDate, LocalDate endDate) {
 
-        List<ProjectTask> milestoneTasks = taskRepository.findMilestoneTasksByDateRange(projectIds, startDate, endDate);
-        
-        System.out.println("DEBUG: Found " + milestoneTasks.size() + " milestone tasks for projects " + projectIds);
-        
+        List<Long> accessibleProjectIds = projectAccessService.getAccessibleProjects(null).stream()
+                .map(Project::getId).filter(projectIds::contains).toList();
+        if (accessibleProjectIds.isEmpty()) return List.of();
+        List<ProjectTask> milestoneTasks = taskRepository.findMilestoneTasksByDateRange(accessibleProjectIds, startDate, endDate);
         return milestoneTasks.stream().map(this::mapTaskToMilestoneDto).collect(Collectors.toList());
     }
 
