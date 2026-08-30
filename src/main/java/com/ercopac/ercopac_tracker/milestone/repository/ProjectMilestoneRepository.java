@@ -39,12 +39,15 @@ public interface ProjectMilestoneRepository extends JpaRepository<ProjectMilesto
     
     void deleteByProjectId(Long projectId);
 
-    // ✅ THIS IS THE ONLY CORRECT METHOD FOR THE DASHBOARD
+    // ✅ CORRIGÉ : Ajout de LEFT JOIN FETCH pour récupérer les couleurs et codes
+    @Query("SELECT pm FROM ProjectMilestone pm " +
+           "LEFT JOIN FETCH pm.milestoneType " +  // ← Charge les données de MilestoneType
+           "WHERE pm.projectId IN :projectIds " +
+           "AND pm.milestoneDate BETWEEN :startDate AND :endDate " +
+           "ORDER BY pm.milestoneDate ASC")
     List<ProjectMilestone> findByProjectIdInAndMilestoneDateBetween(
-            List<Long> projectIds, 
-            LocalDate startDate, 
-            LocalDate endDate
+            @Param("projectIds") List<Long> projectIds, 
+            @Param("startDate") LocalDate startDate, 
+            @Param("endDate") LocalDate endDate
     );
-    
-    // ❌ DO NOT PUT findByProjectIdInAndPlannedStartBetween HERE! It will crash the app.
 }
