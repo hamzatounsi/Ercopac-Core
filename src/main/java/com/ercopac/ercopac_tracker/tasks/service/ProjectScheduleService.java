@@ -85,6 +85,7 @@ public class ProjectScheduleService {
                 .setDisplayOrder(task.getDisplayOrder())
                 .setOutlineLevel(task.getOutlineLevel())
                 .setCustomerMilestone(task.getCustomerMilestone())
+                .setMilestoneTypeId(task.getMilestoneTypeId())  
                 .setAssignedUserId(task.getAssignedUser() != null ? task.getAssignedUser().getId() : null)
                 .setAssignedUserName(task.getAssignedUser() != null ? task.getAssignedUser().getFullName() : null)
                 .setDependencies(dependencyDtos)
