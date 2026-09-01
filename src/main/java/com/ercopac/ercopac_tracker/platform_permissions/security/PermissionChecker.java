@@ -25,19 +25,23 @@ public class PermissionChecker {
 
     public boolean canRead(Authentication authentication, PermissionModule module) {
         AppUser user = getCurrentUser(authentication);
-
         if (user.getRole() == Role.PLATFORM_OWNER) {
             return true;
         }
-
         if (user.getOrganisation() == null) {
             return false;
         }
-
         if (module == PermissionModule.CRM && user.getRole().isCrmRole()) {
             return true;
         }
-
+        // ✅ FIX: le rôle MANAGER (Command Center) doit pouvoir lire les
+        // Tasks/Milestones sans dépendre d'une ligne role_permissions
+        // configurée manuellement en base — cohérent avec son accès déjà
+        // accordé (via @PreAuthorize statique) aux autres endpoints
+        // Command Center comme /company-dashboard et /revenue-forecast.
+        if (module == PermissionModule.TASKS && user.getRole() == Role.MANAGER) {
+            return true;
+        }
         Role effectiveRole = user.getRole() == Role.PROJECT_MANAGER_LEAD ? Role.PROJECT_MANAGER : user.getRole();
         return permissionRepository
                 .findByOrganisation_IdAndRoleAndModule(
@@ -51,21 +55,17 @@ public class PermissionChecker {
 
     public boolean canWrite(Authentication authentication, PermissionModule module) {
         AppUser user = getCurrentUser(authentication);
-
         if (user.getRole() == Role.PLATFORM_OWNER) {
             return true;
         }
-
         if (user.getOrganisation() == null) {
             return false;
         }
-
         if (module == PermissionModule.CRM) {
             if (user.getRole().isSalesManagerRole()) {
                 return true;
             }
         }
-
         Role effectiveRole = user.getRole() == Role.PROJECT_MANAGER_LEAD ? Role.PROJECT_MANAGER : user.getRole();
         return permissionRepository
                 .findByOrganisation_IdAndRoleAndModule(
@@ -83,7 +83,6 @@ public class PermissionChecker {
 
     private AppUser getCurrentUser(Authentication authentication) {
         String email = authentication.getName();
-
         return userRepository.findByEmail1(email)
                 .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
     }
