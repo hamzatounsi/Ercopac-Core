@@ -91,7 +91,7 @@ public class DataSeeder implements CommandLineRunner {
         // ✅ Link DM to Engineering Department
         AppUser dm = seedUser("dm@pharmastore.com", "Sarah Engineering", "Hamza123!", Role.DEPARTMENT_MANAGER, org, "Engineering", deptEng, engineeringType);
         
-        AppUser employee1 = seedUser("employee1@pharmastore.com", "John Developer", "Hamza123!", Role.EMPLOYEE, org, "Engineering", deptEng, engineeringType);
+        AppUser employee1 = seedUser("employee3@pharmastore.com", "John Developer", "Hamza123!", Role.EMPLOYEE, org, "Engineering", deptEng, engineeringType);
         AppUser employee2 = seedUser("employee2@pharmastore.com", "Emma Planner", "Hamza123!", Role.EMPLOYEE, org, "Design", deptDesign, projectManagerType);
 
         seedGeneralManagerPermissions(org);
