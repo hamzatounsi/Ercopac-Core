@@ -8,7 +8,8 @@ import com.ercopac.ercopac_tracker.planning.dto.ProjectTemplateTaskSnapshot;
 import com.ercopac.ercopac_tracker.planning.dto.ProjectTemplateDto;
 import com.ercopac.ercopac_tracker.planning.repository.ProjectTemplateRepository;
 import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
-import com.ercopac.ercopac_tracker.projects.domain.Project;
+import com.ercopac.ercopac_tracker.projects.domain.Project;   
+
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
@@ -197,6 +198,18 @@ public class ProjectTemplateService {
 
     private void clearSchedule(Long projectId) {
         List<ProjectTask> existing = projectTaskRepository.findByProjectId(projectId);
+        
+        // ✅ FIX: casse les références parent_id AVANT suppression, sinon
+        // Postgres rejette le DELETE avec une violation de contrainte FK
+        // (fk67wf4s9c7219sj0ac7e0915mj) dès qu'une tâche a des enfants.
+        for (ProjectTask task : existing) {
+            if (task.getParentId() != null) {
+                task.setParentId(null);
+            }
+        }
+        projectTaskRepository.saveAll(existing);
+        projectTaskRepository.flush();
+
         for (ProjectTask task : existing) {
             taskDependencyRepository.deleteByPredecessorTaskId(task.getId());
             taskDependencyRepository.deleteBySuccessorTaskId(task.getId());
