@@ -3,6 +3,7 @@ package com.ercopac.ercopac_tracker.crm.web;
 import com.ercopac.ercopac_tracker.config.SecurityConfig;
 import com.ercopac.ercopac_tracker.crm.dto.CrmManagerViewDto;
 import com.ercopac.ercopac_tracker.crm.service.CrmService;
+import com.ercopac.ercopac_tracker.crm.service.CrmEquipmentService;
 import com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule;
 import com.ercopac.ercopac_tracker.platform_permissions.security.PermissionChecker;
 import com.ercopac.ercopac_tracker.security.JwtAuthFilter;
@@ -32,6 +33,7 @@ class CrmControllerAuthorizationTest {
     @MockitoBean JwtService jwtService;
     @MockitoBean UserRepository userRepository;
     @MockitoBean CrmService service;
+    @MockitoBean CrmEquipmentService equipmentService;
     @MockitoBean(name = "permissionChecker") PermissionChecker permissionChecker;
 
     @Test

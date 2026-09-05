@@ -1,0 +1,2 @@
+ALTER TABLE crm_report_schedules
+    ADD COLUMN IF NOT EXISTS type_filter VARCHAR(20) NOT NULL DEFAULT 'ALL';

@@ -12,6 +12,8 @@ public interface CrmActivityRepository extends JpaRepository<CrmActivity, Long> 
             Long orgId, Pageable pageable);
  
     List<CrmActivity> findByLead_IdOrderByCreatedAtDesc(Long leadId);
+
+    List<CrmActivity> findByLead_IdAndOrganisation_IdOrderByCreatedAtDesc(Long leadId, Long orgId);
  
     List<CrmActivity> findByOpportunity_IdOrderByCreatedAtDesc(Long opportunityId);
 }

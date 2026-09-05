@@ -1,0 +1,2 @@
+package com.ercopac.ercopac_tracker.crm.repository; import com.ercopac.ercopac_tracker.crm.domain.CrmOpportunityEquipment; import org.springframework.data.jpa.repository.JpaRepository; import java.util.*;
+public interface CrmOpportunityEquipmentRepository extends JpaRepository<CrmOpportunityEquipment,Long>{ List<CrmOpportunityEquipment> findByOpportunity_IdAndOrganisation_IdOrderById(Long opp,Long org); List<CrmOpportunityEquipment> findByOrganisation_Id(Long org); void deleteByOpportunity_IdAndOrganisation_Id(Long opp,Long org); }

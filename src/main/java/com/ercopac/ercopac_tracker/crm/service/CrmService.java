@@ -396,12 +396,12 @@ public class CrmService {
         Organisation organisation = organisation(organisationId);
         if (stageRepo.countByOrganisation_Id(organisationId) == 0) {
             stageRepo.saveAll(List.of(
-                    new CrmPipelineStage(organisation, "Make presentation", "#94a3b8", 0, 0, false, false),
-                    new CrmPipelineStage(organisation, "Problem setting", "#6366f1", 1, 0, false, false),
-                    new CrmPipelineStage(organisation, "Problem solving", "#06b6d4", 2, 0, false, false),
-                    new CrmPipelineStage(organisation, "Proposal/Quote", "#3b82f6", 3, 0, false, false),
-                    new CrmPipelineStage(organisation, "Negotiation/Revision", "#f59e0b", 4, 0, false, false),
-                    new CrmPipelineStage(organisation, "Closed won", "#0f7b4f", 5, 0, true, false),
+                    new CrmPipelineStage(organisation, "Make presentation", "#94a3b8", 0, 10, false, false),
+                    new CrmPipelineStage(organisation, "Problem setting", "#6366f1", 1, 20, false, false),
+                    new CrmPipelineStage(organisation, "Problem solving", "#06b6d4", 2, 40, false, false),
+                    new CrmPipelineStage(organisation, "Proposal/Quote", "#3b82f6", 3, 65, false, false),
+                    new CrmPipelineStage(organisation, "Negotiation/Revision", "#f59e0b", 4, 85, false, false),
+                    new CrmPipelineStage(organisation, "Closed won", "#0f7b4f", 5, 100, true, false),
                     new CrmPipelineStage(organisation, "Closed lost", "#c0392b", 6, 0, false, true),
                     new CrmPipelineStage(organisation, "Abandoned", "#64748b", 7, 0, false, true)
             ));
@@ -412,6 +412,7 @@ public class CrmService {
         entity.setName(dto.getName().trim());
         entity.setColor(blank(dto.getColor()) == null ? "#64748b" : dto.getColor());
         entity.setDisplayOrder(dto.getDisplayOrder() == null ? 0 : Math.max(0, dto.getDisplayOrder()));
+        entity.setProbability(probability(dto.getProbability()));
         entity.setWon(dto.isWon()); entity.setLost(dto.isLost());
     }
 
@@ -419,6 +420,7 @@ public class CrmService {
         CrmPipelineStageDto dto = new CrmPipelineStageDto();
         dto.setId(entity.getId()); dto.setName(entity.getName()); dto.setColor(entity.getColor());
         dto.setDisplayOrder(entity.getDisplayOrder());
+        dto.setProbability(entity.getProbability());
         dto.setWon(entity.isWon()); dto.setLost(entity.isLost());
         return dto;
     }
@@ -471,6 +473,24 @@ public class CrmService {
 
     public CrmLeadDto getLead(Long requestedOrganisationId, Long leadId) {
         return toLeadDto(lead(tenant(requestedOrganisationId), leadId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<CrmActivityDto> getLeadActivities(Long requestedOrganisationId, Long leadId) {
+        Long organisationId = tenant(requestedOrganisationId);
+        lead(organisationId, leadId);
+        return activityRepo.findByLead_IdAndOrganisation_IdOrderByCreatedAtDesc(leadId, organisationId).stream()
+                .map(this::toActivityDto).toList();
+    }
+
+    public CrmActivityDto addLeadActivity(Long requestedOrganisationId, Long leadId, String description) {
+        Long organisationId = tenant(requestedOrganisationId);
+        requireText(description, "Activity description is required.");
+        CrmLead source = lead(organisationId, leadId);
+        CrmActivity item = CrmActivity.of(source.getOrganisation(), currentUser(), CrmActivity.ActivityType.NOTE_ADDED,
+                description.trim());
+        item.setLead(source);
+        return toActivityDto(activityRepo.save(item));
     }
 
     public CrmLeadDto createLead(Long requestedOrganisationId, CrmLeadDto dto) {
@@ -674,6 +694,7 @@ public class CrmService {
 
     private void applyStage(CrmOpportunity entity, CrmPipelineStage selected) {
         entity.setStage(selected);
+        entity.setProbability(selected.getProbability());
         entity.setWon(selected.isWon()); entity.setLost(selected.isLost());
     }
 
