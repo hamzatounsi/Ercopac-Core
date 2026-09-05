@@ -1,0 +1,2 @@
+package com.ercopac.ercopac_tracker.crm.repository; import com.ercopac.ercopac_tracker.crm.domain.CrmReportSchedule; import org.springframework.data.jpa.repository.JpaRepository; import java.time.LocalDateTime; import java.util.*;
+public interface CrmReportScheduleRepository extends JpaRepository<CrmReportSchedule,Long>{ List<CrmReportSchedule> findByOrganisation_IdOrderByNextRunAtAsc(Long org); Optional<CrmReportSchedule> findByIdAndOrganisation_Id(Long id,Long org); List<CrmReportSchedule> findByActiveTrueAndNextRunAtLessThanEqual(LocalDateTime due); }

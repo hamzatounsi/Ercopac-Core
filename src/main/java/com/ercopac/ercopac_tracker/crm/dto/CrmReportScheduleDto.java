@@ -1,0 +1,1 @@
+package com.ercopac.ercopac_tracker.crm.dto; import java.time.LocalDateTime; public record CrmReportScheduleDto(Long id, String reportType, String typeFilter, String recipients, String frequency, boolean active, LocalDateTime lastSentAt, LocalDateTime nextRunAt) {}

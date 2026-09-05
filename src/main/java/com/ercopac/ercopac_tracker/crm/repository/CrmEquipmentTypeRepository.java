@@ -1,0 +1,2 @@
+package com.ercopac.ercopac_tracker.crm.repository; import com.ercopac.ercopac_tracker.crm.domain.CrmEquipmentType; import org.springframework.data.jpa.repository.JpaRepository; import java.util.*;
+public interface CrmEquipmentTypeRepository extends JpaRepository<CrmEquipmentType,Long>{ List<CrmEquipmentType> findByOrganisation_IdOrderByNameAsc(Long org); List<CrmEquipmentType> findByOrganisation_IdAndActiveTrueOrderByNameAsc(Long org); Optional<CrmEquipmentType> findByIdAndOrganisation_Id(Long id,Long org); }

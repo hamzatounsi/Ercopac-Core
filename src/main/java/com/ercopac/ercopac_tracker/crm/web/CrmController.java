@@ -2,6 +2,7 @@ package com.ercopac.ercopac_tracker.crm.web;
 
 import com.ercopac.ercopac_tracker.crm.dto.*;
 import com.ercopac.ercopac_tracker.crm.service.CrmService;
+import com.ercopac.ercopac_tracker.crm.service.CrmEquipmentService;
 import org.springframework.http.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -21,7 +22,8 @@ public class CrmController {
             "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).CRM)";
     private static final String CRM_MANAGER = "@permissionChecker.canAccessCrmManagerView(authentication)";
     private final CrmService service;
-    public CrmController(CrmService service) { this.service = service; }
+    private final CrmEquipmentService equipmentService;
+    public CrmController(CrmService service, CrmEquipmentService equipmentService) { this.service = service; this.equipmentService = equipmentService; }
 
     @GetMapping("/dashboard") @PreAuthorize(CRM_READ)
     public CrmDashboardDto dashboard(@PathVariable Long orgId) { return service.getDashboard(orgId); }
@@ -40,6 +42,17 @@ public class CrmController {
     public CrmNotificationPreferenceDto saveNotificationPreferences(@PathVariable Long orgId, @RequestBody CrmNotificationPreferenceDto dto) { return service.saveNotificationPreferences(orgId, dto); }
     @GetMapping("/opportunities/team-users") @PreAuthorize(CRM_READ)
     public List<CrmUserDto> opportunityTeamUsers(@PathVariable Long orgId) { return service.getOpportunityTeamUsers(orgId); }
+    @GetMapping("/equipment-types") @PreAuthorize(CRM_READ) public List<CrmEquipmentTypeDto> equipmentTypes(@PathVariable Long orgId, @RequestParam(defaultValue="false") boolean includeInactive) { return equipmentService.types(orgId, includeInactive); }
+    @PostMapping("/equipment-types") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.CREATED) public CrmEquipmentTypeDto createEquipmentType(@PathVariable Long orgId, @RequestBody CrmEquipmentTypeDto dto) { return equipmentService.saveType(orgId, null, dto); }
+    @PutMapping("/equipment-types/{id}") @PreAuthorize(CRM_WRITE) public CrmEquipmentTypeDto updateEquipmentType(@PathVariable Long orgId,@PathVariable Long id,@RequestBody CrmEquipmentTypeDto dto) { return equipmentService.saveType(orgId,id,dto); }
+    @DeleteMapping("/equipment-types/{id}") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.NO_CONTENT) public void deleteEquipmentType(@PathVariable Long orgId,@PathVariable Long id) { equipmentService.deleteType(orgId,id); }
+    @GetMapping("/opportunities/{id}/equipment") @PreAuthorize(CRM_READ) public List<CrmOpportunityEquipmentDto> opportunityEquipment(@PathVariable Long orgId,@PathVariable Long id) { return equipmentService.opportunityEquipment(orgId,id); }
+    @PutMapping("/opportunities/{id}/equipment") @PreAuthorize(CRM_WRITE) public List<CrmOpportunityEquipmentDto> saveOpportunityEquipment(@PathVariable Long orgId,@PathVariable Long id,@RequestBody List<CrmOpportunityEquipmentDto> body) { return equipmentService.replaceOpportunityEquipment(orgId,id,body); }
+    @GetMapping("/equipment-reports") @PreAuthorize(CRM_READ) public CrmEquipmentReportDto equipmentReport(@PathVariable Long orgId,@RequestParam(required=false) String stage,@RequestParam(required=false,name="type") String type) { return equipmentService.report(orgId,stage,type); }
+    @GetMapping("/report-schedules") @PreAuthorize(CRM_READ) public List<CrmReportScheduleDto> reportSchedules(@PathVariable Long orgId) { return equipmentService.schedules(orgId); }
+    @PostMapping("/report-schedules") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.CREATED) public CrmReportScheduleDto createReportSchedule(@PathVariable Long orgId,@RequestBody CrmReportScheduleDto dto) { return equipmentService.saveSchedule(orgId,null,dto); }
+    @PutMapping("/report-schedules/{id}") @PreAuthorize(CRM_WRITE) public CrmReportScheduleDto updateReportSchedule(@PathVariable Long orgId,@PathVariable Long id,@RequestBody CrmReportScheduleDto dto) { return equipmentService.saveSchedule(orgId,id,dto); }
+    @DeleteMapping("/report-schedules/{id}") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.NO_CONTENT) public void deleteReportSchedule(@PathVariable Long orgId,@PathVariable Long id) { equipmentService.deleteSchedule(orgId,id); }
 
     @GetMapping("/accounts") @PreAuthorize(CRM_READ)
     public List<CrmAccountDto> accounts(@PathVariable Long orgId, @RequestParam(required = false) String search) {
@@ -85,6 +98,12 @@ public class CrmController {
     }
     @GetMapping("/leads/{id}") @PreAuthorize(CRM_READ)
     public CrmLeadDto lead(@PathVariable Long orgId, @PathVariable Long id) { return service.getLead(orgId, id); }
+    @GetMapping("/leads/{id}/activities") @PreAuthorize(CRM_READ)
+    public List<CrmActivityDto> leadActivities(@PathVariable Long orgId, @PathVariable Long id) { return service.getLeadActivities(orgId, id); }
+    @PostMapping("/leads/{id}/activities") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.CREATED)
+    public CrmActivityDto addLeadActivity(@PathVariable Long orgId, @PathVariable Long id, @RequestBody Map<String, String> body) {
+        return service.addLeadActivity(orgId, id, body.get("description"));
+    }
     @PostMapping("/leads") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.CREATED)
     public CrmLeadDto createLead(@PathVariable Long orgId, @RequestBody CrmLeadDto dto) { return service.createLead(orgId, dto); }
     @PutMapping("/leads/{id}") @PreAuthorize(CRM_WRITE)
