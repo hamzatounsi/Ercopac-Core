@@ -9,6 +9,7 @@ import com.ercopac.ercopac_tracker.planning.dto.ProjectTemplateDto;
 import com.ercopac.ercopac_tracker.planning.repository.ProjectTemplateRepository;
 import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
+
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
@@ -81,12 +82,18 @@ public class ProjectTemplateService {
         this.securityUtils = securityUtils;
     }
 
+    /**
+     * ✅ FIX: templates are shared across the whole organisation, not
+     * limited to the project where they were created/imported. projectId
+     * is kept as a parameter for controller/frontend call compatibility
+     * but is no longer used to filter the list.
+     */
     @Transactional(readOnly = true)
     public List<ProjectTemplateDto> getProjectTemplates(Long projectId) {
         Long organisationId = securityUtils.getCurrentOrganisationId();
 
         return templateRepository
-                .findByProjectIdAndOrganisationIdOrderByCreatedAtDesc(projectId, organisationId)
+                .findByOrganisationIdOrderByCreatedAtDesc(organisationId)
                 .stream()
                 .map(this::toDto)
                 .toList();
@@ -108,12 +115,16 @@ public class ProjectTemplateService {
         return toDto(templateRepository.save(template));
     }
 
+    /**
+     * ✅ FIX: an organisation-wide template can be deleted from any
+     * project's settings, not only the one it was created in.
+     */
     @Transactional
     public void deleteTemplate(Long projectId, Long templateId) {
         Long organisationId = securityUtils.getCurrentOrganisationId();
 
         ProjectTemplate template = templateRepository
-                .findByIdAndProjectIdAndOrganisationId(templateId, projectId, organisationId)
+                .findByIdAndOrganisationId(templateId, organisationId)
                 .orElseThrow(() -> new EntityNotFoundException("Template not found"));
 
         templateRepository.delete(template);
@@ -123,12 +134,17 @@ public class ProjectTemplateService {
      * Materializes a reusable template snapshot as real project tasks.  A full
      * template keeps the editor's existing replace behaviour; a selected
      * template appends once and is idempotent for retry/double-click safety.
+     *
+     * ✅ FIX: the template lookup is organisation-wide — it may have been
+     * created/imported from a different project of the same organisation.
+     * The generated tasks are still created in THIS project (projectId);
+     * only the template lookup scope changed.
      */
     @Transactional
     public ApplyProjectTemplateResultDto applyTemplate(Long projectId, Long templateId) {
         Long organisationId = securityUtils.getCurrentOrganisationId();
         ProjectTemplate template = templateRepository
-                .findByIdAndProjectIdAndOrganisationId(templateId, projectId, organisationId)
+                .findByIdAndOrganisationId(templateId, organisationId)
                 .orElseThrow(() -> new EntityNotFoundException("Template not found"));
         Project project = projectRepository.findByIdAndOrganisationId(projectId, organisationId)
                 .orElseThrow(() -> new EntityNotFoundException("Project not found"));
@@ -197,6 +213,18 @@ public class ProjectTemplateService {
 
     private void clearSchedule(Long projectId) {
         List<ProjectTask> existing = projectTaskRepository.findByProjectId(projectId);
+
+        // ✅ FIX: casse les références parent_id AVANT suppression, sinon
+        // Postgres rejette le DELETE avec une violation de contrainte FK
+        // (fk67wf4s9c7219sj0ac7e0915mj) dès qu'une tâche a des enfants.
+        for (ProjectTask task : existing) {
+            if (task.getParentId() != null) {
+                task.setParentId(null);
+            }
+        }
+        projectTaskRepository.saveAll(existing);
+        projectTaskRepository.flush();
+
         for (ProjectTask task : existing) {
             taskDependencyRepository.deleteByPredecessorTaskId(task.getId());
             taskDependencyRepository.deleteBySuccessorTaskId(task.getId());

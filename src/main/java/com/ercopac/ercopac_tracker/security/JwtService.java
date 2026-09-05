@@ -12,7 +12,6 @@ import java.util.Date;
 
 @Service
 public class JwtService {
-
     private final String secret;
 
     public JwtService(@Value("${jwt.secret}") String secret) {
@@ -22,6 +21,9 @@ public class JwtService {
         this.secret = secret;
     }
 
+    // ✅ FIX: overload kept for backward compatibility with any existing
+    // caller that doesn't yet pass fullName — falls back to username so
+    // the frontend still shows something reasonable instead of breaking.
     public String generateToken(
             Long userId,
             String username,
@@ -29,7 +31,18 @@ public class JwtService {
             Long organisationId,
             String organisationName
     ) {
-        return generateToken(userId, username, role, organisationId, organisationName, 6 * 60 * 60 * 1000L);
+        return generateToken(userId, username, username, role, organisationId, organisationName, 6 * 60 * 60 * 1000L);
+    }
+
+    public String generateToken(
+            Long userId,
+            String username,
+            String fullName,
+            String role,
+            Long organisationId,
+            String organisationName
+    ) {
+        return generateToken(userId, username, fullName, role, organisationId, organisationName, 6 * 60 * 60 * 1000L);
     }
 
     public String generateToken(
@@ -40,10 +53,26 @@ public class JwtService {
             String organisationName,
             long expirationMillis
     ) {
+        return generateToken(userId, username, username, role, organisationId, organisationName, expirationMillis);
+    }
+
+    // ✅ FIX: fullName claim added — this is what the frontend's
+    // getCurrentUsername() reads first (payload.fullName) to display the
+    // real logged-in user's name instead of falling back to their email.
+    public String generateToken(
+            Long userId,
+            String username,
+            String fullName,
+            String role,
+            Long organisationId,
+            String organisationName,
+            long expirationMillis
+    ) {
         long safeExpirationMillis = Math.max(60_000L, expirationMillis);
         return Jwts.builder()
                 .setSubject(username)
                 .claim("userId", userId)
+                .claim("fullName", fullName)
                 .claim("role", role)
                 .claim("organisationId", organisationId)
                 .claim("organisationName", organisationName)
@@ -68,6 +97,11 @@ public class JwtService {
     public Long extractUserId(String token) {
         Object value = parseClaims(token).get("userId");
         return value == null ? null : Long.valueOf(value.toString());
+    }
+
+    public String extractFullName(String token) {
+        Object value = parseClaims(token).get("fullName");
+        return value == null ? null : value.toString();
     }
 
     public String extractRole(String token) {
