@@ -48,6 +48,9 @@ public class CrmOpportunity {
     @Column(nullable = false)
     private Integer probability = 0;
 
+    @Column(nullable = false, precision = 5, scale = 2)
+    private BigDecimal discount = BigDecimal.ZERO;
+
     @Column(name = "closing_date")
     private LocalDate closingDate;
 
@@ -161,6 +164,8 @@ public class CrmOpportunity {
     public void setCurrency(String currency) { this.currency = currency; }
     public Integer getProbability() { return probability; }
     public void setProbability(Integer probability) { this.probability = probability; }
+    public BigDecimal getDiscount() { return discount; }
+    public void setDiscount(BigDecimal discount) { this.discount = discount; }
     public LocalDate getClosingDate() { return closingDate; }
     public void setClosingDate(LocalDate closingDate) { this.closingDate = closingDate; }
     public AppUser getOwner() { return owner; }

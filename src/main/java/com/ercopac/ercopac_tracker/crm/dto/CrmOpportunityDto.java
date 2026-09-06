@@ -17,6 +17,9 @@ public class CrmOpportunityDto {
     private BigDecimal value;
     private String currency;
     private Integer probability;
+    private BigDecimal discount;
+    private BigDecimal discountedValue;
+    private BigDecimal expectedRevenue;
     private LocalDate closingDate;
     private Long ownerId;
     private String ownerName;
@@ -68,6 +71,12 @@ public class CrmOpportunityDto {
     public void setCurrency(String currency) { this.currency = currency; }
     public Integer getProbability() { return probability; }
     public void setProbability(Integer probability) { this.probability = probability; }
+    public BigDecimal getDiscount() { return discount; }
+    public void setDiscount(BigDecimal discount) { this.discount = discount; }
+    public BigDecimal getDiscountedValue() { return discountedValue; }
+    public void setDiscountedValue(BigDecimal discountedValue) { this.discountedValue = discountedValue; }
+    public BigDecimal getExpectedRevenue() { return expectedRevenue; }
+    public void setExpectedRevenue(BigDecimal expectedRevenue) { this.expectedRevenue = expectedRevenue; }
     public LocalDate getClosingDate() { return closingDate; }
     public void setClosingDate(LocalDate closingDate) { this.closingDate = closingDate; }
     public Long getOwnerId() { return ownerId; }
