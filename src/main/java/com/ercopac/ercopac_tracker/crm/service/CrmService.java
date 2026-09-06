@@ -61,6 +61,7 @@ public class CrmService {
     private final OrganisationRepository organisationRepo;
     private final UserRepository userRepo;
     private final SecurityUtils security;
+    private final CrmOpportunityVisibilityService opportunityVisibility;
     private final Path attachmentRoot;
 
     @Autowired
@@ -81,6 +82,7 @@ public class CrmService {
                       OrganisationRepository organisationRepo,
                       UserRepository userRepo,
                       SecurityUtils security,
+                      CrmOpportunityVisibilityService opportunityVisibility,
                       @Value("${crm.storage.path:uploads/crm}") String attachmentPath) {
         this.stageRepo = stageRepo;
         this.leadRepo = leadRepo;
@@ -99,6 +101,7 @@ public class CrmService {
         this.organisationRepo = organisationRepo;
         this.userRepo = userRepo;
         this.security = security;
+        this.opportunityVisibility = opportunityVisibility;
         this.attachmentRoot = Paths.get(attachmentPath).toAbsolutePath().normalize();
     }
 
@@ -120,7 +123,7 @@ public class CrmService {
                String attachmentPath) {
         this(stageRepo, leadRepo, opportunityRepo, activityRepo, accountRepo, null, categoryRepo, null,
                 noteRepo, attachmentRepo, historyRepo, stageHistoryRepo, targetRepo, null,
-                organisationRepo, userRepo, security, attachmentPath);
+                organisationRepo, userRepo, security, new CrmOpportunityVisibilityService(security), attachmentPath);
     }
 
     @Transactional(readOnly = true)
@@ -189,8 +192,9 @@ public class CrmService {
     }
 
     private CrmOpportunity opportunity(Long organisationId, Long id) {
-        return opportunityRepo.findByIdAndOrganisation_Id(id, organisationId)
+        CrmOpportunity opportunity = opportunityRepo.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> notFound("Opportunity not found."));
+        return opportunityVisibility.requireVisible(opportunity);
     }
 
     private CrmPipelineStage stage(Long organisationId, Long id) {
@@ -332,8 +336,11 @@ public class CrmService {
     private CrmAccountDto toAccountDto(CrmAccount entity) {
         Long organisationId = entity.getOrganisation().getId();
         long leads = leadRepo.countByOrganisation_IdAndAccount_IdAndActiveTrue(organisationId, entity.getId());
-        long opportunities = opportunityRepo.countByOrganisation_IdAndAccount_Id(organisationId, entity.getId());
-        BigDecimal pipeline = Optional.ofNullable(opportunityRepo.sumValueByAccount(organisationId, entity.getId())).orElse(BigDecimal.ZERO);
+        List<CrmOpportunity> visibleOpportunities = opportunityVisibility.visible(
+                opportunityRepo.findByOrganisation_IdAndAccount_IdOrderByCreatedAtDesc(organisationId, entity.getId()));
+        long opportunities = visibleOpportunities.size();
+        BigDecimal pipeline = visibleOpportunities.stream().map(CrmOpportunityValueCalculator::total)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new CrmAccountDto(entity.getId(), entity.getName(), entity.getIndustry(),
                 entity.getIndustryReference() == null ? null : entity.getIndustryReference().getId(), entity.getCountry(), entity.getCity(),
                 entity.getAddress(), entity.getPhone(), entity.getWebsite(), entity.getEmployees(), entity.getAnnualRevenue(),
@@ -565,7 +572,7 @@ public class CrmService {
                                                      Long leadId, Long stageId) {
         Long organisationId = tenant(requestedOrganisationId);
         migrateLegacySupplyCategories(organisationId);
-        return opportunityRepo.findFiltered(organisationId, ownerId, accountId, leadId, stageId)
+        return opportunityVisibility.visible(opportunityRepo.findFiltered(organisationId, ownerId, accountId, leadId, stageId))
                 .stream().map(this::toOpportunityDto).toList();
     }
 
@@ -662,7 +669,20 @@ public class CrmService {
         if (dto.getAccountId() == null) throw badRequest("An account is required for every opportunity.");
         CrmAccount selectedAccount = account(organisationId, dto.getAccountId());
         entity.setName(dto.getName().trim()); entity.setAccount(selectedAccount); entity.setAccountName(selectedAccount.getName());
-        entity.setOwner(tenantUser(organisationId, dto.getOwnerId()));
+        if (opportunityVisibility.isRestrictedRole()) {
+            AppUser actor = currentUser();
+            Long existingOwnerId = entity.getOwner() == null ? null : entity.getOwner().getId();
+            if (creating) {
+                if (dto.getOwnerId() != null && !Objects.equals(dto.getOwnerId(), actor.getId())) {
+                    throw forbidden("You cannot assign this opportunity to another user.");
+                }
+                entity.setOwner(actor);
+            } else if (dto.getOwnerId() != null && !Objects.equals(dto.getOwnerId(), existingOwnerId)) {
+                throw forbidden("You cannot change the opportunity owner.");
+            }
+        } else {
+            entity.setOwner(tenantUser(organisationId, dto.getOwnerId()));
+        }
         if (dto.getLeadId() == null) entity.setLead(null);
         else {
             CrmLead contact = lead(organisationId, dto.getLeadId());
@@ -684,8 +704,10 @@ public class CrmService {
         entity.setThirdPartyMaterialValue(nonNegative(dto.getThirdPartyMaterialValue(), "Third-party material value"));
         entity.setErcopacResaleValue(nonNegative(dto.getErcopacResaleValue(), "Ercopac resale value"));
         entity.setResaleValue(nonNegative(dto.getResaleValue(), "Resale value"));
-        BigDecimal calculated = sum(entity.getMaterialValue(), entity.getServicesValue());
-        entity.setValue(calculated.signum() > 0 ? calculated : nonNegative(dto.getValue(), "Opportunity value"));
+        entity.setDiscount(discount(dto.getDiscount()));
+        entity.setValue(CrmOpportunityValueCalculator.total(entity));
+        validateSplit(entity.getErcopacMaterialValue(), entity.getThirdPartyMaterialValue(), entity.getValue(), "Sales split");
+        validateSplit(entity.getErcopacResaleValue(), entity.getResaleValue(), entity.getValue(), "Resale split");
         CrmPipelineStage selectedStage = dto.getStageId() == null
                 ? (creating ? firstStage(organisationId) : entity.getStage()) : stage(organisationId, dto.getStageId());
         if (selectedStage != null) applyStage(entity, selectedStage);
@@ -708,7 +730,10 @@ public class CrmService {
         dto.setId(entity.getId()); dto.setName(entity.getName()); dto.setAccountName(entity.getAccountName());
         if (entity.getAccount() != null) { dto.setAccountId(entity.getAccount().getId()); dto.setAccountCountry(entity.getAccount().getCountry()); }
         if (entity.getStage() != null) { dto.setStageId(entity.getStage().getId()); dto.setStageName(entity.getStage().getName()); dto.setStageColor(entity.getStage().getColor()); }
-        dto.setValue(entity.getValue()); dto.setCurrency(entity.getCurrency()); dto.setProbability(entity.getProbability());
+        dto.setValue(CrmOpportunityValueCalculator.total(entity)); dto.setCurrency(entity.getCurrency()); dto.setProbability(entity.getProbability());
+        dto.setDiscount(zero(entity.getDiscount()));
+        dto.setDiscountedValue(CrmOpportunityValueCalculator.discounted(entity));
+        dto.setExpectedRevenue(CrmOpportunityValueCalculator.expectedRevenue(entity));
         dto.setClosingDate(entity.getClosingDate()); dto.setWon(entity.isWon()); dto.setLost(entity.isLost());
         if (entity.getOwner() != null) { dto.setOwnerId(entity.getOwner().getId()); dto.setOwnerName(entity.getOwner().getFullName()); }
         if (entity.getLead() != null) { dto.setLeadId(entity.getLead().getId()); dto.setContactName(entity.getLead().getFullName()); }
@@ -748,6 +773,7 @@ public class CrmService {
 
     public CrmOpportunityNoteDto updateNote(Long requestedOrganisationId, Long opportunityId, Long noteId, String content) {
         Long organisationId = tenant(requestedOrganisationId); requireText(content, "Note content is required.");
+        opportunity(organisationId, opportunityId);
         CrmOpportunityNote note = noteRepo.findByIdAndOpportunity_IdAndOrganisation_Id(noteId, opportunityId, organisationId)
                 .orElseThrow(() -> notFound("Note not found."));
         note.setContent(content.trim()); return toNoteDto(noteRepo.save(note));
@@ -755,6 +781,7 @@ public class CrmService {
 
     public void deleteNote(Long requestedOrganisationId, Long opportunityId, Long noteId) {
         Long organisationId = tenant(requestedOrganisationId);
+        opportunity(organisationId, opportunityId);
         noteRepo.delete(noteRepo.findByIdAndOpportunity_IdAndOrganisation_Id(noteId, opportunityId, organisationId)
                 .orElseThrow(() -> notFound("Note not found.")));
     }
@@ -792,6 +819,7 @@ public class CrmService {
     @Transactional(readOnly = true)
     public AttachmentDownload downloadAttachment(Long requestedOrganisationId, Long opportunityId, Long attachmentId) {
         Long organisationId = tenant(requestedOrganisationId);
+        opportunity(organisationId, opportunityId);
         CrmOpportunityAttachment attachment = attachmentRepo
                 .findByIdAndOpportunity_IdAndOrganisation_Id(attachmentId, opportunityId, organisationId)
                 .orElseThrow(() -> notFound("Attachment not found."));
@@ -803,6 +831,7 @@ public class CrmService {
 
     public void deleteAttachment(Long requestedOrganisationId, Long opportunityId, Long attachmentId) {
         Long organisationId = tenant(requestedOrganisationId);
+        opportunity(organisationId, opportunityId);
         CrmOpportunityAttachment attachment = attachmentRepo
                 .findByIdAndOpportunity_IdAndOrganisation_Id(attachmentId, opportunityId, organisationId)
                 .orElseThrow(() -> notFound("Attachment not found."));
@@ -844,6 +873,8 @@ public class CrmService {
         result.put("Contact person", entity.getLead() == null ? null : entity.getLead().getFullName());
         result.put("Stage", entity.getStage() == null ? null : entity.getStage().getName());
         result.put("Value", string(entity.getValue())); result.put("Probability", string(entity.getProbability()));
+        result.put("Discount", string(entity.getDiscount()));
+        result.put("Expected revenue", string(CrmOpportunityValueCalculator.expectedRevenue(entity)));
         result.put("Owner", entity.getOwner() == null ? null : entity.getOwner().getFullName());
         result.put("Closing date", string(entity.getClosingDate())); result.put("Supply category", entity.getSupplyCategory() == null ? null : entity.getSupplyCategory().getName());
         result.put("Description", entity.getDescription()); result.put("Next step", entity.getNextStep());
@@ -867,20 +898,29 @@ public class CrmService {
     // Dashboard, reports and lead-only manager view
     public CrmDashboardDto getDashboard(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId); seedConfiguration(organisationId);
+        List<CrmOpportunity> visible = opportunityVisibility.visible(
+                opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId));
+        Set<Long> visibleIds = visible.stream().map(CrmOpportunity::getId).collect(Collectors.toSet());
         CrmDashboardDto dto = new CrmDashboardDto();
-        dto.setOpenOpportunities(opportunityRepo.countByOrganisation_IdAndWonFalseAndLostFalse(organisationId));
-        dto.setPipelineValue(Optional.ofNullable(opportunityRepo.sumPipelineValue(organisationId)).orElse(BigDecimal.ZERO));
+        dto.setOpenOpportunities(visible.stream().filter(item -> !item.isWon() && !item.isLost()).count());
+        dto.setPipelineValue(visible.stream().filter(item -> !item.isWon() && !item.isLost())
+                .map(CrmOpportunityValueCalculator::total).reduce(BigDecimal.ZERO, BigDecimal::add));
         dto.setActiveLeads(leadRepo.countByOrganisation_IdAndActiveTrue(organisationId));
-        dto.setWonThisMonth(opportunityRepo.countWonSince(organisationId, LocalDate.now().withDayOfMonth(1).atStartOfDay()));
+        LocalDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        dto.setWonThisMonth(visible.stream().filter(item -> item.isWon() && !item.getUpdatedAt().isBefore(monthStart)).count());
         dto.setRecentActivities(activityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId, PageRequest.of(0, 10))
-                .stream().map(this::toActivityDto).toList());
+                .stream().filter(item -> item.getOpportunity() == null || visibleIds.contains(item.getOpportunity().getId()))
+                .map(this::toActivityDto).toList());
         LocalDate now = LocalDate.now();
-        dto.setClosingThisMonth(opportunityRepo.findByOrganisation_IdAndClosingDateBetweenOrderByClosingDateAsc(
-                organisationId, now.withDayOfMonth(1), now.withDayOfMonth(now.lengthOfMonth())).stream().map(this::toOpportunityDto).toList());
+        dto.setClosingThisMonth(visible.stream().filter(item -> item.getClosingDate() != null
+                        && !item.getClosingDate().isBefore(now.withDayOfMonth(1))
+                        && !item.getClosingDate().isAfter(now.withDayOfMonth(now.lengthOfMonth())))
+                .sorted(Comparator.comparing(CrmOpportunity::getClosingDate)).map(this::toOpportunityDto).toList());
         Map<String, Long> sources = new LinkedHashMap<>();
         leadRepo.countBySource(organisationId).forEach(row -> sources.put(row[0].toString(), (Long) row[1])); dto.setLeadsBySource(sources);
         Map<Long, Long> counts = new HashMap<>();
-        opportunityRepo.countByStage(organisationId).forEach(row -> counts.put((Long) row[0], (Long) row[1]));
+        visible.stream().filter(item -> item.getStage() != null)
+                .forEach(item -> counts.merge(item.getStage().getId(), 1L, Long::sum));
         List<CrmPipelineStageDto> stages = stageRepo.findByOrganisation_IdOrderByDisplayOrderAsc(organisationId).stream().map(value -> {
             CrmPipelineStageDto stageDto = toStageDto(value); stageDto.setOpportunityCount(counts.getOrDefault(value.getId(), 0L).intValue()); return stageDto;
         }).toList(); dto.setPipeline(stages);
@@ -890,11 +930,11 @@ public class CrmService {
     public CrmReportsDto getReports(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
         migrateLegacySupplyCategories(organisationId);
-        List<CrmOpportunity> values = opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId);
-        BigDecimal total = values.stream().map(item -> zero(item.getValue())).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal weighted = values.stream().map(item -> zero(item.getValue())
-                .multiply(BigDecimal.valueOf(item.getProbability() == null ? 0 : item.getProbability()))
-                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)).reduce(BigDecimal.ZERO, BigDecimal::add);
+        List<CrmOpportunity> values = opportunityVisibility.visible(
+                opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId));
+        BigDecimal total = values.stream().map(CrmOpportunityValueCalculator::total).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal weighted = values.stream().map(CrmOpportunityValueCalculator::expectedRevenue)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new CrmReportsDto(values.size(), total, weighted,
                 breakdown(values, item -> item.getAccount() == null ? "Unspecified" : defaultValue(item.getAccount().getCountry(), "Unspecified")),
                 breakdown(values, item -> item.getStage() == null ? "Unassigned" : item.getStage().getName()),
@@ -909,9 +949,9 @@ public class CrmService {
     public CrmAnalyticsDto getAnalytics(Long requestedOrganisationId, String requestedOpportunityType) {
         Long organisationId = tenant(requestedOrganisationId);
         String opportunityType = blank(requestedOpportunityType);
-        List<CrmOpportunity> opportunities = opportunityType == null
+        List<CrmOpportunity> opportunities = opportunityVisibility.visible(opportunityType == null
                 ? opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId)
-                : opportunityRepo.findByOrganisation_IdAndOpportunityTypeIgnoreCaseOrderByCreatedAtDesc(organisationId, opportunityType);
+                : opportunityRepo.findByOrganisation_IdAndOpportunityTypeIgnoreCaseOrderByCreatedAtDesc(organisationId, opportunityType));
         BigDecimal pipelineValue = opportunities.stream().filter(item -> !item.isWon() && !item.isLost())
                 .map(item -> zero(item.getValue())).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal wonValue = opportunities.stream().filter(CrmOpportunity::isWon)
@@ -945,7 +985,7 @@ public class CrmService {
 
     public List<CrmUserDto> getCrmUsers(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
-        return userRepo.findByOrganisation_IdAndRoleInAndActiveTrueOrderByFullNameAsc(organisationId, SALES_ROLES)
+        return userRepo.findByOrganisation_IdAndRoleInAndActiveTrueOrderByFullNameAsc(organisationId, OPPORTUNITY_TEAM_ROLES)
                 .stream().map(this::toCrmUserDto).toList();
     }
 
@@ -1032,6 +1072,18 @@ public class CrmService {
         int probability = value == null ? 0 : value;
         if (probability < 0 || probability > 100) throw badRequest("Probability must be between 0 and 100.");
         return probability;
+    }
+    private BigDecimal discount(BigDecimal value) {
+        BigDecimal discount = value == null ? BigDecimal.ZERO : value;
+        if (discount.signum() < 0 || discount.compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw badRequest("Discount must be between 0 and 100.");
+        }
+        return discount.setScale(2, RoundingMode.HALF_UP);
+    }
+    private void validateSplit(BigDecimal left, BigDecimal right, BigDecimal total, String label) {
+        if (!CrmOpportunityValueCalculator.splitMatches(left, right, total)) {
+            throw badRequest(label + " must equal Total Value.");
+        }
     }
     private BigDecimal sum(BigDecimal left, BigDecimal right) { return zero(left).add(zero(right)); }
     private BigDecimal zero(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }

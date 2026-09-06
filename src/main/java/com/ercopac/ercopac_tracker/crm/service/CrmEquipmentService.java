@@ -25,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -54,6 +53,7 @@ public class CrmEquipmentService {
     private final CrmReportScheduleRepository schedules;
     private final OrganisationRepository organisations;
     private final SecurityUtils security;
+    private final CrmOpportunityVisibilityService opportunityVisibility;
     private final ProjectumMailService mail;
 
     public CrmEquipmentService(CrmEquipmentTypeRepository types,
@@ -62,6 +62,7 @@ public class CrmEquipmentService {
                                CrmReportScheduleRepository schedules,
                                OrganisationRepository organisations,
                                SecurityUtils security,
+                               CrmOpportunityVisibilityService opportunityVisibility,
                                ProjectumMailService mail) {
         this.types = types;
         this.equipment = equipment;
@@ -69,6 +70,7 @@ public class CrmEquipmentService {
         this.schedules = schedules;
         this.organisations = organisations;
         this.security = security;
+        this.opportunityVisibility = opportunityVisibility;
         this.mail = mail;
     }
 
@@ -161,17 +163,20 @@ public class CrmEquipmentService {
     }
 
     private CrmOpportunity requireOpportunity(Long orgId, Long id) {
-        return opportunities.findByIdAndOrganisation_Id(id, orgId).orElseThrow(() ->
+        CrmOpportunity opportunity = opportunities.findByIdAndOrganisation_Id(id, orgId).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "Opportunity not found."));
+        return opportunityVisibility.requireVisible(opportunity);
     }
 
     public CrmEquipmentReportDto report(Long orgId, String stage, String typeFilter) {
         tenant(orgId);
-        return buildReport(orgId, stage, typeFilter);
+        return buildReport(orgId, stage, typeFilter, true);
     }
 
-    private CrmEquipmentReportDto buildReport(Long orgId, String stage, String typeFilter) {
-        Set<Long> allowed = opportunities.findByOrganisation_IdOrderByCreatedAtDesc(orgId).stream()
+    private CrmEquipmentReportDto buildReport(Long orgId, String stage, String typeFilter, boolean applyVisibility) {
+        List<CrmOpportunity> candidates = opportunities.findByOrganisation_IdOrderByCreatedAtDesc(orgId);
+        if (applyVisibility) candidates = opportunityVisibility.visible(candidates);
+        Set<Long> allowed = candidates.stream()
                 .filter(opportunity -> matchesStage(opportunity, stage) && matchesType(opportunity, typeFilter))
                 .map(CrmOpportunity::getId)
                 .collect(Collectors.toSet());
@@ -282,7 +287,7 @@ public class CrmEquipmentService {
             default -> "ALL".equals(storedType) ? null : storedType;
         };
         if (schedule.getReportType().startsWith("EQUIPMENT_")) {
-            CrmEquipmentReportDto report = buildReport(orgId, null, effectiveType);
+            CrmEquipmentReportDto report = buildReport(orgId, null, effectiveType, false);
             long units = report.totals().stream().mapToLong(CrmEquipmentReportDto.EquipmentTotal::quantity).sum();
             long tracked = report.details().stream().map(CrmEquipmentReportDto.EquipmentDetail::opportunityId).distinct().count();
             return "Scheduled CRM report\n\nReport: " + schedule.getReportType().replace('_', ' ')
@@ -293,10 +298,7 @@ public class CrmEquipmentService {
                 .filter(opportunity -> matchesType(opportunity, effectiveType)).toList();
         BigDecimal total = reportOpportunities.stream().map(CrmOpportunity::getValue)
                 .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal weighted = reportOpportunities.stream().map(opportunity ->
-                        Optional.ofNullable(opportunity.getValue()).orElse(BigDecimal.ZERO)
-                                .multiply(BigDecimal.valueOf(Optional.ofNullable(opportunity.getProbability()).orElse(0)))
-                                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP))
+        BigDecimal weighted = reportOpportunities.stream().map(CrmOpportunityValueCalculator::expectedRevenue)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         long countries = reportOpportunities.stream().map(opportunity -> opportunity.getAccount() == null
                         ? null : opportunity.getAccount().getCountry())

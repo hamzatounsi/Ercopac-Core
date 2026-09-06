@@ -49,10 +49,10 @@ public class CrmController {
     @GetMapping("/opportunities/{id}/equipment") @PreAuthorize(CRM_READ) public List<CrmOpportunityEquipmentDto> opportunityEquipment(@PathVariable Long orgId,@PathVariable Long id) { return equipmentService.opportunityEquipment(orgId,id); }
     @PutMapping("/opportunities/{id}/equipment") @PreAuthorize(CRM_WRITE) public List<CrmOpportunityEquipmentDto> saveOpportunityEquipment(@PathVariable Long orgId,@PathVariable Long id,@RequestBody List<CrmOpportunityEquipmentDto> body) { return equipmentService.replaceOpportunityEquipment(orgId,id,body); }
     @GetMapping("/equipment-reports") @PreAuthorize(CRM_READ) public CrmEquipmentReportDto equipmentReport(@PathVariable Long orgId,@RequestParam(required=false) String stage,@RequestParam(required=false,name="type") String type) { return equipmentService.report(orgId,stage,type); }
-    @GetMapping("/report-schedules") @PreAuthorize(CRM_READ) public List<CrmReportScheduleDto> reportSchedules(@PathVariable Long orgId) { return equipmentService.schedules(orgId); }
-    @PostMapping("/report-schedules") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.CREATED) public CrmReportScheduleDto createReportSchedule(@PathVariable Long orgId,@RequestBody CrmReportScheduleDto dto) { return equipmentService.saveSchedule(orgId,null,dto); }
-    @PutMapping("/report-schedules/{id}") @PreAuthorize(CRM_WRITE) public CrmReportScheduleDto updateReportSchedule(@PathVariable Long orgId,@PathVariable Long id,@RequestBody CrmReportScheduleDto dto) { return equipmentService.saveSchedule(orgId,id,dto); }
-    @DeleteMapping("/report-schedules/{id}") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.NO_CONTENT) public void deleteReportSchedule(@PathVariable Long orgId,@PathVariable Long id) { equipmentService.deleteSchedule(orgId,id); }
+    @GetMapping("/report-schedules") @PreAuthorize(CRM_MANAGER) public List<CrmReportScheduleDto> reportSchedules(@PathVariable Long orgId) { return equipmentService.schedules(orgId); }
+    @PostMapping("/report-schedules") @PreAuthorize(CRM_MANAGER) @ResponseStatus(HttpStatus.CREATED) public CrmReportScheduleDto createReportSchedule(@PathVariable Long orgId,@RequestBody CrmReportScheduleDto dto) { return equipmentService.saveSchedule(orgId,null,dto); }
+    @PutMapping("/report-schedules/{id}") @PreAuthorize(CRM_MANAGER) public CrmReportScheduleDto updateReportSchedule(@PathVariable Long orgId,@PathVariable Long id,@RequestBody CrmReportScheduleDto dto) { return equipmentService.saveSchedule(orgId,id,dto); }
+    @DeleteMapping("/report-schedules/{id}") @PreAuthorize(CRM_MANAGER) @ResponseStatus(HttpStatus.NO_CONTENT) public void deleteReportSchedule(@PathVariable Long orgId,@PathVariable Long id) { equipmentService.deleteSchedule(orgId,id); }
 
     @GetMapping("/accounts") @PreAuthorize(CRM_READ)
     public List<CrmAccountDto> accounts(@PathVariable Long orgId, @RequestParam(required = false) String search) {
