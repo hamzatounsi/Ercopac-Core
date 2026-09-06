@@ -58,6 +58,7 @@ public class CrmService {
     private final CrmOpportunityStageHistoryRepository stageHistoryRepo;
     private final CrmSalesTargetRepository targetRepo;
     private final CrmNotificationPreferenceRepository notificationPreferenceRepo;
+    private final CrmOpportunityAssignmentNotifier assignmentNotifier;
     private final OrganisationRepository organisationRepo;
     private final UserRepository userRepo;
     private final SecurityUtils security;
@@ -79,6 +80,7 @@ public class CrmService {
                       CrmOpportunityStageHistoryRepository stageHistoryRepo,
                       CrmSalesTargetRepository targetRepo,
                       CrmNotificationPreferenceRepository notificationPreferenceRepo,
+                      CrmOpportunityAssignmentNotifier assignmentNotifier,
                       OrganisationRepository organisationRepo,
                       UserRepository userRepo,
                       SecurityUtils security,
@@ -98,6 +100,7 @@ public class CrmService {
         this.stageHistoryRepo = stageHistoryRepo;
         this.targetRepo = targetRepo;
         this.notificationPreferenceRepo = notificationPreferenceRepo;
+        this.assignmentNotifier = assignmentNotifier;
         this.organisationRepo = organisationRepo;
         this.userRepo = userRepo;
         this.security = security;
@@ -122,7 +125,7 @@ public class CrmService {
                SecurityUtils security,
                String attachmentPath) {
         this(stageRepo, leadRepo, opportunityRepo, activityRepo, accountRepo, null, categoryRepo, null,
-                noteRepo, attachmentRepo, historyRepo, stageHistoryRepo, targetRepo, null,
+                noteRepo, attachmentRepo, historyRepo, stageHistoryRepo, targetRepo, null, null,
                 organisationRepo, userRepo, security, new CrmOpportunityVisibilityService(security), attachmentPath);
     }
 
@@ -588,6 +591,9 @@ public class CrmService {
         CrmOpportunity entity = new CrmOpportunity(); entity.setOrganisation(organisation);
         mapOpportunity(entity, dto, true);
         entity = opportunityRepo.save(entity);
+        if (dto.getTeamMembers() != null && !dto.getTeamMembers().isEmpty()) {
+            entity = replaceOpportunityTeam(entity, dto.getTeamMembers().stream().map(CrmUserDto::id).toList(), false);
+        }
         recordStageHistory(entity, currentUser());
         logActivity(organisation, currentUser(), CrmActivity.ActivityType.OPPORTUNITY_CREATED,
                 "New opportunity created: " + entity.getName(), null, entity);
@@ -600,6 +606,9 @@ public class CrmService {
         Long oldStageId = entity.getStage() == null ? null : entity.getStage().getId();
         mapOpportunity(entity, dto, false);
         entity = opportunityRepo.save(entity);
+        if (dto.getTeamMembers() != null && !dto.getTeamMembers().isEmpty()) {
+            entity = replaceOpportunityTeam(entity, dto.getTeamMembers().stream().map(CrmUserDto::id).toList(), true);
+        }
         recordChanges(entity, before);
         Long newStageId = entity.getStage() == null ? null : entity.getStage().getId();
         if (!Objects.equals(oldStageId, newStageId)) {
@@ -626,7 +635,13 @@ public class CrmService {
     public CrmOpportunityDto updateOpportunityTeam(Long requestedOrganisationId, Long opportunityId, List<Long> requestedUserIds) {
         Long organisationId = tenant(requestedOrganisationId);
         CrmOpportunity entity = opportunity(organisationId, opportunityId);
+        return toOpportunityDto(replaceOpportunityTeam(entity, requestedUserIds, true));
+    }
+
+    private CrmOpportunity replaceOpportunityTeam(CrmOpportunity entity, List<Long> requestedUserIds, boolean recordHistory) {
+        Long organisationId = entity.getOrganisation().getId();
         String before = entity.getTeamMembers().stream().map(AppUser::getFullName).sorted().collect(Collectors.joining(", "));
+        Set<Long> previousMemberIds = entity.getTeamMembers().stream().map(AppUser::getId).collect(Collectors.toSet());
         LinkedHashSet<Long> userIds = requestedUserIds == null ? new LinkedHashSet<>() : requestedUserIds.stream()
                 .filter(Objects::nonNull).collect(Collectors.toCollection(LinkedHashSet::new));
         LinkedHashSet<AppUser> members = new LinkedHashSet<>();
@@ -641,8 +656,9 @@ public class CrmService {
         entity.getTeamMembers().addAll(members);
         entity = opportunityRepo.save(entity);
         String after = entity.getTeamMembers().stream().map(AppUser::getFullName).sorted().collect(Collectors.joining(", "));
-        if (!Objects.equals(before, after)) history(entity, "Team", blank(before), blank(after));
-        return toOpportunityDto(entity);
+        if (recordHistory && !Objects.equals(before, after)) history(entity, "Team", blank(before), blank(after));
+        if (assignmentNotifier != null) assignmentNotifier.notifyNewAssignments(entity, previousMemberIds);
+        return entity;
     }
 
     public CrmOpportunityDto markWon(Long requestedOrganisationId, Long id) {

@@ -23,9 +23,16 @@ public final class CrmOpportunityValueCalculator {
     }
 
     public static BigDecimal expectedRevenue(CrmOpportunity opportunity) {
-        int probability = opportunity.getProbability() == null ? 0 : opportunity.getProbability();
-        return money(discounted(opportunity)
-                .multiply(BigDecimal.valueOf(probability))
+        return money(expectedRevenueBeforeDiscount(opportunity).subtract(discountAmount(opportunity)));
+    }
+
+    public static BigDecimal expectedRevenueBeforeDiscount(CrmOpportunity opportunity) {
+        return total(opportunity);
+    }
+
+    public static BigDecimal discountAmount(CrmOpportunity opportunity) {
+        return money(total(opportunity)
+                .multiply(zero(opportunity.getDiscount()))
                 .divide(ONE_HUNDRED, 6, RoundingMode.HALF_UP));
     }
 
