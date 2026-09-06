@@ -18,7 +18,19 @@ class CrmOpportunityValueCalculatorTest {
 
         assertEquals(new BigDecimal("320000.00"), CrmOpportunityValueCalculator.total(opportunity));
         assertEquals(new BigDecimal("304000.00"), CrmOpportunityValueCalculator.discounted(opportunity));
-        assertEquals(new BigDecimal("228000.00"), CrmOpportunityValueCalculator.expectedRevenue(opportunity));
+        assertEquals(new BigDecimal("320000.00"), CrmOpportunityValueCalculator.expectedRevenueBeforeDiscount(opportunity));
+        assertEquals(new BigDecimal("16000.00"), CrmOpportunityValueCalculator.discountAmount(opportunity));
+        assertEquals(new BigDecimal("304000.00"), CrmOpportunityValueCalculator.expectedRevenue(opportunity));
+        opportunity.setProbability(50);
+        assertEquals(new BigDecimal("304000.00"), CrmOpportunityValueCalculator.expectedRevenue(opportunity));
+        opportunity.setProbability(20);
+        assertEquals(new BigDecimal("304000.00"), CrmOpportunityValueCalculator.expectedRevenue(opportunity));
+        opportunity.setProbability(100);
+        assertEquals(new BigDecimal("304000.00"), CrmOpportunityValueCalculator.expectedRevenue(opportunity));
+        opportunity.setDiscount(BigDecimal.ZERO);
+        assertEquals(new BigDecimal("320000.00"), CrmOpportunityValueCalculator.expectedRevenue(opportunity));
+        opportunity.setDiscount(new BigDecimal("10"));
+        assertEquals(new BigDecimal("288000.00"), CrmOpportunityValueCalculator.expectedRevenue(opportunity));
         assertEquals(true, CrmOpportunityValueCalculator.splitMatches(
                 new BigDecimal("200000"), new BigDecimal("120000"), CrmOpportunityValueCalculator.total(opportunity)));
         assertEquals(true, CrmOpportunityValueCalculator.splitMatches(
