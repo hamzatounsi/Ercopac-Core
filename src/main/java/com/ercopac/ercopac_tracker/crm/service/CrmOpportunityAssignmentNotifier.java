@@ -47,5 +47,27 @@ public class CrmOpportunityAssignmentNotifier {
             notification.setLink("/crm/opportunities/" + opportunity.getId());
         }
     }
-    
+
+    @Transactional
+    public void notifyOpportunityUpdated(CrmOpportunity opportunity, AppUser actor, String subject, String message) {
+        Long organisationId = opportunity.getOrganisation().getId();
+        for (AppUser member : opportunity.getTeamMembers()) {
+            if (member.getId() == null
+                    || Objects.equals(member.getId(), actor.getId())
+                    || member.getOrganisation() == null
+                    || !Objects.equals(member.getOrganisation().getId(), organisationId)) continue;
+
+            boolean crmEmailEnabled = preferences.findByOrganisation_IdAndUser_Id(organisationId, member.getId())
+                    .map(value -> value.isEmailNotifications()).orElse(true);
+            boolean userEmailEnabled = !Boolean.FALSE.equals(member.getEmailNotificationsEnabled());
+            NotificationChannel channel = crmEmailEnabled && userEmailEnabled
+                    ? NotificationChannel.EMAIL : NotificationChannel.APP_ALERT;
+
+            Notification notification = notifications.create(new NotificationRequest(
+                    organisationId, null, null, member.getId(), member.getEmail(), channel, "INFO",
+                    subject, message,
+                    "<p>" + HtmlUtils.htmlEscape(message) + "</p>"));
+            notification.setLink("/crm/opportunities/" + opportunity.getId());
+        }
+    }
 }
