@@ -676,7 +676,27 @@ public class CrmService {
     }
 
     public void deleteOpportunity(Long requestedOrganisationId, Long id) {
-        opportunityRepo.delete(opportunity(tenant(requestedOrganisationId), id));
+        Long organisationId = tenant(requestedOrganisationId);
+        CrmOpportunity entity = opportunity(organisationId, id);
+
+        // Supprimer d'abord toutes les données liées qui référencent cette opportunity
+        activityRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
+        noteRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
+        historyRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
+        stageHistoryRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
+
+        // Supprimer les fichiers physiques d'attachments avant de supprimer les entités
+        attachmentRepo.findByOpportunity_IdAndOrganisation_IdOrderByUploadedAtDesc(id, organisationId)
+                .forEach(attachment -> {
+                    Path tenantRoot = attachmentRoot.resolve(String.valueOf(organisationId)).normalize();
+                    Path target = tenantRoot.resolve(attachment.getStoragePath()).normalize();
+                    if (target.startsWith(tenantRoot)) {
+                        try { Files.deleteIfExists(target); } catch (IOException ignored) { }
+                    }
+                });
+        attachmentRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
+
+        opportunityRepo.delete(entity);
     }
 
     private void mapOpportunity(CrmOpportunity entity, CrmOpportunityDto dto, boolean creating) {
