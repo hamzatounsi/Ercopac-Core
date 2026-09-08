@@ -47,4 +47,5 @@ public class CrmOpportunityAssignmentNotifier {
             notification.setLink("/crm/opportunities/" + opportunity.getId());
         }
     }
+    
 }
