@@ -28,7 +28,6 @@ public class NotificationService {
     @Transactional
     public Notification create(NotificationRequest request) {
         Notification notification = new Notification();
-
         notification.setOrganisationId(request.organisationId());
         notification.setProjectId(request.projectId());
         notification.setTaskId(request.taskId());
@@ -43,10 +42,13 @@ public class NotificationService {
         notification.setRetryCount(0);
         notification.setCreatedAt(LocalDateTime.now());
         notification.setNextRetryAt(LocalDateTime.now());
+        notification = repository.save(notification);
 
-        return repository.save(notification);
+        // ✅ Envoyer immédiatement (synchrone) après la création
+        sendNow(notification);
+
+        return notification;
     }
-
     @Async
     public void sendAsync(Long notificationId) {
         repository.findById(notificationId).ifPresent(this::sendNow);

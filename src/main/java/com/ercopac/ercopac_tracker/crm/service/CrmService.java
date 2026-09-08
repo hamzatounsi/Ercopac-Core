@@ -609,12 +609,18 @@ public class CrmService {
         if (dto.getTeamMembers() != null && !dto.getTeamMembers().isEmpty()) {
             entity = replaceOpportunityTeam(entity, dto.getTeamMembers().stream().map(CrmUserDto::id).toList(), true);
         }
-        recordChanges(entity, before);
+        List<String> changedFields = recordChanges(entity, before);
         Long newStageId = entity.getStage() == null ? null : entity.getStage().getId();
         if (!Objects.equals(oldStageId, newStageId)) {
             recordStageHistory(entity, currentUser());
             logActivity(entity.getOrganisation(), currentUser(), CrmActivity.ActivityType.STAGE_UPDATED,
                     "Stage updated to " + (entity.getStage() == null ? "Unassigned" : entity.getStage().getName()), null, entity);
+        }
+        if (assignmentNotifier != null && !changedFields.isEmpty()) {
+            AppUser actor = currentUser();
+            String message = actor.getFullName() + " updated " + entity.getName()
+                    + " (" + String.join(", ", changedFields) + ")";
+            assignmentNotifier.notifyOpportunityUpdated(entity, actor, "Opportunity updated", message);
         }
         return toOpportunityDto(entity);
     }
@@ -627,11 +633,16 @@ public class CrmService {
         entity = opportunityRepo.save(entity);
         history(entity, "Stage", old, entity.getStage().getName());
         recordStageHistory(entity, currentUser());
-        logActivity(entity.getOrganisation(), currentUser(), CrmActivity.ActivityType.STAGE_UPDATED,
+        AppUser actor = currentUser();
+        logActivity(entity.getOrganisation(), actor, CrmActivity.ActivityType.STAGE_UPDATED,
                 "Stage updated to " + entity.getStage().getName(), null, entity);
+        if (assignmentNotifier != null) {
+            String message = actor.getFullName() + " changed the stage of " + entity.getName()
+                    + " to " + entity.getStage().getName();
+            assignmentNotifier.notifyOpportunityUpdated(entity, actor, "Opportunity stage changed", message);
+        }
         return toOpportunityDto(entity);
     }
-
     public CrmOpportunityDto updateOpportunityTeam(Long requestedOrganisationId, Long opportunityId, List<Long> requestedUserIds) {
         Long organisationId = tenant(requestedOrganisationId);
         CrmOpportunity entity = opportunity(organisationId, opportunityId);
@@ -799,14 +810,18 @@ public class CrmService {
         Long organisationId = tenant(requestedOrganisationId);
         requireText(content, "Note content is required.");
         CrmOpportunity opportunity = opportunity(organisationId, opportunityId);
+        AppUser actor = currentUser();
         CrmOpportunityNote note = new CrmOpportunityNote(); note.setOrganisation(opportunity.getOrganisation());
-        note.setOpportunity(opportunity); note.setAuthor(currentUser()); note.setContent(content.trim());
+        note.setOpportunity(opportunity); note.setAuthor(actor); note.setContent(content.trim());
         note = noteRepo.save(note);
-        logActivity(opportunity.getOrganisation(), currentUser(), CrmActivity.ActivityType.NOTE_ADDED,
+        logActivity(opportunity.getOrganisation(), actor, CrmActivity.ActivityType.NOTE_ADDED,
                 "Note added to " + opportunity.getName(), null, opportunity);
+        if (assignmentNotifier != null) {
+            String message = actor.getFullName() + " added a note to " + opportunity.getName() + ": " + content.trim();
+            assignmentNotifier.notifyOpportunityUpdated(opportunity, actor, "New note on opportunity", message);
+        }
         return toNoteDto(note);
     }
-
     public CrmOpportunityNoteDto updateNote(Long requestedOrganisationId, Long opportunityId, Long noteId, String content) {
         Long organisationId = tenant(requestedOrganisationId); requireText(content, "Note content is required.");
         opportunity(organisationId, opportunityId);
@@ -842,16 +857,20 @@ public class CrmService {
         if (!target.startsWith(tenantRoot)) throw badRequest("Invalid attachment path.");
         try { Files.createDirectories(tenantRoot); Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING); }
         catch (IOException exception) { throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not store attachment."); }
+        AppUser actor = currentUser();
         CrmOpportunityAttachment attachment = new CrmOpportunityAttachment();
         attachment.setOrganisation(opportunity.getOrganisation()); attachment.setOpportunity(opportunity);
         attachment.setOriginalFileName(original); attachment.setStoredFileName(stored); attachment.setStoragePath(stored);
-        attachment.setContentType(type); attachment.setFileSize(file.getSize()); attachment.setUploadedBy(currentUser());
+        attachment.setContentType(type); attachment.setFileSize(file.getSize()); attachment.setUploadedBy(actor);
         attachment = attachmentRepo.save(attachment);
-        logActivity(opportunity.getOrganisation(), currentUser(), CrmActivity.ActivityType.OFFER_ATTACHED,
+        logActivity(opportunity.getOrganisation(), actor, CrmActivity.ActivityType.OFFER_ATTACHED,
                 "File attached: " + original, null, opportunity);
+        if (assignmentNotifier != null) {
+            String message = actor.getFullName() + " attached a file to " + opportunity.getName() + ": " + original;
+            assignmentNotifier.notifyOpportunityUpdated(opportunity, actor, "New attachment on opportunity", message);
+        }
         return toAttachmentDto(attachment);
     }
-
     @Transactional(readOnly = true)
     public AttachmentDownload downloadAttachment(Long requestedOrganisationId, Long opportunityId, Long attachmentId) {
         Long organisationId = tenant(requestedOrganisationId);
@@ -895,12 +914,17 @@ public class CrmService {
                         item.getModifiedBy() == null ? null : item.getModifiedBy().getFullName(), item.getEnteredAt())).toList();
     }
 
-    private void recordChanges(CrmOpportunity entity, Map<String, String> before) {
+    private List<String> recordChanges(CrmOpportunity entity, Map<String, String> before) {
         Map<String, String> after = opportunitySnapshot(entity);
+        List<String> changedFields = new ArrayList<>();
         before.forEach((field, oldValue) -> {
             String newValue = after.get(field);
-            if (!Objects.equals(oldValue, newValue)) history(entity, field, oldValue, newValue);
+            if (!Objects.equals(oldValue, newValue)) {
+                history(entity, field, oldValue, newValue);
+                changedFields.add(field);
+            }
         });
+        return changedFields;
     }
 
     private Map<String, String> opportunitySnapshot(CrmOpportunity entity) {
