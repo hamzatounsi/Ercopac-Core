@@ -650,9 +650,12 @@ public class CrmService {
     }
 
     private CrmOpportunity replaceOpportunityTeam(CrmOpportunity entity, List<Long> requestedUserIds, boolean recordHistory) {
+        System.out.println("🔥 DEBUG [CrmService]: replaceOpportunityTeam appelé. requestedUserIds = " + requestedUserIds);
+        
         Long organisationId = entity.getOrganisation().getId();
         String before = entity.getTeamMembers().stream().map(AppUser::getFullName).sorted().collect(Collectors.joining(", "));
         Set<Long> previousMemberIds = entity.getTeamMembers().stream().map(AppUser::getId).collect(Collectors.toSet());
+        
         LinkedHashSet<Long> userIds = requestedUserIds == null ? new LinkedHashSet<>() : requestedUserIds.stream()
                 .filter(Objects::nonNull).collect(Collectors.toCollection(LinkedHashSet::new));
         LinkedHashSet<AppUser> members = new LinkedHashSet<>();
@@ -668,10 +671,15 @@ public class CrmService {
         entity = opportunityRepo.save(entity);
         String after = entity.getTeamMembers().stream().map(AppUser::getFullName).sorted().collect(Collectors.joining(", "));
         if (recordHistory && !Objects.equals(before, after)) history(entity, "Team", blank(before), blank(after));
-        if (assignmentNotifier != null) assignmentNotifier.notifyNewAssignments(entity, previousMemberIds);
+        
+        System.out.println("🔥 DEBUG [CrmService]: Avant d'appeler le notifier. assignmentNotifier est null ? " + (assignmentNotifier == null));
+        if (assignmentNotifier != null) {
+            assignmentNotifier.notifyNewAssignments(entity, previousMemberIds);
+        } else {
+            System.out.println("⚠️ ERREUR CRITIQUE : assignmentNotifier est NULL !");
+        }
         return entity;
     }
-
     public CrmOpportunityDto markWon(Long requestedOrganisationId, Long id) {
         Long organisationId = tenant(requestedOrganisationId);
         CrmPipelineStage won = stageRepo.findByOrganisation_IdOrderByDisplayOrderAsc(organisationId).stream()
