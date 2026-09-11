@@ -11,7 +11,11 @@ public class CrmDashboardDto {
     private long openOpportunities;
     private BigDecimal pipelineValue;
     private long activeLeads;
+    private long contactedLeadsLastMonth;
     private long wonThisMonth;
+    private long closingThisWeekCount;
+    private BigDecimal wonThisYear;
+    private BigDecimal annualTarget;
     private List<CrmActivityDto> recentActivities;
     private List<CrmOpportunityDto> closingThisMonth;
     private Map<String, Long> leadsBySource;
@@ -34,9 +38,29 @@ public class CrmDashboardDto {
         this.activeLeads = activeLeads;
     }
 
+    public long getContactedLeadsLastMonth() { return contactedLeadsLastMonth; }
+    public void setContactedLeadsLastMonth(long contactedLeadsLastMonth) {
+        this.contactedLeadsLastMonth = contactedLeadsLastMonth;
+    }
+
     public long getWonThisMonth() { return wonThisMonth; }
     public void setWonThisMonth(long wonThisMonth) {
         this.wonThisMonth = wonThisMonth;
+    }
+
+    public long getClosingThisWeekCount() { return closingThisWeekCount; }
+    public void setClosingThisWeekCount(long closingThisWeekCount) {
+        this.closingThisWeekCount = closingThisWeekCount;
+    }
+
+    public BigDecimal getWonThisYear() { return wonThisYear; }
+    public void setWonThisYear(BigDecimal wonThisYear) {
+        this.wonThisYear = wonThisYear;
+    }
+
+    public BigDecimal getAnnualTarget() { return annualTarget; }
+    public void setAnnualTarget(BigDecimal annualTarget) {
+        this.annualTarget = annualTarget;
     }
 
     public List<CrmActivityDto> getRecentActivities() { return recentActivities; }
