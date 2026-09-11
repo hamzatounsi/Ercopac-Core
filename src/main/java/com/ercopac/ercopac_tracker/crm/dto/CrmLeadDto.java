@@ -1,7 +1,8 @@
 package com.ercopac.ercopac_tracker.crm.dto;
- 
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
- 
+
 public class CrmLeadDto {
     private Long id;
     private String fullName;
@@ -19,12 +20,13 @@ public class CrmLeadDto {
     private String ownerName;
     private boolean converted;
     private LocalDateTime convertedAt;
+    private LocalDate contactedDate;
     private String notes;
     private boolean active;
     private LocalDateTime createdAt;
- 
+
     public CrmLeadDto() {}
- 
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getFullName() { return fullName; }
@@ -57,6 +59,8 @@ public class CrmLeadDto {
     public void setConverted(boolean converted) { this.converted = converted; }
     public LocalDateTime getConvertedAt() { return convertedAt; }
     public void setConvertedAt(LocalDateTime convertedAt) { this.convertedAt = convertedAt; }
+    public LocalDate getContactedDate() { return contactedDate; }
+    public void setContactedDate(LocalDate contactedDate) { this.contactedDate = contactedDate; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
     public boolean isActive() { return active; }
@@ -64,4 +68,3 @@ public class CrmLeadDto {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }
- 

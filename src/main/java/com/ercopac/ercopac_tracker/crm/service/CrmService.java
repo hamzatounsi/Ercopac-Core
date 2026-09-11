@@ -542,7 +542,6 @@ public class CrmService {
                 "Lead converted to opportunity: " + entity.getName(), source, entity);
         return toOpportunityDto(entity);
     }
-
     private void mapLead(CrmLead entity, CrmLeadDto dto, boolean creating) {
         requireText(dto.getFullName(), "Lead name is required.");
         if (dto.getAccountId() == null) throw badRequest("An account is required for every lead.");
@@ -553,10 +552,10 @@ public class CrmService {
         if (dto.getSource() != null) entity.setSource(parseEnum(CrmLead.Source.class, dto.getSource(), "lead source"));
         if (dto.getStatus() != null) entity.setStatus(parseEnum(CrmLead.Status.class, dto.getStatus(), "lead status"));
         entity.setOwner(tenantUser(entity.getOrganisation().getId(), dto.getOwnerId()));
+        entity.setContactedDate(dto.getContactedDate());
         entity.setNotes(blank(dto.getNotes()));
         entity.setActive(creating || dto.isActive());
     }
-
     private CrmLeadDto toLeadDto(CrmLead entity) {
         CrmLeadDto dto = new CrmLeadDto();
         dto.setId(entity.getId()); dto.setFullName(entity.getFullName()); dto.setCompany(entity.getCompany());
@@ -565,11 +564,12 @@ public class CrmService {
         dto.setMobile(entity.getMobile()); dto.setRating(entity.getRating());
         dto.setSource(entity.getSource().name()); dto.setStatus(entity.getStatus().name());
         if (entity.getOwner() != null) { dto.setOwnerId(entity.getOwner().getId()); dto.setOwnerName(entity.getOwner().getFullName()); }
-        dto.setConverted(entity.isConverted()); dto.setConvertedAt(entity.getConvertedAt()); dto.setNotes(entity.getNotes());
+        dto.setConverted(entity.isConverted()); dto.setConvertedAt(entity.getConvertedAt());
+        dto.setContactedDate(entity.getContactedDate());
+        dto.setNotes(entity.getNotes());
         dto.setActive(entity.isActive()); dto.setCreatedAt(entity.getCreatedAt());
         return dto;
     }
-
     // Opportunities
     public List<CrmOpportunityDto> getOpportunities(Long requestedOrganisationId, Long ownerId, Long accountId,
                                                      Long leadId, Long stageId) {
@@ -963,7 +963,6 @@ public class CrmService {
         item.setClosingDate(opportunity.getClosingDate()); item.setModifiedBy(user); stageHistoryRepo.save(item);
     }
 
-    // Dashboard, reports and lead-only manager view
     public CrmDashboardDto getDashboard(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId); seedConfiguration(organisationId);
         List<CrmOpportunity> visible = opportunityVisibility.visible(
@@ -973,16 +972,46 @@ public class CrmService {
         dto.setOpenOpportunities(visible.stream().filter(item -> !item.isWon() && !item.isLost()).count());
         dto.setPipelineValue(visible.stream().filter(item -> !item.isWon() && !item.isLost())
                 .map(CrmOpportunityValueCalculator::total).reduce(BigDecimal.ZERO, BigDecimal::add));
-        dto.setActiveLeads(leadRepo.countByOrganisation_IdAndActiveTrue(organisationId));
-        LocalDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+
+        LocalDate now = LocalDate.now();
+        LocalDate currentMonthStart = now.withDayOfMonth(1);
+        LocalDate currentMonthEnd = now.withDayOfMonth(now.lengthOfMonth());
+        LocalDate lastMonthStart = currentMonthStart.minusMonths(1);
+        LocalDate lastMonthEnd = lastMonthStart.withDayOfMonth(lastMonthStart.lengthOfMonth());
+
+        dto.setActiveLeads(leadRepo.countByOrganisation_IdAndContactedDateBetween(
+                organisationId, currentMonthStart, currentMonthEnd));
+        dto.setContactedLeadsLastMonth(leadRepo.countByOrganisation_IdAndContactedDateBetween(
+                organisationId, lastMonthStart, lastMonthEnd));
+
+        LocalDateTime monthStart = now.withDayOfMonth(1).atStartOfDay();
         dto.setWonThisMonth(visible.stream().filter(item -> item.isWon() && !item.getUpdatedAt().isBefore(monthStart)).count());
+
+        // Closing this week
+        LocalDate weekEnd = now.plusDays(7);
+        dto.setClosingThisWeekCount(visible.stream()
+                .filter(item -> !item.isWon() && !item.isLost())
+                .filter(item -> item.getClosingDate() != null
+                        && !item.getClosingDate().isBefore(now)
+                        && !item.getClosingDate().isAfter(weekEnd))
+                .count());
+
+        // Won vs annual target
+        int currentYear = now.getYear();
+        LocalDateTime yearStart = LocalDate.of(currentYear, 1, 1).atStartOfDay();
+        BigDecimal wonThisYear = visible.stream()
+                .filter(item -> item.isWon() && !item.getUpdatedAt().isBefore(yearStart))
+                .map(item -> zero(item.getValue()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        dto.setWonThisYear(wonThisYear);
+        dto.setAnnualTarget(targetRepo.sumAmountByOrganisation_IdAndTargetYear(organisationId, currentYear));
+
         dto.setRecentActivities(activityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId, PageRequest.of(0, 10))
                 .stream().filter(item -> item.getOpportunity() == null || visibleIds.contains(item.getOpportunity().getId()))
                 .map(this::toActivityDto).toList());
-        LocalDate now = LocalDate.now();
         dto.setClosingThisMonth(visible.stream().filter(item -> item.getClosingDate() != null
-                        && !item.getClosingDate().isBefore(now.withDayOfMonth(1))
-                        && !item.getClosingDate().isAfter(now.withDayOfMonth(now.lengthOfMonth())))
+                        && !item.getClosingDate().isBefore(currentMonthStart)
+                        && !item.getClosingDate().isAfter(currentMonthEnd))
                 .sorted(Comparator.comparing(CrmOpportunity::getClosingDate)).map(this::toOpportunityDto).toList());
         Map<String, Long> sources = new LinkedHashMap<>();
         leadRepo.countBySource(organisationId).forEach(row -> sources.put(row[0].toString(), (Long) row[1])); dto.setLeadsBySource(sources);
@@ -994,7 +1023,6 @@ public class CrmService {
         }).toList(); dto.setPipeline(stages);
         return dto;
     }
-
     public CrmReportsDto getReports(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
         migrateLegacySupplyCategories(organisationId);
