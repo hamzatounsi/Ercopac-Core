@@ -965,6 +965,8 @@ public class CrmService {
 
     public CrmDashboardDto getDashboard(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId); seedConfiguration(organisationId);
+        AppUser me = currentUser();
+
         List<CrmOpportunity> visible = opportunityVisibility.visible(
                 opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId));
         Set<Long> visibleIds = visible.stream().map(CrmOpportunity::getId).collect(Collectors.toSet());
@@ -979,15 +981,16 @@ public class CrmService {
         LocalDate lastMonthStart = currentMonthStart.minusMonths(1);
         LocalDate lastMonthEnd = lastMonthStart.withDayOfMonth(lastMonthStart.lengthOfMonth());
 
-        dto.setActiveLeads(leadRepo.countByOrganisation_IdAndContactedDateBetween(
-                organisationId, currentMonthStart, currentMonthEnd));
-        dto.setContactedLeadsLastMonth(leadRepo.countByOrganisation_IdAndContactedDateBetween(
-                organisationId, lastMonthStart, lastMonthEnd));
+        // ✅ "Leads contacted this month" — filtré par owner = current user
+        dto.setActiveLeads(leadRepo.countByOrganisation_IdAndOwner_IdAndContactedDateBetween(
+                organisationId, me.getId(), currentMonthStart, currentMonthEnd));
+        dto.setContactedLeadsLastMonth(leadRepo.countByOrganisation_IdAndOwner_IdAndContactedDateBetween(
+                organisationId, me.getId(), lastMonthStart, lastMonthEnd));
 
         LocalDateTime monthStart = now.withDayOfMonth(1).atStartOfDay();
         dto.setWonThisMonth(visible.stream().filter(item -> item.isWon() && !item.getUpdatedAt().isBefore(monthStart)).count());
 
-        // Closing this week
+        // Closing this week (reste organisation-wide, non concerné par la demande)
         LocalDate weekEnd = now.plusDays(7);
         dto.setClosingThisWeekCount(visible.stream()
                 .filter(item -> !item.isWon() && !item.isLost())
@@ -996,23 +999,33 @@ public class CrmService {
                         && !item.getClosingDate().isAfter(weekEnd))
                 .count());
 
-        // Won vs annual target
+        // ✅ "Won vs annual target" — filtré par owner = current user
         int currentYear = now.getYear();
         LocalDateTime yearStart = LocalDate.of(currentYear, 1, 1).atStartOfDay();
         BigDecimal wonThisYear = visible.stream()
                 .filter(item -> item.isWon() && !item.getUpdatedAt().isBefore(yearStart))
+                .filter(item -> item.getOwner() != null && Objects.equals(item.getOwner().getId(), me.getId()))
                 .map(item -> zero(item.getValue()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         dto.setWonThisYear(wonThisYear);
-        dto.setAnnualTarget(targetRepo.sumAmountByOrganisation_IdAndTargetYear(organisationId, currentYear));
+
+        BigDecimal myTarget = targetRepo.findByOrganisation_IdAndUser_IdAndTargetYear(organisationId, me.getId(), currentYear)
+                .map(CrmSalesTarget::getAmount)
+                .orElse(BigDecimal.ZERO);
+        dto.setAnnualTarget(myTarget);
 
         dto.setRecentActivities(activityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId, PageRequest.of(0, 10))
                 .stream().filter(item -> item.getOpportunity() == null || visibleIds.contains(item.getOpportunity().getId()))
                 .map(this::toActivityDto).toList());
-        dto.setClosingThisMonth(visible.stream().filter(item -> item.getClosingDate() != null
+
+        // ✅ "Closing this month" — filtré par owner = current user
+        dto.setClosingThisMonth(visible.stream()
+                .filter(item -> item.getOwner() != null && Objects.equals(item.getOwner().getId(), me.getId()))
+                .filter(item -> item.getClosingDate() != null
                         && !item.getClosingDate().isBefore(currentMonthStart)
                         && !item.getClosingDate().isAfter(currentMonthEnd))
                 .sorted(Comparator.comparing(CrmOpportunity::getClosingDate)).map(this::toOpportunityDto).toList());
+
         Map<String, Long> sources = new LinkedHashMap<>();
         leadRepo.countBySource(organisationId).forEach(row -> sources.put(row[0].toString(), (Long) row[1])); dto.setLeadsBySource(sources);
         Map<Long, Long> counts = new HashMap<>();
