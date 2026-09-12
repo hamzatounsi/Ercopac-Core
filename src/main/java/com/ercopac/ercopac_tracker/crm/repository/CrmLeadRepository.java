@@ -33,7 +33,8 @@ public interface CrmLeadRepository extends JpaRepository<CrmLead, Long> {
     List<CrmLead> searchByOrgAndTerm(@Param("orgId") Long orgId, @Param("term") String term);
 
     long countByOrganisation_IdAndActiveTrue(Long orgId);
-
+    
+    
     // Lead-source aggregation for the CRM dashboard and reports.
     @Query("SELECT l.source, COUNT(l) FROM CrmLead l " +
            "WHERE l.organisation.id = :orgId AND l.active = true " +
@@ -42,4 +43,5 @@ public interface CrmLeadRepository extends JpaRepository<CrmLead, Long> {
 
     // Contacted-leads KPI for the CRM dashboard (this month vs last month).
     long countByOrganisation_IdAndContactedDateBetween(Long orgId, LocalDate start, LocalDate end);
+    long countByOrganisation_IdAndOwner_IdAndContactedDateBetween(Long orgId, Long ownerId, LocalDate start, LocalDate end);
 }
