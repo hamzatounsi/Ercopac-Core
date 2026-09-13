@@ -69,7 +69,9 @@ class CrmServiceTenantTest {
     @Test
     void salesManagerDirectOpportunityIdForAnotherOwnerIsNotReturned() {
         when(security.getCurrentUserId()).thenReturn(10L);
-    
+        doAnswer(invocation -> java.util.Arrays.stream(invocation.getArguments())
+                .anyMatch("SALES_MANAGER"::equals))
+                .when(security).hasAnyRole(any(String[].class));
         CrmOpportunity opportunity = mock(CrmOpportunity.class);
         AppUser otherOwner = mock(AppUser.class);
     
