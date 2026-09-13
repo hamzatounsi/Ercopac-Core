@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.Collection;
+import java.util.List;
 
 @Service
 public class JwtService {
@@ -27,33 +29,33 @@ public class JwtService {
     public String generateToken(
             Long userId,
             String username,
-            String role,
+            Collection<String> roles,
             Long organisationId,
             String organisationName
     ) {
-        return generateToken(userId, username, username, role, organisationId, organisationName, 6 * 60 * 60 * 1000L);
+        return generateToken(userId, username, username, roles, organisationId, organisationName, 6 * 60 * 60 * 1000L);
     }
 
     public String generateToken(
             Long userId,
             String username,
             String fullName,
-            String role,
+            Collection<String> roles,
             Long organisationId,
             String organisationName
     ) {
-        return generateToken(userId, username, fullName, role, organisationId, organisationName, 6 * 60 * 60 * 1000L);
+        return generateToken(userId, username, fullName, roles, organisationId, organisationName, 6 * 60 * 60 * 1000L);
     }
 
     public String generateToken(
             Long userId,
             String username,
-            String role,
+            Collection<String> roles,
             Long organisationId,
             String organisationName,
             long expirationMillis
     ) {
-        return generateToken(userId, username, username, role, organisationId, organisationName, expirationMillis);
+        return generateToken(userId, username, username, roles, organisationId, organisationName, expirationMillis);
     }
 
     // ✅ FIX: fullName claim added — this is what the frontend's
@@ -63,7 +65,7 @@ public class JwtService {
             Long userId,
             String username,
             String fullName,
-            String role,
+            Collection<String> roles,
             Long organisationId,
             String organisationName,
             long expirationMillis
@@ -73,7 +75,7 @@ public class JwtService {
                 .setSubject(username)
                 .claim("userId", userId)
                 .claim("fullName", fullName)
-                .claim("role", role)
+                .claim("roles", roles == null ? List.of() : roles.stream().distinct().toList())
                 .claim("organisationId", organisationId)
                 .claim("organisationName", organisationName)
                 .setIssuedAt(new Date())
@@ -104,9 +106,15 @@ public class JwtService {
         return value == null ? null : value.toString();
     }
 
-    public String extractRole(String token) {
-        Object value = parseClaims(token).get("role");
-        return value == null ? null : value.toString();
+    public List<String> extractRoles(String token) {
+        Claims claims = parseClaims(token);
+        Object value = claims.get("roles");
+        if (value instanceof Collection<?> collection) {
+            return collection.stream().map(Object::toString).toList();
+        }
+        // Accept already-issued single-role tokens during the deployment transition.
+        Object legacyRole = claims.get("role");
+        return legacyRole == null ? List.of() : List.of(legacyRole.toString());
     }
 
     public Long extractOrganisationId(String token) {

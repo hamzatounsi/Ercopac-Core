@@ -16,6 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.never;
@@ -42,7 +43,7 @@ class JwtAuthFilterTest {
         AppUser user = currentUser(7L, 10L, Role.ORG_ADMIN, true);
         when(jwtService.extractUsername("token")).thenReturn("admin@example.com");
         when(jwtService.extractUserId("token")).thenReturn(7L);
-        when(jwtService.extractRole("token")).thenReturn("ORG_ADMIN");
+        when(jwtService.extractRoles("token")).thenReturn(List.of("ORG_ADMIN"));
         when(jwtService.extractOrganisationId("token")).thenReturn(99L);
         when(userRepository.findByEmail1("admin@example.com")).thenReturn(Optional.of(user));
 
@@ -77,6 +78,25 @@ class JwtAuthFilterTest {
 
         assertThat(response.getStatus()).isEqualTo(401);
         verify(chain, never()).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void createsAuthoritiesForEveryCurrentRole() throws Exception {
+        AppUser user = currentUser(7L, 10L, Role.PROJECT_MANAGER, true);
+        user.getRoles().add(Role.SALES_MANAGER);
+        when(jwtService.extractUsername("token")).thenReturn("admin@example.com");
+        when(jwtService.extractUserId("token")).thenReturn(7L);
+        when(jwtService.extractRoles("token")).thenReturn(List.of("PROJECT_MANAGER", "SALES_MANAGER"));
+        when(jwtService.extractOrganisationId("token")).thenReturn(10L);
+        when(userRepository.findByEmail1("admin@example.com")).thenReturn(Optional.of(user));
+
+        MockHttpServletResponse response = filter("token");
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities())
+                .extracting(authority -> authority.getAuthority())
+                .contains("PROJECT_MANAGER", "ROLE_PROJECT_MANAGER", "SALES_MANAGER", "ROLE_SALES_MANAGER");
+        verify(chain).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     private MockHttpServletResponse filter(String token) throws Exception {

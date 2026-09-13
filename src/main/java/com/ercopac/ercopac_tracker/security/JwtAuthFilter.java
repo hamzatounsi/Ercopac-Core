@@ -21,6 +21,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
 import java.time.Instant;
 
 @Component
@@ -82,7 +84,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     return;
                 }
 
-                String cleanRole = user.getRole().name();
                 Long organisationId = user.getOrganisation() == null
                         ? null
                         : user.getOrganisation().getId();
@@ -91,16 +92,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         new UsernamePasswordAuthenticationToken(
                                 user.getEmail(),
                                 null,
-                                List.of(
-                                        new SimpleGrantedAuthority(cleanRole),
-                                        new SimpleGrantedAuthority("ROLE_" + cleanRole)
-                                )
+                                user.getRoles().stream()
+                                        .flatMap(role -> Stream.of(
+                                                new SimpleGrantedAuthority(role.name()),
+                                                new SimpleGrantedAuthority("ROLE_" + role.name())))
+                                        .distinct()
+                                        .toList()
                         );
 
                 Map<String, Object> details = new HashMap<>();
                 details.put("userId", user.getId());
                 details.put("organisationId", organisationId);
-                details.put("role", cleanRole);
+                details.put("roles", user.getRoles().stream().map(Enum::name).sorted().toList());
 
                 authToken.setDetails(details);
                 SecurityContextHolder.getContext().setAuthentication(authToken);
@@ -118,26 +121,27 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     private boolean isCurrentAccountStateValid(String token, AppUser user) {
-        if (user == null || !user.isActive() || user.getRole() == null) {
+        if (user == null || !user.isActive() || user.getRoles().isEmpty()) {
             return false;
         }
 
-        if (user.getRole() != Role.PLATFORM_OWNER && user.getOrganisation() == null) {
+        if (!user.hasRole(Role.PLATFORM_OWNER) && user.getOrganisation() == null) {
             return false;
         }
 
         Long tokenUserId = jwtService.extractUserId(token);
-        String tokenRole = jwtService.extractRole(token);
+        Set<String> tokenRoles = jwtService.extractRoles(token).stream()
+                .map(role -> role.replaceFirst("^ROLE_", ""))
+                .collect(java.util.stream.Collectors.toSet());
         Long tokenOrganisationId = jwtService.extractOrganisationId(token);
         Long currentOrganisationId = user.getOrganisation() == null
                 ? null
                 : user.getOrganisation().getId();
-        String cleanTokenRole = tokenRole == null
-                ? null
-                : tokenRole.replaceFirst("^ROLE_", "");
+        Set<String> currentRoles = user.getRoles().stream().map(Enum::name)
+                .collect(java.util.stream.Collectors.toSet());
 
         if (!user.getId().equals(tokenUserId)
-                || !user.getRole().name().equals(cleanTokenRole)
+                || !currentRoles.equals(tokenRoles)
                 || !java.util.Objects.equals(currentOrganisationId, tokenOrganisationId)) {
             return false;
         }

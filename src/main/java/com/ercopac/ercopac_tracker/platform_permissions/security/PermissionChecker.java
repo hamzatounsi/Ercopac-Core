@@ -25,13 +25,13 @@ public class PermissionChecker {
 
     public boolean canRead(Authentication authentication, PermissionModule module) {
         AppUser user = getCurrentUser(authentication);
-        if (user.getRole() == Role.PLATFORM_OWNER) {
+        if (user.hasRole(Role.PLATFORM_OWNER)) {
             return true;
         }
         if (user.getOrganisation() == null) {
             return false;
         }
-        if (module == PermissionModule.CRM && user.getRole().isCrmRole()) {
+        if (module == PermissionModule.CRM && user.getRoles().stream().anyMatch(Role::isCrmRole)) {
             return true;
         }
         // ✅ FIX: le rôle MANAGER (Command Center) doit pouvoir lire les
@@ -39,46 +39,40 @@ public class PermissionChecker {
         // configurée manuellement en base — cohérent avec son accès déjà
         // accordé (via @PreAuthorize statique) aux autres endpoints
         // Command Center comme /company-dashboard et /revenue-forecast.
-        if (module == PermissionModule.TASKS && user.getRole() == Role.MANAGER) {
+        if (module == PermissionModule.TASKS && user.hasRole(Role.MANAGER)) {
             return true;
         }
-        Role effectiveRole = user.getRole() == Role.PROJECT_MANAGER_LEAD ? Role.PROJECT_MANAGER : user.getRole();
-        return permissionRepository
-                .findByOrganisation_IdAndRoleAndModule(
-                        user.getOrganisation().getId(),
-                        effectiveRole,
-                        module
-                )
-                .map(RolePermission::isCanRead)
-                .orElse(false);
+        return user.getRoles().stream().map(this::effectiveRole).distinct().anyMatch(role ->
+                permissionRepository.findByOrganisation_IdAndRoleAndModule(
+                        user.getOrganisation().getId(), role, module)
+                        .map(RolePermission::isCanRead).orElse(false));
     }
 
     public boolean canWrite(Authentication authentication, PermissionModule module) {
         AppUser user = getCurrentUser(authentication);
-        if (user.getRole() == Role.PLATFORM_OWNER) {
+        if (user.hasRole(Role.PLATFORM_OWNER)) {
             return true;
         }
         if (user.getOrganisation() == null) {
             return false;
         }
         if (module == PermissionModule.CRM) {
-            if (user.getRole().isSalesManagerRole()) {
+            if (user.getRoles().stream().anyMatch(Role::isSalesManagerRole)) {
                 return true;
             }
         }
-        Role effectiveRole = user.getRole() == Role.PROJECT_MANAGER_LEAD ? Role.PROJECT_MANAGER : user.getRole();
-        return permissionRepository
-                .findByOrganisation_IdAndRoleAndModule(
-                        user.getOrganisation().getId(),
-                        effectiveRole,
-                        module
-                )
-                .map(RolePermission::isCanWrite)
-                .orElse(false);
+        return user.getRoles().stream().map(this::effectiveRole).distinct().anyMatch(role ->
+                permissionRepository.findByOrganisation_IdAndRoleAndModule(
+                        user.getOrganisation().getId(), role, module)
+                        .map(RolePermission::isCanWrite).orElse(false));
     }
 
     public boolean canAccessCrmManagerView(Authentication authentication) {
-        return getCurrentUser(authentication).getRole() == Role.SALES_MANAGER_LEAD;
+        return getCurrentUser(authentication).hasRole(Role.SALES_MANAGER_LEAD);
+    }
+
+    private Role effectiveRole(Role role) {
+        return role == Role.PROJECT_MANAGER_LEAD ? Role.PROJECT_MANAGER : role;
     }
 
     private AppUser getCurrentUser(Authentication authentication) {

@@ -24,7 +24,7 @@ public class DbUserDetailsService implements UserDetailsService {
         return org.springframework.security.core.userdetails.User
                 .withUsername(u.getEmail())
                 .password(u.getPasswordHash())
-                .roles(u.getRole().name()) 
+                .roles(u.getRoles().stream().map(Enum::name).toArray(String[]::new))
                 .disabled(!u.isActive())
                 .build();
     }

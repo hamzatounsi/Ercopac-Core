@@ -26,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.mockito.ArgumentCaptor;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -88,7 +89,7 @@ class OrganisationAdminServiceTest {
                 "Elevated User",
                 "elevated@example.com",
                 "temporary-password",
-                "PLATFORM_OWNER",
+                Set.of("PLATFORM_OWNER"),
                 null,
                 null,
                 null,
@@ -108,7 +109,7 @@ class OrganisationAdminServiceTest {
         OrgAdminDtos.UpdateUserRequest request = new OrgAdminDtos.UpdateUserRequest(
                 "Other Tenant User",
                 "other@example.com",
-                "EMPLOYEE",
+                Set.of("EMPLOYEE"),
                 null,
                 null,
                 null,
@@ -148,7 +149,7 @@ class OrganisationAdminServiceTest {
                 "New User",
                 "new@example.com",
                 "temporary-password",
-                "EMPLOYEE",
+                Set.of("EMPLOYEE"),
                 88L,
                 null,
                 null,
@@ -176,13 +177,38 @@ class OrganisationAdminServiceTest {
         verify(userRepository, org.mockito.Mockito.times(4)).save(users.capture());
 
         assertThat(users.getAllValues())
-                .extracting(AppUser::getRole, AppUser::getOrganisation, AppUser::isActive, AppUser::isInternalUser)
+                .extracting(AppUser::getRoles, AppUser::getOrganisation, AppUser::isActive, AppUser::isInternalUser)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(Role.SALES_MANAGER_LEAD, organisation, true, false),
-                        org.assertj.core.groups.Tuple.tuple(Role.SALES_MANAGER, organisation, true, false),
-                        org.assertj.core.groups.Tuple.tuple(Role.SYSTEM_ENGINEER, organisation, true, false),
-                        org.assertj.core.groups.Tuple.tuple(Role.CLIENT, organisation, true, false)
+                        org.assertj.core.groups.Tuple.tuple(Set.of(Role.SALES_MANAGER_LEAD), organisation, true, false),
+                        org.assertj.core.groups.Tuple.tuple(Set.of(Role.SALES_MANAGER), organisation, true, false),
+                        org.assertj.core.groups.Tuple.tuple(Set.of(Role.SYSTEM_ENGINEER), organisation, true, false),
+                        org.assertj.core.groups.Tuple.tuple(Set.of(Role.CLIENT), organisation, true, false)
                 );
+    }
+
+    @Test
+    void createsOneUserWithMultipleRoles() {
+        when(passwordEncoder.encode("temporary-password")).thenReturn("encoded-password");
+        when(userRepository.save(org.mockito.ArgumentMatchers.any(AppUser.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        Department department = new Department();
+        ReflectionTestUtils.setField(department, "id", 20L);
+        department.setCode("PMO");
+        department.setLabel("PMO");
+        department.setOrganisation(organisation);
+        ResourceType resourceType = resourceType(30L, "PM", organisation);
+        when(departmentRepository.findByIdAndOrganisation_Id(20L, 10L)).thenReturn(Optional.of(department));
+        when(resourceTypeRepository.findByIdAndOrganisation_Id(30L, 10L)).thenReturn(Optional.of(resourceType));
+
+        OrgAdminDtos.UserSummary summary = service.createUser(new OrgAdminDtos.CreateUserRequest(
+                "Project Sales", "project-sales@example.com", "temporary-password",
+                Set.of("PROJECT_MANAGER", "SALES_MANAGER"), 20L, 30L, null, null, true));
+
+        ArgumentCaptor<AppUser> captor = ArgumentCaptor.forClass(AppUser.class);
+        verify(userRepository).save(captor.capture());
+        assertThat(captor.getValue().getRoles()).containsExactlyInAnyOrder(
+                Role.PROJECT_MANAGER, Role.SALES_MANAGER);
+        assertThat(summary.roles()).containsExactly("PROJECT_MANAGER", "SALES_MANAGER");
     }
 
     @Test
@@ -261,7 +287,7 @@ class OrganisationAdminServiceTest {
                 "New " + role,
                 email,
                 "temporary-password",
-                role,
+                Set.of(role),
                 departmentId,
                 resourceTypeId,
                 null,

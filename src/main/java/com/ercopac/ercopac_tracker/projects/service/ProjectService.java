@@ -166,14 +166,14 @@ public class ProjectService {
         Long organisationId = requireCurrentOrganisationId();
         AppUser lead = userRepository.findByIdAndOrganisation_Id(securityUtils.getCurrentUserId(), organisationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authenticated user not found."));
-        if (!lead.isActive() || lead.getRole() != Role.PROJECT_MANAGER_LEAD) {
+        if (!lead.isActive() || !lead.hasRole(Role.PROJECT_MANAGER_LEAD)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only a Project Manager Lead can assign project managers.");
         }
         Project project = projectRepository.findByIdAndOrganisationId(projectId, organisationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found."));
         AppUser manager = userRepository.findByIdAndOrganisation_Id(projectManagerId, organisationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project manager not found."));
-        if (!manager.isActive() || !manager.getRole().isProjectManagerRole()) {
+        if (!manager.isActive() || manager.getRoles().stream().noneMatch(Role::isProjectManagerRole)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selected user is not an eligible Project Manager.");
         }
         project.setProjectManagerId(manager.getId());
@@ -250,14 +250,14 @@ public class ProjectService {
     private AppUser eligibleUser(Long userId, Long organisationId, Role role) {
         AppUser user = userRepository.findByIdAndOrganisation_Id(userId, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Selected user is not available for this organisation"));
-        if (!user.isActive() || user.getRole() != role) throw new IllegalArgumentException("Selected user is not eligible for this ownership role");
+        if (!user.isActive() || !user.hasRole(role)) throw new IllegalArgumentException("Selected user is not eligible for this ownership role");
         return user;
     }
 
     private AppUser eligibleProjectManager(Long userId, Long organisationId) {
         AppUser user = userRepository.findByIdAndOrganisation_Id(userId, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Selected user is not available for this organisation"));
-        if (!user.isActive() || !user.getRole().isProjectManagerRole()) {
+        if (!user.isActive() || user.getRoles().stream().noneMatch(Role::isProjectManagerRole)) {
             throw new IllegalArgumentException("Selected user is not eligible for the Project Manager role");
         }
         return user;
@@ -266,7 +266,7 @@ public class ProjectService {
     private AppUser eligibleSalesManager(Long userId, Long organisationId) {
         AppUser user = userRepository.findByIdAndOrganisation_Id(userId, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Selected user is not available for this organisation"));
-        if (!user.isActive() || !user.getRole().isSalesManagerRole()) {
+        if (!user.isActive() || user.getRoles().stream().noneMatch(Role::isSalesManagerRole)) {
             throw new IllegalArgumentException("Selected user is not eligible for the Sales Manager role");
         }
         return user;

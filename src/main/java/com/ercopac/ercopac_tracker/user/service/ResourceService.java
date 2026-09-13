@@ -87,12 +87,12 @@ public class ResourceService {
         user.setFullName(request.fullName());
         user.setEmail(request.email().trim().toLowerCase());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        Role role = parseRequiredRole(request.role());
-        user.setRole(role);
+        java.util.Set<Role> roles = parseRequiredRoles(request.roles());
+        user.setRoles(roles);
         user.setOrganisation(organisation);
 
         user.setEmployeeCode(normalize(request.employeeCode()));
-        assignResourceProfile(user, role, request.departmentCode(), request.resourceType(), organisationId);
+        assignResourceProfile(user, request.departmentCode(), request.resourceType(), organisationId);
         // FIXED: look up ResourceType entity by code
         user.setJobTitle(normalize(request.jobTitle()));
         user.setSeniority(normalize(request.seniority()));
@@ -117,7 +117,7 @@ public class ResourceService {
         AppUser user = userRepository.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
 
-        if (!user.getRole().requiresResourceProfile()) {
+        if (!user.requiresResourceProfile()) {
             throw new IllegalArgumentException("Only internal resource accounts can be managed here");
         }
 
@@ -137,7 +137,7 @@ public class ResourceService {
             user.setEmployeeCode(null);
         }
 
-        assignResourceProfile(user, user.getRole(), request.departmentCode(), request.resourceType(), organisationId);
+        assignResourceProfile(user, request.departmentCode(), request.resourceType(), organisationId);
         user.setJobTitle(normalize(request.jobTitle()));
         user.setSeniority(normalize(request.seniority()));
         user.setInternalUser(true);
@@ -159,7 +159,7 @@ public class ResourceService {
         Long organisationId = requireOrganisationIdForWrite();
         AppUser user = userRepository.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
-        if (!user.getRole().requiresResourceProfile()) {
+        if (!user.requiresResourceProfile()) {
             throw new IllegalArgumentException("Only internal resource accounts can be managed here");
         }
         user.setActive(active);
@@ -178,7 +178,7 @@ public class ResourceService {
                     .filter(u -> normalizedDepartmentCode == null
                             || normalizedDepartmentCode.equals(u.getDepartmentCode()))
                     .filter(u -> role == null || role.isBlank()
-                            || (u.getRole() != null && u.getRole().name().equalsIgnoreCase(role)))
+                            || u.getRoles().stream().anyMatch(value -> value.name().equalsIgnoreCase(role)))
                     .map(this::toOptionDto)
                     .toList();
         }
@@ -281,7 +281,7 @@ public class ResourceService {
                 user.getResourceType() != null ? user.getResourceType().getCode() : null,
                 user.getJobTitle(),
                 user.getEmail(),
-                user.getRole() != null ? user.getRole().name() : null,
+                user.getRoles().stream().map(Enum::name).collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new)),
                 user.getSeniority(),
                 user.isInternalUser(),
                 user.getHoursPerDay(),
@@ -333,8 +333,8 @@ public class ResourceService {
             throw new IllegalArgumentException("Email is required");
         if (request.password() == null || request.password().isBlank())
             throw new IllegalArgumentException("Password is required");
-        if (request.role() == null || request.role().isBlank())
-            throw new IllegalArgumentException("Role is required");
+        if (request.roles() == null || request.roles().isEmpty())
+            throw new IllegalArgumentException("At least one role is required");
 
         if (userRepository.existsByEmail(request.email().trim().toLowerCase()))
             throw new IllegalArgumentException("Email already exists");
@@ -352,36 +352,32 @@ public class ResourceService {
         catch (Exception ex) { throw new IllegalArgumentException("Invalid role: " + role); }
     }
 
-    private Role parseRequiredRole(String role) {
-        if (role == null || role.isBlank()) throw new IllegalArgumentException("Role is required");
-        Role parsed;
-        try {
-            parsed = Role.valueOf(role.trim().toUpperCase());
-        }
-        catch (Exception ex) { throw new IllegalArgumentException("Invalid role: " + role); }
-        if (!parsed.requiresResourceProfile()) {
-            throw new IllegalArgumentException("Only internal resource roles can be assigned through resource management");
+    private java.util.Set<Role> parseRequiredRoles(java.util.Set<String> roles) {
+        if (roles == null || roles.isEmpty()) throw new IllegalArgumentException("At least one role is required");
+        java.util.Set<Role> parsed = roles.stream().map(this::parseRole)
+                .collect(java.util.stream.Collectors.toCollection(() -> java.util.EnumSet.noneOf(Role.class)));
+        if (parsed.stream().noneMatch(Role::requiresResourceProfile)) {
+            throw new IllegalArgumentException("At least one internal resource role is required through resource management");
         }
         return parsed;
     }
 
     private void assignResourceProfile(
             AppUser user,
-            Role role,
             String departmentCode,
             String resourceTypeCode,
             Long organisationId
     ) {
-        if (!role.requiresResourceProfile()) {
+        if (!user.requiresResourceProfile()) {
             throw new IllegalArgumentException("A resource profile is required for this operation");
         }
         String normalizedDepartment = normalize(departmentCode);
         String normalizedResourceType = normalize(resourceTypeCode);
         if (normalizedDepartment == null) {
-            throw new IllegalArgumentException("Department is required for " + role.name());
+            throw new IllegalArgumentException("Department is required for resource roles");
         }
         if (normalizedResourceType == null) {
-            throw new IllegalArgumentException("Resource type is required for " + role.name());
+            throw new IllegalArgumentException("Resource type is required for resource roles");
         }
         var department = departmentRepository.findByCodeAndOrganisation_Id(normalizedDepartment, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Department not found"));

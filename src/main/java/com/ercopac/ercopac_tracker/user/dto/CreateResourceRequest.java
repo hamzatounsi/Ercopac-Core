@@ -1,6 +1,7 @@
 package com.ercopac.ercopac_tracker.user.dto;
 
 import java.math.BigDecimal;
+import java.util.Set;
 
 public record CreateResourceRequest(
         String fullName,
@@ -10,7 +11,7 @@ public record CreateResourceRequest(
         String departmentCode,
         String resourceType,
         String jobTitle,
-        String role,
+        Set<String> roles,
         String seniority,
         Boolean internalUser,
         Integer hoursPerDay,

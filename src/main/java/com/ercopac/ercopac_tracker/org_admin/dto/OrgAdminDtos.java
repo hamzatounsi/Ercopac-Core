@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 public final class OrgAdminDtos {
 
@@ -84,7 +85,7 @@ public final class OrgAdminDtos {
             Long id,
             String fullName,
             String email,
-            String role,
+            List<String> roles,
             Long departmentId,
             String departmentCode,
             String departmentName,
@@ -111,7 +112,8 @@ public final class OrgAdminDtos {
             @Size(min = 8, max = 128, message = "Temporary password must contain 8 to 128 characters")
             String password,
 
-            @NotBlank(message = "Role is required") String role,
+            @NotNull(message = "At least one role is required")
+            @Size(min = 1, message = "At least one role is required") Set<String> roles,
             Long departmentId,
             Long resourceTypeId,
 
@@ -134,7 +136,8 @@ public final class OrgAdminDtos {
             @Size(max = 180, message = "Email must not exceed 180 characters")
             String email,
 
-            @NotBlank(message = "Role is required") String role,
+            @NotNull(message = "At least one role is required")
+            @Size(min = 1, message = "At least one role is required") Set<String> roles,
             Long departmentId,
             Long resourceTypeId,
 

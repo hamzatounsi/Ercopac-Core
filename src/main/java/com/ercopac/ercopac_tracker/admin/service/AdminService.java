@@ -62,7 +62,7 @@ public class AdminService {
         // assignment, not a separate subset of historical allocation rows.
         return userRepository.findByOrganisation_IdAndActiveTrueOrderByFullNameAsc(organisationId)
                 .stream()
-                .filter(user -> user.getRole() != Role.PLATFORM_OWNER)
+                .filter(user -> !user.hasRole(Role.PLATFORM_OWNER))
                 .map(this::toLicenceDto)
                 .toList();
     }
@@ -95,7 +95,7 @@ public class AdminService {
                 .map(user -> new AdminLicenceCandidateDto(
                         user.getId(), user.getFullName(), user.getEmail(), user.getDepartmentCode(),
                         user.getResourceType() == null ? null : user.getResourceType().getCode(),
-                        user.getRole().name()
+                        user.getRoles().stream().map(Enum::name).sorted().reduce((a, b) -> a + ", " + b).orElse("")
                 ))
                 .toList();
     }
@@ -130,7 +130,7 @@ public class AdminService {
         Role targetRole = mapLicenceToRole(licenceType.name());
         protectRequiredAdmin(user, targetRole, organisationId);
         validateRoleProfile(user, targetRole);
-        if (user.isActive() && user.getRole() != targetRole) {
+        if (user.isActive() && !user.hasRole(targetRole)) {
             enforceRoleLimit(organisation, targetRole);
         }
 
@@ -142,7 +142,7 @@ public class AdminService {
             assignment.setUser(user);
             assignment.setLicenceType(licenceType);
 
-            user.setRole(targetRole);
+            user.getRoles().add(targetRole);
             userRepository.save(user);
 
             return toLicenceDto(licenceRepository.save(assignment));
@@ -157,15 +157,19 @@ public class AdminService {
 
         AppUser user = userRepository.findByIdAndOrganisation_Id(userId, organisationId)
                 .orElseThrow(() -> notFound("User not found in current organisation"));
-        protectRequiredAdmin(user, Role.EMPLOYEE, organisationId);
+        AdminLicenceAssignment existingAssignment = licenceRepository
+                .findByOrganisation_IdAndUser_Id(organisationId, userId).orElse(null);
+        Role removedRole = existingAssignment == null ? null : mapLicenceToRole(existingAssignment.getLicenceType().name());
+        protectRequiredAdmin(user, removedRole == Role.ORG_ADMIN ? Role.EMPLOYEE : removedRole, organisationId);
 
         Organisation organisation = getOrganisation(organisationId);
-        if (user.isActive() && user.getRole() != Role.EMPLOYEE) {
+        if (user.isActive() && !user.hasRole(Role.EMPLOYEE) && user.getRoles().size() == 1) {
             enforceRoleLimit(organisation, Role.EMPLOYEE);
         }
 
         licenceRepository.deleteByOrganisation_IdAndUser_Id(organisationId, userId);
-        user.setRole(Role.EMPLOYEE);
+        if (removedRole != null) user.getRoles().remove(removedRole);
+        if (user.getRoles().isEmpty()) user.getRoles().add(Role.EMPLOYEE);
         userRepository.save(user);
     }
 
@@ -342,7 +346,7 @@ public class AdminService {
     // ================= HELPERS =================
 
     private void protectRequiredAdmin(AppUser user, Role targetRole, Long organisationId) {
-        if (user.getRole() != Role.ORG_ADMIN || targetRole == Role.ORG_ADMIN || !user.isActive()) {
+        if (!user.hasRole(Role.ORG_ADMIN) || targetRole == Role.ORG_ADMIN || !user.isActive()) {
             return;
         }
         if (user.getId().equals(securityUtils.getCurrentUserId())) {
@@ -557,7 +561,7 @@ public class AdminService {
                 user.getEmail(),
                 user.getDepartmentCode(),
                 user.getResourceType() != null ? user.getResourceType().getCode() : null,
-                user.getRole().name()
+                user.getRoles().stream().map(Enum::name).sorted().reduce((a, b) -> a + ", " + b).orElse("")
         );
     }
 
