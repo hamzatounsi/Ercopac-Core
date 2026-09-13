@@ -69,16 +69,20 @@ class CrmServiceTenantTest {
     @Test
     void salesManagerDirectOpportunityIdForAnotherOwnerIsNotReturned() {
         when(security.getCurrentUserId()).thenReturn(10L);
-        when(opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(11L)).thenReturn(List.of());
+    
         CrmOpportunity opportunity = mock(CrmOpportunity.class);
         AppUser otherOwner = mock(AppUser.class);
+    
         when(opportunity.getOwner()).thenReturn(otherOwner);
         when(otherOwner.getId()).thenReturn(20L);
-        when(opportunityRepo.findByIdAndOrganisation_Id(99L, 11L)).thenReturn(Optional.of(opportunity));
-
-        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                () -> service.getOpportunity(11L, 99L));
-
+        when(opportunityRepo.findByIdAndOrganisation_Id(99L, 11L))
+                .thenReturn(Optional.of(opportunity));
+    
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.getOpportunity(11L, 99L)
+        );
+    
         assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
     }
 }
