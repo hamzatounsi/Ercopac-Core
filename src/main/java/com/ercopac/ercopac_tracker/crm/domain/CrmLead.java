@@ -5,6 +5,7 @@ package com.ercopac.ercopac_tracker.crm.domain;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -70,6 +71,9 @@ public class CrmLead {
     @Column(name = "converted_at")
     private LocalDateTime convertedAt;
 
+    @Column(name = "contacted_date")
+    private LocalDate contactedDate;
+
     @Column(length = 2000)
     private String notes;
 
@@ -116,6 +120,8 @@ public class CrmLead {
     public void setConverted(boolean converted) { this.converted = converted; }
     public LocalDateTime getConvertedAt() { return convertedAt; }
     public void setConvertedAt(LocalDateTime convertedAt) { this.convertedAt = convertedAt; }
+    public LocalDate getContactedDate() { return contactedDate; }
+    public void setContactedDate(LocalDate contactedDate) { this.contactedDate = contactedDate; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
     public boolean isActive() { return active; }

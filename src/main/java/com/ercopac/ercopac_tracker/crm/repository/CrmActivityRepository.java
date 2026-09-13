@@ -2,12 +2,16 @@ package com.ercopac.ercopac_tracker.crm.repository;
  
 import com.ercopac.ercopac_tracker.crm.domain.CrmActivity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Pageable;
 import java.util.List;
  
 public interface CrmActivityRepository extends JpaRepository<CrmActivity, Long> {
- 
-    // Recent activity feed for dashboard (latest N)
+	// Ajoutez cette méthode si elle n'existe pas déjà
+	@Modifying
+	@Transactional
+	void deleteAllByOpportunity_IdAndOrganisation_Id(Long opportunityId, Long organisationId);
     List<CrmActivity> findByOrganisation_IdOrderByCreatedAtDesc(
             Long orgId, Pageable pageable);
  

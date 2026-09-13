@@ -542,7 +542,6 @@ public class CrmService {
                 "Lead converted to opportunity: " + entity.getName(), source, entity);
         return toOpportunityDto(entity);
     }
-
     private void mapLead(CrmLead entity, CrmLeadDto dto, boolean creating) {
         requireText(dto.getFullName(), "Lead name is required.");
         if (dto.getAccountId() == null) throw badRequest("An account is required for every lead.");
@@ -553,10 +552,10 @@ public class CrmService {
         if (dto.getSource() != null) entity.setSource(parseEnum(CrmLead.Source.class, dto.getSource(), "lead source"));
         if (dto.getStatus() != null) entity.setStatus(parseEnum(CrmLead.Status.class, dto.getStatus(), "lead status"));
         entity.setOwner(tenantUser(entity.getOrganisation().getId(), dto.getOwnerId()));
+        entity.setContactedDate(dto.getContactedDate());
         entity.setNotes(blank(dto.getNotes()));
         entity.setActive(creating || dto.isActive());
     }
-
     private CrmLeadDto toLeadDto(CrmLead entity) {
         CrmLeadDto dto = new CrmLeadDto();
         dto.setId(entity.getId()); dto.setFullName(entity.getFullName()); dto.setCompany(entity.getCompany());
@@ -565,11 +564,12 @@ public class CrmService {
         dto.setMobile(entity.getMobile()); dto.setRating(entity.getRating());
         dto.setSource(entity.getSource().name()); dto.setStatus(entity.getStatus().name());
         if (entity.getOwner() != null) { dto.setOwnerId(entity.getOwner().getId()); dto.setOwnerName(entity.getOwner().getFullName()); }
-        dto.setConverted(entity.isConverted()); dto.setConvertedAt(entity.getConvertedAt()); dto.setNotes(entity.getNotes());
+        dto.setConverted(entity.isConverted()); dto.setConvertedAt(entity.getConvertedAt());
+        dto.setContactedDate(entity.getContactedDate());
+        dto.setNotes(entity.getNotes());
         dto.setActive(entity.isActive()); dto.setCreatedAt(entity.getCreatedAt());
         return dto;
     }
-
     // Opportunities
     public List<CrmOpportunityDto> getOpportunities(Long requestedOrganisationId, Long ownerId, Long accountId,
                                                      Long leadId, Long stageId) {
@@ -609,12 +609,18 @@ public class CrmService {
         if (dto.getTeamMembers() != null && !dto.getTeamMembers().isEmpty()) {
             entity = replaceOpportunityTeam(entity, dto.getTeamMembers().stream().map(CrmUserDto::id).toList(), true);
         }
-        recordChanges(entity, before);
+        List<String> changedFields = recordChanges(entity, before);
         Long newStageId = entity.getStage() == null ? null : entity.getStage().getId();
         if (!Objects.equals(oldStageId, newStageId)) {
             recordStageHistory(entity, currentUser());
             logActivity(entity.getOrganisation(), currentUser(), CrmActivity.ActivityType.STAGE_UPDATED,
                     "Stage updated to " + (entity.getStage() == null ? "Unassigned" : entity.getStage().getName()), null, entity);
+        }
+        if (assignmentNotifier != null && !changedFields.isEmpty()) {
+            AppUser actor = currentUser();
+            String message = actor.getFullName() + " updated " + entity.getName()
+                    + " (" + String.join(", ", changedFields) + ")";
+            assignmentNotifier.notifyOpportunityUpdated(entity, actor, "Opportunity updated", message);
         }
         return toOpportunityDto(entity);
     }
@@ -627,11 +633,16 @@ public class CrmService {
         entity = opportunityRepo.save(entity);
         history(entity, "Stage", old, entity.getStage().getName());
         recordStageHistory(entity, currentUser());
-        logActivity(entity.getOrganisation(), currentUser(), CrmActivity.ActivityType.STAGE_UPDATED,
+        AppUser actor = currentUser();
+        logActivity(entity.getOrganisation(), actor, CrmActivity.ActivityType.STAGE_UPDATED,
                 "Stage updated to " + entity.getStage().getName(), null, entity);
+        if (assignmentNotifier != null) {
+            String message = actor.getFullName() + " changed the stage of " + entity.getName()
+                    + " to " + entity.getStage().getName();
+            assignmentNotifier.notifyOpportunityUpdated(entity, actor, "Opportunity stage changed", message);
+        }
         return toOpportunityDto(entity);
     }
-
     public CrmOpportunityDto updateOpportunityTeam(Long requestedOrganisationId, Long opportunityId, List<Long> requestedUserIds) {
         Long organisationId = tenant(requestedOrganisationId);
         CrmOpportunity entity = opportunity(organisationId, opportunityId);
@@ -639,9 +650,12 @@ public class CrmService {
     }
 
     private CrmOpportunity replaceOpportunityTeam(CrmOpportunity entity, List<Long> requestedUserIds, boolean recordHistory) {
+        System.out.println("🔥 DEBUG [CrmService]: replaceOpportunityTeam appelé. requestedUserIds = " + requestedUserIds);
+        
         Long organisationId = entity.getOrganisation().getId();
         String before = entity.getTeamMembers().stream().map(AppUser::getFullName).sorted().collect(Collectors.joining(", "));
         Set<Long> previousMemberIds = entity.getTeamMembers().stream().map(AppUser::getId).collect(Collectors.toSet());
+        
         LinkedHashSet<Long> userIds = requestedUserIds == null ? new LinkedHashSet<>() : requestedUserIds.stream()
                 .filter(Objects::nonNull).collect(Collectors.toCollection(LinkedHashSet::new));
         LinkedHashSet<AppUser> members = new LinkedHashSet<>();
@@ -657,10 +671,15 @@ public class CrmService {
         entity = opportunityRepo.save(entity);
         String after = entity.getTeamMembers().stream().map(AppUser::getFullName).sorted().collect(Collectors.joining(", "));
         if (recordHistory && !Objects.equals(before, after)) history(entity, "Team", blank(before), blank(after));
-        if (assignmentNotifier != null) assignmentNotifier.notifyNewAssignments(entity, previousMemberIds);
+        
+        System.out.println("🔥 DEBUG [CrmService]: Avant d'appeler le notifier. assignmentNotifier est null ? " + (assignmentNotifier == null));
+        if (assignmentNotifier != null) {
+            assignmentNotifier.notifyNewAssignments(entity, previousMemberIds);
+        } else {
+            System.out.println("⚠️ ERREUR CRITIQUE : assignmentNotifier est NULL !");
+        }
         return entity;
     }
-
     public CrmOpportunityDto markWon(Long requestedOrganisationId, Long id) {
         Long organisationId = tenant(requestedOrganisationId);
         CrmPipelineStage won = stageRepo.findByOrganisation_IdOrderByDisplayOrderAsc(organisationId).stream()
@@ -676,7 +695,27 @@ public class CrmService {
     }
 
     public void deleteOpportunity(Long requestedOrganisationId, Long id) {
-        opportunityRepo.delete(opportunity(tenant(requestedOrganisationId), id));
+        Long organisationId = tenant(requestedOrganisationId);
+        CrmOpportunity entity = opportunity(organisationId, id);
+
+        // Supprimer d'abord toutes les données liées qui référencent cette opportunity
+        activityRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
+        noteRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
+        historyRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
+        stageHistoryRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
+
+        // Supprimer les fichiers physiques d'attachments avant de supprimer les entités
+        attachmentRepo.findByOpportunity_IdAndOrganisation_IdOrderByUploadedAtDesc(id, organisationId)
+                .forEach(attachment -> {
+                    Path tenantRoot = attachmentRoot.resolve(String.valueOf(organisationId)).normalize();
+                    Path target = tenantRoot.resolve(attachment.getStoragePath()).normalize();
+                    if (target.startsWith(tenantRoot)) {
+                        try { Files.deleteIfExists(target); } catch (IOException ignored) { }
+                    }
+                });
+        attachmentRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
+
+        opportunityRepo.delete(entity);
     }
 
     private void mapOpportunity(CrmOpportunity entity, CrmOpportunityDto dto, boolean creating) {
@@ -779,14 +818,18 @@ public class CrmService {
         Long organisationId = tenant(requestedOrganisationId);
         requireText(content, "Note content is required.");
         CrmOpportunity opportunity = opportunity(organisationId, opportunityId);
+        AppUser actor = currentUser();
         CrmOpportunityNote note = new CrmOpportunityNote(); note.setOrganisation(opportunity.getOrganisation());
-        note.setOpportunity(opportunity); note.setAuthor(currentUser()); note.setContent(content.trim());
+        note.setOpportunity(opportunity); note.setAuthor(actor); note.setContent(content.trim());
         note = noteRepo.save(note);
-        logActivity(opportunity.getOrganisation(), currentUser(), CrmActivity.ActivityType.NOTE_ADDED,
+        logActivity(opportunity.getOrganisation(), actor, CrmActivity.ActivityType.NOTE_ADDED,
                 "Note added to " + opportunity.getName(), null, opportunity);
+        if (assignmentNotifier != null) {
+            String message = actor.getFullName() + " added a note to " + opportunity.getName() + ": " + content.trim();
+            assignmentNotifier.notifyOpportunityUpdated(opportunity, actor, "New note on opportunity", message);
+        }
         return toNoteDto(note);
     }
-
     public CrmOpportunityNoteDto updateNote(Long requestedOrganisationId, Long opportunityId, Long noteId, String content) {
         Long organisationId = tenant(requestedOrganisationId); requireText(content, "Note content is required.");
         opportunity(organisationId, opportunityId);
@@ -822,16 +865,20 @@ public class CrmService {
         if (!target.startsWith(tenantRoot)) throw badRequest("Invalid attachment path.");
         try { Files.createDirectories(tenantRoot); Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING); }
         catch (IOException exception) { throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not store attachment."); }
+        AppUser actor = currentUser();
         CrmOpportunityAttachment attachment = new CrmOpportunityAttachment();
         attachment.setOrganisation(opportunity.getOrganisation()); attachment.setOpportunity(opportunity);
         attachment.setOriginalFileName(original); attachment.setStoredFileName(stored); attachment.setStoragePath(stored);
-        attachment.setContentType(type); attachment.setFileSize(file.getSize()); attachment.setUploadedBy(currentUser());
+        attachment.setContentType(type); attachment.setFileSize(file.getSize()); attachment.setUploadedBy(actor);
         attachment = attachmentRepo.save(attachment);
-        logActivity(opportunity.getOrganisation(), currentUser(), CrmActivity.ActivityType.OFFER_ATTACHED,
+        logActivity(opportunity.getOrganisation(), actor, CrmActivity.ActivityType.OFFER_ATTACHED,
                 "File attached: " + original, null, opportunity);
+        if (assignmentNotifier != null) {
+            String message = actor.getFullName() + " attached a file to " + opportunity.getName() + ": " + original;
+            assignmentNotifier.notifyOpportunityUpdated(opportunity, actor, "New attachment on opportunity", message);
+        }
         return toAttachmentDto(attachment);
     }
-
     @Transactional(readOnly = true)
     public AttachmentDownload downloadAttachment(Long requestedOrganisationId, Long opportunityId, Long attachmentId) {
         Long organisationId = tenant(requestedOrganisationId);
@@ -875,12 +922,17 @@ public class CrmService {
                         item.getModifiedBy() == null ? null : item.getModifiedBy().getFullName(), item.getEnteredAt())).toList();
     }
 
-    private void recordChanges(CrmOpportunity entity, Map<String, String> before) {
+    private List<String> recordChanges(CrmOpportunity entity, Map<String, String> before) {
         Map<String, String> after = opportunitySnapshot(entity);
+        List<String> changedFields = new ArrayList<>();
         before.forEach((field, oldValue) -> {
             String newValue = after.get(field);
-            if (!Objects.equals(oldValue, newValue)) history(entity, field, oldValue, newValue);
+            if (!Objects.equals(oldValue, newValue)) {
+                history(entity, field, oldValue, newValue);
+                changedFields.add(field);
+            }
         });
+        return changedFields;
     }
 
     private Map<String, String> opportunitySnapshot(CrmOpportunity entity) {
@@ -911,9 +963,10 @@ public class CrmService {
         item.setClosingDate(opportunity.getClosingDate()); item.setModifiedBy(user); stageHistoryRepo.save(item);
     }
 
-    // Dashboard, reports and lead-only manager view
     public CrmDashboardDto getDashboard(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId); seedConfiguration(organisationId);
+        AppUser me = currentUser();
+
         List<CrmOpportunity> visible = opportunityVisibility.visible(
                 opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId));
         Set<Long> visibleIds = visible.stream().map(CrmOpportunity::getId).collect(Collectors.toSet());
@@ -921,17 +974,58 @@ public class CrmService {
         dto.setOpenOpportunities(visible.stream().filter(item -> !item.isWon() && !item.isLost()).count());
         dto.setPipelineValue(visible.stream().filter(item -> !item.isWon() && !item.isLost())
                 .map(CrmOpportunityValueCalculator::total).reduce(BigDecimal.ZERO, BigDecimal::add));
-        dto.setActiveLeads(leadRepo.countByOrganisation_IdAndActiveTrue(organisationId));
-        LocalDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+
+        LocalDate now = LocalDate.now();
+        LocalDate currentMonthStart = now.withDayOfMonth(1);
+        LocalDate currentMonthEnd = now.withDayOfMonth(now.lengthOfMonth());
+        LocalDate lastMonthStart = currentMonthStart.minusMonths(1);
+        LocalDate lastMonthEnd = lastMonthStart.withDayOfMonth(lastMonthStart.lengthOfMonth());
+
+        // ✅ "Leads contacted this month" — filtré par owner = current user
+        dto.setActiveLeads(leadRepo.countByOrganisation_IdAndOwner_IdAndContactedDateBetween(
+                organisationId, me.getId(), currentMonthStart, currentMonthEnd));
+        dto.setContactedLeadsLastMonth(leadRepo.countByOrganisation_IdAndOwner_IdAndContactedDateBetween(
+                organisationId, me.getId(), lastMonthStart, lastMonthEnd));
+
+        LocalDateTime monthStart = now.withDayOfMonth(1).atStartOfDay();
         dto.setWonThisMonth(visible.stream().filter(item -> item.isWon() && !item.getUpdatedAt().isBefore(monthStart)).count());
+
+        // Closing this week (reste organisation-wide, non concerné par la demande)
+        LocalDate weekEnd = now.plusDays(7);
+        dto.setClosingThisWeekCount(visible.stream()
+                .filter(item -> !item.isWon() && !item.isLost())
+                .filter(item -> item.getClosingDate() != null
+                        && !item.getClosingDate().isBefore(now)
+                        && !item.getClosingDate().isAfter(weekEnd))
+                .count());
+
+        // ✅ "Won vs annual target" — filtré par owner = current user
+        int currentYear = now.getYear();
+        LocalDateTime yearStart = LocalDate.of(currentYear, 1, 1).atStartOfDay();
+        BigDecimal wonThisYear = visible.stream()
+                .filter(item -> item.isWon() && !item.getUpdatedAt().isBefore(yearStart))
+                .filter(item -> item.getOwner() != null && Objects.equals(item.getOwner().getId(), me.getId()))
+                .map(item -> zero(item.getValue()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        dto.setWonThisYear(wonThisYear);
+
+        BigDecimal myTarget = targetRepo.findByOrganisation_IdAndUser_IdAndTargetYear(organisationId, me.getId(), currentYear)
+                .map(CrmSalesTarget::getAmount)
+                .orElse(BigDecimal.ZERO);
+        dto.setAnnualTarget(myTarget);
+
         dto.setRecentActivities(activityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId, PageRequest.of(0, 10))
                 .stream().filter(item -> item.getOpportunity() == null || visibleIds.contains(item.getOpportunity().getId()))
                 .map(this::toActivityDto).toList());
-        LocalDate now = LocalDate.now();
-        dto.setClosingThisMonth(visible.stream().filter(item -> item.getClosingDate() != null
-                        && !item.getClosingDate().isBefore(now.withDayOfMonth(1))
-                        && !item.getClosingDate().isAfter(now.withDayOfMonth(now.lengthOfMonth())))
+
+        // ✅ "Closing this month" — filtré par owner = current user
+        dto.setClosingThisMonth(visible.stream()
+                .filter(item -> item.getOwner() != null && Objects.equals(item.getOwner().getId(), me.getId()))
+                .filter(item -> item.getClosingDate() != null
+                        && !item.getClosingDate().isBefore(currentMonthStart)
+                        && !item.getClosingDate().isAfter(currentMonthEnd))
                 .sorted(Comparator.comparing(CrmOpportunity::getClosingDate)).map(this::toOpportunityDto).toList());
+
         Map<String, Long> sources = new LinkedHashMap<>();
         leadRepo.countBySource(organisationId).forEach(row -> sources.put(row[0].toString(), (Long) row[1])); dto.setLeadsBySource(sources);
         Map<Long, Long> counts = new HashMap<>();
@@ -942,7 +1036,6 @@ public class CrmService {
         }).toList(); dto.setPipeline(stages);
         return dto;
     }
-
     public CrmReportsDto getReports(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
         migrateLegacySupplyCategories(organisationId);
