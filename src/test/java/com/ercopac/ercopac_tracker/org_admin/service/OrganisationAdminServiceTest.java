@@ -212,6 +212,29 @@ class OrganisationAdminServiceTest {
     }
 
     @Test
+    void updatesMultipleRolesAndAcceptsLegacySingleRoleRequests() {
+        AppUser target = user(21L, Role.CLIENT, true);
+        when(userRepository.findByIdAndOrganisation_Id(21L, 10L)).thenReturn(Optional.of(target));
+        when(securityUtils.getCurrentUserId()).thenReturn(99L);
+        when(userRepository.save(target)).thenReturn(target);
+
+        OrgAdminDtos.UserSummary withSecondRole = service.updateUser(21L, new OrgAdminDtos.UpdateUserRequest(
+                "Admin", "admin@example.com", Set.of("CLIENT", "SALES_MANAGER"),
+                null, null, null, null, true));
+        assertThat(withSecondRole.roles()).containsExactly("CLIENT", "SALES_MANAGER");
+
+        OrgAdminDtos.UserSummary withoutSecondRole = service.updateUser(21L, new OrgAdminDtos.UpdateUserRequest(
+                "Admin", "admin@example.com", Set.of("CLIENT"),
+                null, null, null, null, true));
+        assertThat(withoutSecondRole.roles()).containsExactly("CLIENT");
+
+        OrgAdminDtos.UserSummary legacyRequest = service.updateUser(21L, new OrgAdminDtos.UpdateUserRequest(
+                "Admin", "admin@example.com", null,
+                null, null, null, null, true, "CLIENT"));
+        assertThat(legacyRequest.roles()).containsExactly("CLIENT");
+    }
+
+    @Test
     void referencedDepartmentCannotBeDeleted() {
         Department department = new Department("OPS", "Operations", organisation);
         ReflectionTestUtils.setField(department, "id", 55L);

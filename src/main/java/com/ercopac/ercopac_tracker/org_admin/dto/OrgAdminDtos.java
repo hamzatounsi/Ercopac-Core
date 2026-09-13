@@ -136,7 +136,6 @@ public final class OrgAdminDtos {
             @Size(max = 180, message = "Email must not exceed 180 characters")
             String email,
 
-            @NotNull(message = "At least one role is required")
             @Size(min = 1, message = "At least one role is required") Set<String> roles,
             Long departmentId,
             Long resourceTypeId,
@@ -147,8 +146,22 @@ public final class OrgAdminDtos {
             @Size(max = 80, message = "Job title must not exceed 80 characters")
             String jobTitle,
 
-            @NotNull(message = "Account status is required") Boolean active
+            @NotNull(message = "Account status is required") Boolean active,
+
+            String role
     ) {
+        public UpdateUserRequest(
+                String fullName,
+                String email,
+                Set<String> roles,
+                Long departmentId,
+                Long resourceTypeId,
+                String employeeCode,
+                String jobTitle,
+                Boolean active
+        ) {
+            this(fullName, email, roles, departmentId, resourceTypeId, employeeCode, jobTitle, active, null);
+        }
     }
 
     public record UpdateUserStatusRequest(

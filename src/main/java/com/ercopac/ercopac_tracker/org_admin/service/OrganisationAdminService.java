@@ -289,7 +289,9 @@ public class OrganisationAdminService {
         Organisation organisation = currentOrganisation();
         Long organisationId = organisation.getId();
         AppUser user = findOrganisationUser(id, organisationId);
-        Set<Role> targetRoles = parseAssignableRoles(request.roles());
+        Set<Role> targetRoles = request.roles() != null && !request.roles().isEmpty()
+                ? parseAssignableRoles(request.roles())
+                : parseAssignableRoles(request.role() == null ? null : Set.of(request.role()));
         boolean targetActive = request.active();
         String email = request.email().trim().toLowerCase(Locale.ROOT);
 
