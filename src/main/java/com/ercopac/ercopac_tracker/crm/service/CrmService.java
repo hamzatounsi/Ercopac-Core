@@ -661,7 +661,7 @@ public class CrmService {
         LinkedHashSet<AppUser> members = new LinkedHashSet<>();
         for (Long userId : userIds) {
             AppUser member = tenantUser(organisationId, userId);
-            if (!member.isActive() || !OPPORTUNITY_TEAM_ROLES.contains(member.getRole())) {
+            if (!member.isActive() || member.getRoles().stream().noneMatch(OPPORTUNITY_TEAM_ROLES::contains)) {
                 throw badRequest("Only active CRM users can be assigned to an opportunity team.");
             }
             members.add(member);
@@ -1105,7 +1105,7 @@ public class CrmService {
     }
 
     private CrmUserDto toCrmUserDto(AppUser user) {
-        return new CrmUserDto(user.getId(), user.getFullName(), user.getEmail(), user.getRole().name());
+        return new CrmUserDto(user.getId(), user.getFullName(), user.getEmail(), crmRoleName(user));
     }
 
     public CrmManagerViewDto getManagerView(Long requestedOrganisationId, int year) {
@@ -1117,7 +1117,7 @@ public class CrmService {
         List<CrmManagerViewDto.TeamMember> members = team.stream().map(user -> {
             List<CrmOpportunity> owned = opportunities.stream().filter(item -> item.getOwner() != null && Objects.equals(item.getOwner().getId(), user.getId())).toList();
             CrmSalesTarget target = targets.get(user.getId());
-            return new CrmManagerViewDto.TeamMember(user.getId(), user.getFullName(), user.getRole().name(), owned.size(),
+            return new CrmManagerViewDto.TeamMember(user.getId(), user.getFullName(), crmRoleName(user), owned.size(),
                     owned.stream().filter(item -> !item.isLost()).map(item -> zero(item.getValue())).reduce(BigDecimal.ZERO, BigDecimal::add),
                     owned.stream().filter(CrmOpportunity::isWon).map(item -> zero(item.getValue())).reduce(BigDecimal.ZERO, BigDecimal::add),
                     target == null ? BigDecimal.ZERO : target.getAmount(), target == null ? "EUR" : target.getCurrency());
@@ -1128,13 +1128,19 @@ public class CrmService {
     public CrmManagerViewDto.TeamMember saveTarget(Long requestedOrganisationId, Long userId, int year, BigDecimal amount, String currency) {
         Organisation organisation = organisation(requestedOrganisationId);
         AppUser user = tenantUser(organisation.getId(), userId);
-        if (user == null || !SALES_ROLES.contains(user.getRole())) throw badRequest("Targets can only be assigned to CRM sales users.");
+        if (user == null || user.getRoles().stream().noneMatch(SALES_ROLES::contains)) throw badRequest("Targets can only be assigned to CRM sales users.");
         CrmSalesTarget target = targetRepo.findByOrganisation_IdAndUser_IdAndTargetYear(organisation.getId(), userId, year)
                 .orElseGet(CrmSalesTarget::new);
         target.setOrganisation(organisation); target.setUser(user); target.setTargetYear(year);
         target.setAmount(nonNegative(amount, "Target")); target.setCurrency(blank(currency) == null ? "EUR" : currency.toUpperCase(Locale.ROOT));
         targetRepo.save(target);
         return getManagerView(organisation.getId(), year).team().stream().filter(item -> Objects.equals(item.userId(), userId)).findFirst().orElseThrow();
+    }
+
+    private String crmRoleName(AppUser user) {
+        return user.getRoles().stream().filter(SALES_ROLES::contains).sorted()
+                .map(Enum::name).findFirst()
+                .orElseGet(() -> user.getPrimaryRole() == null ? "" : user.getPrimaryRole().name());
     }
 
     private void logActivity(Organisation organisation, AppUser user, CrmActivity.ActivityType type, String description,

@@ -248,7 +248,7 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
     private AppUser user(String email, String name, Role role, Organisation organisation, Department department, boolean internal) {
         return users.findByEmailIgnoreCase(email).map(existing -> {
             existing.setFullName(name);
-            existing.setRole(role);
+            existing.setRoles(java.util.Set.of(role));
             existing.setOrganisation(organisation);
             existing.setDepartment(department);
             existing.setDepartmentCode(department == null ? null : department.getCode());

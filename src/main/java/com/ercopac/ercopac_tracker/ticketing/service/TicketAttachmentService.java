@@ -52,6 +52,6 @@ import java.util.*;
         int lastSlash=name.lastIndexOf('/');name=lastSlash>=0?name.substring(lastSlash+1):name;
         return name.replaceAll("[^a-zA-Z0-9._ -]","_");}private TicketAttachmentDto dto(TicketAttachment a){var u=a.getUploadedBy();
         return new TicketAttachmentDto(a.getId(),a.getOriginalFileName(),a.getContentType(),a.getFileSize(),
-        new com.ercopac.ercopac_tracker.ticketing.dto.TicketDtos.UserSummary(u.getId(),u.getFullName(),u.getEmail(),u.getRole().name()),a.getUploadedAt());
+        new com.ercopac.ercopac_tracker.ticketing.dto.TicketDtos.UserSummary(u.getId(),u.getFullName(),u.getEmail(),u.getPrimaryRole().name()),a.getUploadedAt());
     }
 }

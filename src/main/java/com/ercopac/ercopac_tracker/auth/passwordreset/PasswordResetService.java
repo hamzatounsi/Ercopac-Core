@@ -253,7 +253,7 @@ public class PasswordResetService {
         AppUser admin = userRepository.findById(adminUserId)
                 .orElseThrow(() -> new IllegalArgumentException("Admin user not found"));
 
-        if (admin.getRole() == Role.PLATFORM_OWNER) {
+        if (admin.hasRole(Role.PLATFORM_OWNER)) {
             return;
         }
 

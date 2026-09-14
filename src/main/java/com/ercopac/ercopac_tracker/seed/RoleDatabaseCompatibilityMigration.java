@@ -29,23 +29,45 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
         // resetting existing organisations or subscriptions.
         jdbcTemplate.execute("alter table public.organisations add column if not exists sales_manager_licence_limit integer not null default 0");
         jdbcTemplate.execute("alter table public.organisations add column if not exists client_licence_limit integer not null default 0");
-        jdbcTemplate.execute("alter table public.users drop constraint if exists users_role_check");
         jdbcTemplate.execute("alter table public.role_permissions drop constraint if exists role_permissions_role_check");
         jdbcTemplate.execute("alter table public.admin_licence_assignments drop constraint if exists admin_licence_assignments_licence_type_check");
 
-        jdbcTemplate.update("""
-                update public.users
-                set role = case upper(trim(role))
-                    when 'OWNER' then 'PLATFORM_OWNER'
-                    when 'ADMIN' then case when organisation_id is null then 'PLATFORM_OWNER' else 'ORG_ADMIN' end
-                    when 'ORGANIZATION_ADMIN' then 'ORG_ADMIN'
-                    when 'ORGANISATION_ADMIN' then 'ORG_ADMIN'
-                    when 'GENERAL_MANAGER' then 'PROJECT_MANAGER'
-                    when 'PLATFORM_ADMIN' then case when organisation_id is null then 'PLATFORM_OWNER' else 'ORG_ADMIN' end
-                    else upper(trim(role))
-                end
-                where role is not null
-                """);
+        if (columnExists("users", "role")) {
+            jdbcTemplate.execute("alter table public.users drop constraint if exists users_role_check");
+            jdbcTemplate.update("""
+                    update public.users
+                    set role = case upper(trim(role))
+                        when 'OWNER' then 'PLATFORM_OWNER'
+                        when 'ADMIN' then case when organisation_id is null then 'PLATFORM_OWNER' else 'ORG_ADMIN' end
+                        when 'ORGANIZATION_ADMIN' then 'ORG_ADMIN'
+                        when 'ORGANISATION_ADMIN' then 'ORG_ADMIN'
+                        when 'GENERAL_MANAGER' then 'PROJECT_MANAGER'
+                        when 'PLATFORM_ADMIN' then case when organisation_id is null then 'PLATFORM_OWNER' else 'ORG_ADMIN' end
+                        else upper(trim(role))
+                    end
+                    where role is not null
+                    """);
+            Integer unsupportedLegacyRoles = jdbcTemplate.queryForObject("""
+                    select count(*) from public.users
+                    where role is not null and role not in (
+                        'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
+                        'DEPARTMENT_MANAGER', 'EMPLOYEE', 'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT'
+                    )
+                    """, Integer.class);
+            if (unsupportedLegacyRoles != null && unsupportedLegacyRoles > 0) {
+                throw new IllegalStateException("Unsupported legacy role values remain in users");
+            }
+            jdbcTemplate.update("""
+                    insert into public.user_roles (user_id, role)
+                    select u.id, u.role from public.users u
+                    where u.role is not null and not exists (
+                        select 1 from public.user_roles ur where ur.user_id = u.id and ur.role = u.role
+                    )
+                    """);
+            jdbcTemplate.execute("alter table public.users drop column role");
+        }
+
+        jdbcTemplate.update("update public.user_roles set role = upper(trim(role)) where role is not null");
 
         // The legacy allocation enum predated the business roles. Keep old
         // allocations readable while moving them to the final role values.
@@ -65,13 +87,17 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
         // Non-resource roles must not remain in department capacity/resource
         // planning because of historical seed or admin-profile defaults.
         jdbcTemplate.update("""
-                update public.users
+                update public.users u
                 set department_id = null,
                     department_code = null,
                     resource_type_id = null,
                     internal_user = false
-                where role in ('PLATFORM_OWNER', 'ORG_ADMIN', 'CLIENT',
-                    'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER')
+                where not exists (
+                    select 1 from public.user_roles ur
+                    where ur.user_id = u.id and ur.role in (
+                        'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'DEPARTMENT_MANAGER', 'EMPLOYEE'
+                    )
+                )
                 """);
 
         // Role permissions use the same enum values and must be migrated
@@ -87,7 +113,7 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                 """);
 
         Integer unsupportedRoles = jdbcTemplate.queryForObject("""
-                select count(*) from public.users
+                select count(*) from public.user_roles
                 where role is not null
                   and role not in (
                     'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
@@ -96,11 +122,12 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                   )
                 """, Integer.class);
         if (unsupportedRoles != null && unsupportedRoles > 0) {
-            throw new IllegalStateException("Unsupported role values remain in users; migration was not applied");
+            throw new IllegalStateException("Unsupported role values remain in user_roles; migration was not applied");
         }
 
+        jdbcTemplate.execute("alter table public.user_roles drop constraint if exists user_roles_role_check");
         jdbcTemplate.execute("""
-                alter table public.users add constraint users_role_check check (
+                alter table public.user_roles add constraint user_roles_role_check check (
                     role in (
                         'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
                         'DEPARTMENT_MANAGER', 'EMPLOYEE',
@@ -128,5 +155,15 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                     )
                 )
                 """);
+    }
+
+    private boolean columnExists(String table, String column) {
+        Integer count = jdbcTemplate.queryForObject("""
+                select count(*) from information_schema.columns
+                where lower(table_schema) = 'public'
+                  and lower(table_name) = lower(?)
+                  and lower(column_name) = lower(?)
+                """, Integer.class, table, column);
+        return count != null && count > 0;
     }
 }

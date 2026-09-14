@@ -16,6 +16,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -83,7 +84,7 @@ public class AuthController {
                     null,
                     user.getId(),
                     user.getEmail(),
-                    user.getRole().name(),
+                    roleNames(user),
                     null,
                     null,
                     null,
@@ -110,7 +111,7 @@ public class AuthController {
                     null,
                     user.getId(),
                     user.getEmail(),
-                    user.getRole().name(),
+                    roleNames(user),
                     null,
                     null,
                     null,
@@ -129,7 +130,7 @@ public class AuthController {
                 user.getId(),
                 user.getEmail(),
                 user.getFullName(),
-                user.getRole().name(),
+                roleNames(user),
                 organisationId,
                 organisationName,
                 sessionDurationMillis(user)
@@ -141,7 +142,7 @@ public class AuthController {
                 token,
                 user.getId(),
                 user.getEmail(),
-                user.getRole().name(),
+                roleNames(user),
                 organisationId,
                 organisationCode,
                 organisationName,
@@ -150,6 +151,10 @@ public class AuthController {
                 null,
                 null
         );
+    }
+
+    private List<String> roleNames(AppUser user) {
+        return user.getRoles().stream().map(Enum::name).sorted().toList();
     }
 
     private long sessionDurationMillis(AppUser user) {

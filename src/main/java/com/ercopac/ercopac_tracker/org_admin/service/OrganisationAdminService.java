@@ -79,7 +79,6 @@ public class OrganisationAdminService {
             "id", "id",
             "fullName", "fullName",
             "email", "email",
-            "role", "role",
             "department", "department.label",
             "active", "active"
     );
@@ -257,7 +256,7 @@ public class OrganisationAdminService {
     public OrgAdminDtos.UserSummary createUser(OrgAdminDtos.CreateUserRequest request) {
         Organisation organisation = currentOrganisation();
         Long organisationId = organisation.getId();
-        Role role = parseAssignableRole(request.role());
+        Set<Role> roles = parseAssignableRoles(request.roles());
         boolean active = request.active() == null || request.active();
         String email = request.email().trim().toLowerCase(Locale.ROOT);
 
@@ -268,20 +267,20 @@ public class OrganisationAdminService {
         validateEmployeeCode(request.employeeCode(), organisationId, null);
         if (active) {
             enforceActiveCapacity(organisation);
-            enforceRoleCapacity(organisation, role);
+            roles.forEach(role -> enforceRoleCapacity(organisation, role));
         }
 
         AppUser user = new AppUser();
         user.setFullName(request.fullName().trim());
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setRole(role);
+        user.setRoles(roles);
         user.setOrganisation(organisation);
-        user.setInternalUser(role.requiresResourceProfile());
+        user.setInternalUser(roles.stream().anyMatch(Role::requiresResourceProfile));
         user.setEmployeeCode(normalizeUpper(request.employeeCode()));
         user.setJobTitle(normalize(request.jobTitle()));
         user.setActive(active);
-        applyResourceProfile(user, role, request.departmentId(), request.resourceTypeId(), organisationId);
+        applyResourceProfile(user, roles, request.departmentId(), request.resourceTypeId(), organisationId);
 
         return toUserSummary(userRepository.save(user));
     }
@@ -290,18 +289,20 @@ public class OrganisationAdminService {
         Organisation organisation = currentOrganisation();
         Long organisationId = organisation.getId();
         AppUser user = findOrganisationUser(id, organisationId);
-        Role targetRole = parseAssignableRole(request.role());
+        Set<Role> targetRoles = request.roles() != null && !request.roles().isEmpty()
+                ? parseAssignableRoles(request.roles())
+                : parseAssignableRoles(request.role() == null ? null : Set.of(request.role()));
         boolean targetActive = request.active();
         String email = request.email().trim().toLowerCase(Locale.ROOT);
 
         if (user.getId().equals(securityUtils.getCurrentUserId())
                 && (!email.equalsIgnoreCase(user.getEmail())
-                || targetRole != user.getRole()
+                || !targetRoles.equals(user.getRoles())
                 || !targetActive)) {
             throw conflict("You cannot change your own email, role, or active status during an active session.");
         }
 
-        ensureRequiredAdminRemains(user, targetRole, targetActive, organisationId);
+        ensureRequiredAdminRemains(user, targetRoles, targetActive, organisationId);
 
         userRepository.findByEmailIgnoreCase(email)
                 .filter(existing -> !existing.getId().equals(user.getId()))
@@ -310,21 +311,23 @@ public class OrganisationAdminService {
                 });
         validateEmployeeCode(request.employeeCode(), organisationId, user.getId());
 
-        if (targetActive && (!user.isActive() || targetRole != user.getRole())) {
+        if (targetActive && (!user.isActive() || !targetRoles.equals(user.getRoles()))) {
             if (!user.isActive()) {
                 enforceActiveCapacity(organisation);
             }
-            enforceRoleCapacity(organisation, targetRole);
+            targetRoles.stream()
+                    .filter(role -> !user.isActive() || !alreadyConsumesLicence(user.getRoles(), role))
+                    .forEach(role -> enforceRoleCapacity(organisation, role));
         }
 
         user.setFullName(request.fullName().trim());
         user.setEmail(email);
-        user.setRole(targetRole);
-        user.setInternalUser(targetRole.requiresResourceProfile());
+        user.setRoles(targetRoles);
+        user.setInternalUser(targetRoles.stream().anyMatch(Role::requiresResourceProfile));
         user.setEmployeeCode(normalizeUpper(request.employeeCode()));
         user.setJobTitle(normalize(request.jobTitle()));
         user.setActive(targetActive);
-        applyResourceProfile(user, targetRole, request.departmentId(), request.resourceTypeId(), organisationId);
+        applyResourceProfile(user, targetRoles, request.departmentId(), request.resourceTypeId(), organisationId);
 
         return toUserSummary(userRepository.save(user));
     }
@@ -337,10 +340,10 @@ public class OrganisationAdminService {
         if (user.getId().equals(securityUtils.getCurrentUserId()) && !active) {
             throw conflict("You cannot deactivate your own account.");
         }
-        ensureRequiredAdminRemains(user, user.getRole(), active, organisationId);
+        ensureRequiredAdminRemains(user, user.getRoles(), active, organisationId);
         if (active && !user.isActive()) {
             enforceActiveCapacity(organisation);
-            enforceRoleCapacity(organisation, user.getRole());
+            user.getRoles().forEach(role -> enforceRoleCapacity(organisation, role));
         }
 
         user.setActive(active);
@@ -523,12 +526,12 @@ public class OrganisationAdminService {
 
     private void applyResourceProfile(
             AppUser user,
-            Role role,
+            Set<Role> roles,
             Long departmentId,
             Long resourceTypeId,
             Long organisationId
     ) {
-        if (!role.requiresResourceProfile()) {
+        if (roles.stream().noneMatch(Role::requiresResourceProfile)) {
             user.setDepartment(null);
             user.setDepartmentCode(null);
             user.setResourceType(null);
@@ -536,11 +539,11 @@ public class OrganisationAdminService {
         }
 
         if (departmentId == null) {
-            throw new IllegalArgumentException("Department is required for " + roleLabel(role) + ".");
+            throw new IllegalArgumentException("Department is required for resource-planning roles.");
         }
         Department department = findDepartment(departmentId, organisationId);
         if (resourceTypeId == null) {
-            throw new IllegalArgumentException("Resource type is required for " + roleLabel(role) + ".");
+            throw new IllegalArgumentException("Resource type is required for resource-planning roles.");
         }
         ResourceType resourceType = resourceTypeRepository.findByIdAndOrganisation_Id(resourceTypeId, organisationId)
                 .orElseThrow(() -> notFound("Resource type not found."));
@@ -559,7 +562,7 @@ public class OrganisationAdminService {
         }
 
         AppUser manager = findOrganisationUser(managerId, organisationId);
-        if (!manager.isActive() || manager.getRole() != Role.DEPARTMENT_MANAGER) {
+        if (!manager.isActive() || !manager.hasRole(Role.DEPARTMENT_MANAGER)) {
             throw new IllegalArgumentException("Department manager must be an active Department Manager.");
         }
 
@@ -622,13 +625,13 @@ public class OrganisationAdminService {
 
     private void ensureRequiredAdminRemains(
             AppUser user,
-            Role targetRole,
+            Set<Role> targetRoles,
             boolean targetActive,
             Long organisationId
     ) {
-        boolean removesActiveAdmin = user.getRole() == Role.ORG_ADMIN
+        boolean removesActiveAdmin = user.hasRole(Role.ORG_ADMIN)
                 && user.isActive()
-                && (targetRole != Role.ORG_ADMIN || !targetActive);
+                && (!targetRoles.contains(Role.ORG_ADMIN) || !targetActive);
 
         if (removesActiveAdmin
                 && userRepository.countByOrganisation_IdAndRoleAndActiveTrue(
@@ -683,6 +686,20 @@ public class OrganisationAdminService {
             }
             throw new IllegalArgumentException("Invalid organisation role.");
         }
+    }
+
+    private Set<Role> parseAssignableRoles(Set<String> values) {
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("At least one role is required.");
+        }
+        return values.stream().map(this::parseAssignableRole)
+                .collect(java.util.stream.Collectors.toCollection(() -> EnumSet.noneOf(Role.class)));
+    }
+
+    private boolean alreadyConsumesLicence(Set<Role> currentRoles, Role targetRole) {
+        if (targetRole.isProjectManagerRole()) return currentRoles.stream().anyMatch(Role::isProjectManagerRole);
+        if (targetRole.isCrmRole()) return currentRoles.stream().anyMatch(Role::isCrmRole);
+        return currentRoles.contains(targetRole);
     }
 
     private AppUser findOrganisationUser(Long userId, Long organisationId) {
@@ -743,7 +760,7 @@ public class OrganisationAdminService {
                 user.getId(),
                 user.getFullName(),
                 user.getEmail(),
-                user.getRole().name(),
+                user.getRoles().stream().map(Enum::name).sorted().toList(),
                 department == null ? null : department.getId(),
                 department == null ? user.getDepartmentCode() : department.getCode(),
                 department == null ? user.getDepartmentCode() : department.getLabel(),

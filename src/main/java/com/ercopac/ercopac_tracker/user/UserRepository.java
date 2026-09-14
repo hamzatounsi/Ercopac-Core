@@ -26,9 +26,11 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
 
     long countByOrganisation_IdAndActiveTrue(Long organisationId);
 
-    long countByOrganisation_IdAndRole(Long organisationId, Role role);
+    @Query("select count(distinct u) from AppUser u join u.roles r where u.organisation.id = :organisationId and r = :role")
+    long countByOrganisation_IdAndRole(@Param("organisationId") Long organisationId, @Param("role") Role role);
 
-    long countByRole(Role role);
+    @Query("select count(distinct u) from AppUser u join u.roles r where r = :role")
+    long countByRole(@Param("role") Role role);
 
     Optional<AppUser> findByIdAndOrganisation_Id(Long id, Long organisationId);
 
@@ -40,9 +42,11 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
 
     Optional<AppUser> findByOrganisation_IdAndEmployeeCodeIgnoreCase(Long organisationId, String employeeCode);
 
-    List<AppUser> findByOrganisation_IdAndRoleOrderByFullNameAsc(Long organisationId, Role role);
+    @Query("select distinct u from AppUser u join u.roles r where u.organisation.id = :organisationId and r = :role order by u.fullName")
+    List<AppUser> findByOrganisation_IdAndRoleOrderByFullNameAsc(@Param("organisationId") Long organisationId, @Param("role") Role role);
 
-    List<AppUser> findByOrganisation_IdAndRoleInAndActiveTrueOrderByFullNameAsc(Long organisationId, Collection<Role> roles);
+    @Query("select distinct u from AppUser u join u.roles r where u.organisation.id = :organisationId and r in :roles and u.active = true order by u.fullName")
+    List<AppUser> findByOrganisation_IdAndRoleInAndActiveTrueOrderByFullNameAsc(@Param("organisationId") Long organisationId, @Param("roles") Collection<Role> roles);
 
     List<AppUser> findByOrganisation_IdAndDepartmentCodeOrderByFullNameAsc(Long organisationId, String departmentCode);
 
@@ -59,9 +63,11 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     // All active users in org (no filter):
     List<AppUser> findByOrganisation_IdAndActiveTrueOrderByFullNameAsc(Long organisationId);
 
-    int countByOrganisation_IdAndRoleAndActiveTrue(Long organisationId, Role role);
+    @Query("select count(distinct u) from AppUser u join u.roles r where u.organisation.id = :organisationId and r = :role and u.active = true")
+    int countByOrganisation_IdAndRoleAndActiveTrue(@Param("organisationId") Long organisationId, @Param("role") Role role);
 
-    long countByOrganisation_IdAndRoleInAndActiveTrue(Long organisationId, Collection<Role> roles);
+    @Query("select count(distinct u) from AppUser u join u.roles r where u.organisation.id = :organisationId and r in :roles and u.active = true")
+    long countByOrganisation_IdAndRoleInAndActiveTrue(@Param("organisationId") Long organisationId, @Param("roles") Collection<Role> roles);
 
     long countByOrganisation_IdAndDepartment1_Id(Long organisationId, Long departmentId);
 
@@ -93,7 +99,7 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     long countActiveUsersWithoutDepartment(@Param("organisationId") Long organisationId);
 
     @Query("""
-        select u
+        select distinct u
         from AppUser u
         left join u.department1 d
         where u.organisation.id = :organisationId
@@ -104,7 +110,7 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
                 lower(coalesce(u.employeeCode, '')) like :searchPattern
               )
           and (:departmentId is null or d.id = :departmentId)
-          and (:role is null or u.role = :role)
+          and (:role is null or :role member of u.roles)
           and (:active is null or u.active = :active)
     """)
     Page<AppUser> searchOrganisationUsers(
@@ -117,7 +123,7 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     );
 
     @Query("""
-        select u
+        select distinct u
         from AppUser u
         where (:organisationId is null or u.organisation.id = :organisationId)
           and (
@@ -130,7 +136,7 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
                 lower(coalesce(u.resourceType.code, '')) like :searchPattern
               )
           and (:departmentCode is null or u.departmentCode = :departmentCode)
-          and (:role is null or u.role = :role)
+          and (:role is null or :role member of u.roles)
           and (:active is null or u.active = :active)
           and (:internalUser is null or u.internalUser = :internalUser)
         order by u.fullName asc
@@ -191,7 +197,11 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT u FROM AppUser u LEFT JOIN FETCH u.organisation WHERE u.email = :email")
     Optional<AppUser> findByEmail1(@Param("email") String email);
 
-    Optional<AppUser> findFirstByOrganisationIdAndRole(Long organisationId, Role role);
+    @Query("select u from AppUser u join u.roles r where u.organisation.id = :organisationId and r = :role order by u.id")
+    List<AppUser> findByOrganisationIdAndRole(@Param("organisationId") Long organisationId, @Param("role") Role role);
+    default Optional<AppUser> findFirstByOrganisationIdAndRole(Long organisationId, Role role) {
+        return findByOrganisationIdAndRole(organisationId, role).stream().findFirst();
+    }
     List<AppUser> findByOrganisation_IdAndResourceType_IdAndActiveTrue(
     	    Long organisationId, Long resourceTypeId);
  // Add this inside UserRepository.java

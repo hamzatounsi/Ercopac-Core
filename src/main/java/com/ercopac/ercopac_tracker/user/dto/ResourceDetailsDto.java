@@ -1,6 +1,7 @@
 package com.ercopac.ercopac_tracker.user.dto;
 
 import java.math.BigDecimal;
+import java.util.Set;
 
 public record ResourceDetailsDto(
         Long id,
@@ -10,7 +11,7 @@ public record ResourceDetailsDto(
         String resourceType,
         String jobTitle,
         String email,
-        String role,
+        Set<String> roles,
         String seniority,
         boolean internalUser,
         Integer hoursPerDay,

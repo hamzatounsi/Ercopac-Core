@@ -2,6 +2,7 @@ package com.ercopac.ercopac_tracker;
 
 import com.ercopac.ercopac_tracker.auth.AuthDtos.LoginResponse;
 import com.ercopac.ercopac_tracker.seed.DefaultPlatformOwnerBootstrap;
+import com.ercopac.ercopac_tracker.security.JwtService;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
@@ -31,6 +32,7 @@ class ErcopacTrackerApplicationTests {
 	@Autowired private UserRepository userRepository;
 	@Autowired private PasswordEncoder passwordEncoder;
 	@Autowired private DefaultPlatformOwnerBootstrap defaultPlatformOwnerBootstrap;
+	@Autowired private JwtService jwtService;
 
 	@Test
 	void contextLoads() {
@@ -41,7 +43,7 @@ class ErcopacTrackerApplicationTests {
 		AppUser owner = userRepository.findByEmailIgnoreCase("owner@projectum.com").orElseThrow();
 		Long originalId = owner.getId();
 		String originalPasswordHash = owner.getPasswordHash();
-		assertThat(owner.getRole()).isEqualTo(Role.PLATFORM_OWNER);
+		assertThat(owner.getRoles()).containsExactly(Role.PLATFORM_OWNER);
 		assertThat(owner.isActive()).isTrue();
 		assertThat(owner.getOrganisation()).isNull();
 		assertThat(owner.getDepartment()).isNull();
@@ -67,7 +69,9 @@ class ErcopacTrackerApplicationTests {
 		assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
 		assertThat(response.getBody()).isNotNull();
 		assertThat(response.getBody().token()).isNotBlank();
-		assertThat(response.getBody().role()).isEqualTo("PLATFORM_OWNER");
+		assertThat(response.getBody().roles()).containsExactly("PLATFORM_OWNER");
+		assertThat(jwtService.extractRoles(response.getBody().token())).containsExactly("PLATFORM_OWNER");
+		assertThat(jwtService.parseClaims(response.getBody().token())).doesNotContainKey("role");
 	}
 
 }

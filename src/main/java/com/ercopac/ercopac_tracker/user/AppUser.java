@@ -12,7 +12,11 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "users")
@@ -31,9 +35,11 @@ public class AppUser {
     @Column(nullable = false)
     private String passwordHash;
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 40)
-    private Role role;
+    @Column(name = "role", nullable = false, length = 40)
+    private Set<Role> roles = new LinkedHashSet<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "organisation_id")
@@ -99,7 +105,7 @@ public class AppUser {
         this.fullName = fullName;
         this.email = email;
         this.passwordHash = passwordHash;
-        this.role = role;
+        setRoles(Set.of(role));
         this.active = true;
         this.internalUser = true;
         this.hoursPerDay = 8;
@@ -114,8 +120,25 @@ public class AppUser {
     public void setEmail(String email) { this.email = email; }
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
-    public Role getRole() { return role; }
-    public void setRole(Role role) { this.role = role; }
+    public Set<Role> getRoles() { return roles; }
+    public void setRoles(Collection<Role> roles) {
+        this.roles.clear();
+        if (roles != null) this.roles.addAll(roles);
+    }
+    public boolean hasRole(Role role) { return role != null && roles.contains(role); }
+    public boolean hasAnyRole(Collection<Role> candidates) {
+        return candidates != null && candidates.stream().anyMatch(roles::contains);
+    }
+    public boolean hasAnyRole(Role... candidates) {
+        return candidates != null && hasAnyRole(List.of(candidates));
+    }
+    public boolean requiresResourceProfile() {
+        return roles.stream().anyMatch(Role::requiresResourceProfile);
+    }
+    /** For legacy display-only DTOs; authorization must always inspect the full role set. */
+    public Role getPrimaryRole() {
+        return roles.stream().sorted().findFirst().orElse(null);
+    }
     public Organisation getOrganisation() { return organisation; }
     public void setOrganisation(Organisation organisation) { this.organisation = organisation; }
     public String getEmployeeCode() { return employeeCode; }

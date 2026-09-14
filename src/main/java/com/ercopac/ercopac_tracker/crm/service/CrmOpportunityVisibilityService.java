@@ -32,22 +32,27 @@ public class CrmOpportunityVisibilityService {
     }
 
     public boolean isRestrictedRole() {
-        String role = security.getCurrentRole();
-        return "SALES_MANAGER".equals(role) || "SYSTEM_ENGINEER".equals(role);
+        return !hasOrganisationWideScope()
+                && security.hasAnyRole("SALES_MANAGER", "SYSTEM_ENGINEER");
     }
 
     private boolean canView(CrmOpportunity opportunity) {
-        String role = security.getCurrentRole();
         Long userId = security.getCurrentUserId();
-        if ("SALES_MANAGER".equals(role)) {
-            return opportunity.getOwner() != null && Objects.equals(opportunity.getOwner().getId(), userId);
+        if (hasOrganisationWideScope()) {
+            return true;
         }
-        if ("SYSTEM_ENGINEER".equals(role)) {
+        if (security.hasAnyRole("SYSTEM_ENGINEER")) {
             return opportunity.getOwner() != null && Objects.equals(opportunity.getOwner().getId(), userId)
                     || opportunity.getTeamMembers().stream().map(AppUser::getId).anyMatch(userId::equals);
         }
-        // SALES_MANAGER_LEAD (and platform/other already-authorized roles) keep the
-        // organisation-wide scope established by the repository query.
-        return true;
+        return security.hasAnyRole("SALES_MANAGER")
+                && opportunity.getOwner() != null
+                && Objects.equals(opportunity.getOwner().getId(), userId);
+    }
+
+    private boolean hasOrganisationWideScope() {
+        return security.hasAnyRole(
+                "SALES_MANAGER_LEAD", "PROJECT_MANAGER", "PROJECT_MANAGER_LEAD", "PLATFORM_OWNER"
+        );
     }
 }

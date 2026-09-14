@@ -44,7 +44,7 @@ class TicketAttachmentServiceTest {
         ReflectionTestUtils.setField(user, "id", 42L);
         user.setFullName("Uploader");
         user.setEmail("uploader@example.test");
-        user.setRole(Role.CLIENT);
+        user.setRoles(java.util.Set.of(Role.CLIENT));
         when(tickets.requireAccessible(1L)).thenReturn(ticket);
         when(tickets.currentUser()).thenReturn(user);
         when(repository.save(any(TicketAttachment.class))).thenAnswer(invocation -> invocation.getArgument(0));

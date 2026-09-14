@@ -1,5 +1,7 @@
 package com.ercopac.ercopac_tracker.auth;
 
+import java.util.List;
+
 public class AuthDtos {
 
     public record LoginRequest(String username, String password) {}
@@ -8,7 +10,7 @@ public class AuthDtos {
             String token,
             Long userId,
             String email,
-            String role,
+            List<String> roles,
             Long organisationId,
             String organisationCode,
             String organisationName,

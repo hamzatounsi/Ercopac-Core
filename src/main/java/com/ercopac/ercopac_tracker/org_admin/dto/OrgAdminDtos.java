@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 public final class OrgAdminDtos {
 
@@ -84,7 +85,7 @@ public final class OrgAdminDtos {
             Long id,
             String fullName,
             String email,
-            String role,
+            List<String> roles,
             Long departmentId,
             String departmentCode,
             String departmentName,
@@ -111,7 +112,8 @@ public final class OrgAdminDtos {
             @Size(min = 8, max = 128, message = "Temporary password must contain 8 to 128 characters")
             String password,
 
-            @NotBlank(message = "Role is required") String role,
+            @NotNull(message = "At least one role is required")
+            @Size(min = 1, message = "At least one role is required") Set<String> roles,
             Long departmentId,
             Long resourceTypeId,
 
@@ -134,7 +136,7 @@ public final class OrgAdminDtos {
             @Size(max = 180, message = "Email must not exceed 180 characters")
             String email,
 
-            @NotBlank(message = "Role is required") String role,
+            @Size(min = 1, message = "At least one role is required") Set<String> roles,
             Long departmentId,
             Long resourceTypeId,
 
@@ -144,8 +146,22 @@ public final class OrgAdminDtos {
             @Size(max = 80, message = "Job title must not exceed 80 characters")
             String jobTitle,
 
-            @NotNull(message = "Account status is required") Boolean active
+            @NotNull(message = "Account status is required") Boolean active,
+
+            String role
     ) {
+        public UpdateUserRequest(
+                String fullName,
+                String email,
+                Set<String> roles,
+                Long departmentId,
+                Long resourceTypeId,
+                String employeeCode,
+                String jobTitle,
+                Boolean active
+        ) {
+            this(fullName, email, roles, departmentId, resourceTypeId, employeeCode, jobTitle, active, null);
+        }
     }
 
     public record UpdateUserStatusRequest(

@@ -29,7 +29,7 @@ public class MyPermissionService {
         AppUser user = userRepository.findByEmail1(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (user.getRole() == Role.PLATFORM_OWNER) {
+        if (user.hasRole(Role.PLATFORM_OWNER)) {
             return Arrays.stream(PermissionModule.values())
                     .map(module -> permission(module.name(), true, true))
                     .toList();
@@ -41,17 +41,18 @@ public class MyPermissionService {
 
         return Arrays.stream(PermissionModule.values())
                 .map(module -> {
-                    var saved = permissionRepository
-                            .findByOrganisation_IdAndRoleAndModule(
-                                    user.getOrganisation().getId(),
-                                    user.getRole(),
-                                    module
-                            );
+                    var saved = user.getRoles().stream()
+                            .map(role -> role == Role.PROJECT_MANAGER_LEAD ? Role.PROJECT_MANAGER : role)
+                            .distinct()
+                            .map(role -> permissionRepository.findByOrganisation_IdAndRoleAndModule(
+                                    user.getOrganisation().getId(), role, module))
+                            .flatMap(Optional::stream)
+                            .toList();
 
                     return permission(
                             module.name(),
-                            saved.map(p -> p.isCanRead()).orElse(false),
-                            saved.map(p -> p.isCanWrite()).orElse(false)
+                            saved.stream().anyMatch(p -> p.isCanRead()),
+                            saved.stream().anyMatch(p -> p.isCanWrite())
                     );
                 })
                 .toList();

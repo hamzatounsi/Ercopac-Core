@@ -33,14 +33,14 @@ public class TicketWebSocketHandshakeInterceptor implements HandshakeInterceptor
         try {
             Claims claims = jwtService.parseClaims(queryParameter(request.getURI().getRawQuery(), "token"));
             Object userId = claims.get("userId");
-            String role = claims.get("role", String.class);
-            if (userId == null || role == null || role.isBlank()) {
+            java.util.List<String> roles = jwtService.extractRoles(queryParameter(request.getURI().getRawQuery(), "token"));
+            if (userId == null || roles.isEmpty()) {
                 response.setStatusCode(HttpStatus.UNAUTHORIZED);
                 return false;
             }
 
             attributes.put("userId", Long.valueOf(userId.toString()));
-            attributes.put("role", role.replace("ROLE_", ""));
+            attributes.put("roles", roles.stream().map(role -> role.replace("ROLE_", "")).toList());
             return true;
         } catch (Exception ex) {
             response.setStatusCode(HttpStatus.UNAUTHORIZED);

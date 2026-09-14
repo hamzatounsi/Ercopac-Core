@@ -60,7 +60,7 @@ public class DepartmentDashboardService {
         AppUser currentUser = getCurrentUserOrThrow();
 
         // A department manager has no selector and must never discover peers.
-        if (currentUser.getRole() == Role.DEPARTMENT_MANAGER) {
+        if (currentUser.hasRole(Role.DEPARTMENT_MANAGER)) {
             return List.of(toManagerDto(currentUser));
         }
 
@@ -86,7 +86,7 @@ public class DepartmentDashboardService {
 
         AppUser manager;
 
-        if (currentUser.getRole() == Role.DEPARTMENT_MANAGER) {
+        if (currentUser.hasRole(Role.DEPARTMENT_MANAGER)) {
             manager = currentUser;
         } else {
             if (query == null || query.managerId() == null) {
@@ -96,7 +96,7 @@ public class DepartmentDashboardService {
             manager = userRepository.findByIdAndOrganisation_Id(query.managerId(), currentOrgId)
                     .orElseThrow(() -> new EntityNotFoundException("Department manager not found with id: " + query.managerId()));
 
-            if (manager.getRole() != Role.DEPARTMENT_MANAGER) {
+            if (!manager.hasRole(Role.DEPARTMENT_MANAGER)) {
                 throw new AccessDeniedException("Selected user is not a department manager.");
             }
             if (!manager.isActive() || !hasDepartment(manager)) {
@@ -114,7 +114,7 @@ public class DepartmentDashboardService {
                 .findByOrganisation_IdAndDepartmentCodeOrderByFullNameAsc(currentOrgId, departmentCode)
                 .stream()
                 .filter(AppUser::isActive)
-                .filter(user -> user.getRole().requiresResourceProfile())
+                .filter(AppUser::requiresResourceProfile)
                 .map(this::toMemberDto)
                 .toList();
 
@@ -800,9 +800,9 @@ public class DepartmentDashboardService {
         // This legacy code-based endpoint must not bypass manager selection.
         // Department managers are always scoped to themselves, while project
         // managers must use /overview with a same-organisation managerId.
-        if (currentUser.getRole() == Role.DEPARTMENT_MANAGER) {
+        if (currentUser.hasRole(Role.DEPARTMENT_MANAGER)) {
             departmentCode = currentUser.getDepartmentCode();
-        } else if (currentUser.getRole().isProjectManagerRole()) {
+        } else if (currentUser.getRoles().stream().anyMatch(Role::isProjectManagerRole)) {
             throw new AccessDeniedException("Project managers must select a department manager.");
         }
 
@@ -810,7 +810,7 @@ public class DepartmentDashboardService {
                 .findByOrganisation_IdAndDepartmentCodeOrderByFullNameAsc(currentOrgId, departmentCode)
                 .stream()
                 .filter(AppUser::isActive)
-                .filter(user -> user.getRole().requiresResourceProfile())
+                .filter(AppUser::requiresResourceProfile)
                 .map(this::toMemberDto)
                 .toList();
 
@@ -881,7 +881,7 @@ public class DepartmentDashboardService {
     AppUser currentUser = getCurrentUserOrThrow();
     assertUserInOrganisation(currentUser, currentOrgId);
 
-    if (currentUser.getRole() == Role.DEPARTMENT_MANAGER) {
+    if (currentUser.hasRole(Role.DEPARTMENT_MANAGER)) {
         return hasDepartment(currentUser)
                 ? List.of(currentUser.getDepartmentCode())
                 : List.of();

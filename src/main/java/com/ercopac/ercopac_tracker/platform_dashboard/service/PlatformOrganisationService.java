@@ -107,7 +107,7 @@ public class PlatformOrganisationService {
         admin.setFullName(request.adminFullName != null ? request.adminFullName.trim() : "Organisation Admin");
         admin.setEmail(adminEmail);
         admin.setPasswordHash(encoder.encode(request.adminPassword));
-        admin.setRole(Role.ORG_ADMIN);
+        admin.setRoles(java.util.Set.of(Role.ORG_ADMIN));
         admin.setOrganisation(organisation);
         admin.setJobTitle("Organisation Administrator");
         admin.setSeniority("SENIOR");

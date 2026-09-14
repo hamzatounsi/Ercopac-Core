@@ -17,20 +17,6 @@ public class SecurityUtils {
         return auth != null ? auth.getName() : null;
     }
 
-    public String getCurrentRole() {
-        Authentication auth = currentAuthentication();
-
-        if (auth == null || auth.getAuthorities() == null || auth.getAuthorities().isEmpty()) {
-            return null;
-        }
-
-        return auth.getAuthorities()
-                .iterator()
-                .next()
-                .getAuthority()
-                .replace("ROLE_", "");
-    }
-
     public Long getCurrentOrganisationId() {
         Authentication auth = currentAuthentication();
 

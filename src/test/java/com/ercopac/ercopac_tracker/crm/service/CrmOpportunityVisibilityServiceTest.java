@@ -35,7 +35,9 @@ class CrmOpportunityVisibilityServiceTest {
 
     @Test
     void salesManagerOnlySeesOwnedOpportunitiesAndDirectIdIsHidden() {
-        when(security.getCurrentRole()).thenReturn("SALES_MANAGER");
+        when(security.hasAnyRole("SALES_MANAGER_LEAD", "PROJECT_MANAGER", "PROJECT_MANAGER_LEAD", "PLATFORM_OWNER")).thenReturn(false);
+        when(security.hasAnyRole("SYSTEM_ENGINEER")).thenReturn(false);
+        when(security.hasAnyRole("SALES_MANAGER")).thenReturn(true);
         CrmOpportunity own = opportunity(salesA);
         CrmOpportunity other = opportunity(salesB);
 
@@ -47,7 +49,8 @@ class CrmOpportunityVisibilityServiceTest {
 
     @Test
     void systemEngineerSeesOwnedOrAssignedOpportunitiesOnly() {
-        when(security.getCurrentRole()).thenReturn("SYSTEM_ENGINEER");
+        when(security.hasAnyRole("SALES_MANAGER_LEAD", "PROJECT_MANAGER", "PROJECT_MANAGER_LEAD", "PLATFORM_OWNER")).thenReturn(false);
+        when(security.hasAnyRole("SYSTEM_ENGINEER")).thenReturn(true);
         CrmOpportunity owned = opportunity(salesA);
         CrmOpportunity assigned = opportunity(salesB);
         assigned.getTeamMembers().add(salesA);
@@ -58,7 +61,7 @@ class CrmOpportunityVisibilityServiceTest {
 
     @Test
     void salesManagerLeadKeepsOrganisationScopedRepositoryResult() {
-        when(security.getCurrentRole()).thenReturn("SALES_MANAGER_LEAD");
+        when(security.hasAnyRole("SALES_MANAGER_LEAD", "PROJECT_MANAGER", "PROJECT_MANAGER_LEAD", "PLATFORM_OWNER")).thenReturn(true);
         CrmOpportunity first = opportunity(salesA);
         CrmOpportunity second = opportunity(salesB);
 
