@@ -966,6 +966,7 @@ public class CrmService {
     public CrmDashboardDto getDashboard(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId); seedConfiguration(organisationId);
         AppUser me = currentUser();
+        boolean isLead = me.getPrimaryRole() == Role.SALES_MANAGER_LEAD;
 
         List<CrmOpportunity> visible = opportunityVisibility.visible(
                 opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId));
@@ -981,16 +982,22 @@ public class CrmService {
         LocalDate lastMonthStart = currentMonthStart.minusMonths(1);
         LocalDate lastMonthEnd = lastMonthStart.withDayOfMonth(lastMonthStart.lengthOfMonth());
 
-        // ✅ "Leads contacted this month" — filtré par owner = current user
-        dto.setActiveLeads(leadRepo.countByOrganisation_IdAndOwner_IdAndContactedDateBetween(
-                organisationId, me.getId(), currentMonthStart, currentMonthEnd));
-        dto.setContactedLeadsLastMonth(leadRepo.countByOrganisation_IdAndOwner_IdAndContactedDateBetween(
-                organisationId, me.getId(), lastMonthStart, lastMonthEnd));
+        // ✅ "Leads contacted this month" — Lead voit toute l'équipe, sinon filtré par owner
+        if (isLead) {
+            dto.setActiveLeads(leadRepo.countByOrganisation_IdAndContactedDateBetween(
+                    organisationId, currentMonthStart, currentMonthEnd));
+            dto.setContactedLeadsLastMonth(leadRepo.countByOrganisation_IdAndContactedDateBetween(
+                    organisationId, lastMonthStart, lastMonthEnd));
+        } else {
+            dto.setActiveLeads(leadRepo.countByOrganisation_IdAndOwner_IdAndContactedDateBetween(
+                    organisationId, me.getId(), currentMonthStart, currentMonthEnd));
+            dto.setContactedLeadsLastMonth(leadRepo.countByOrganisation_IdAndOwner_IdAndContactedDateBetween(
+                    organisationId, me.getId(), lastMonthStart, lastMonthEnd));
+        }
 
         LocalDateTime monthStart = now.withDayOfMonth(1).atStartOfDay();
         dto.setWonThisMonth(visible.stream().filter(item -> item.isWon() && !item.getUpdatedAt().isBefore(monthStart)).count());
 
-        // Closing this week (reste organisation-wide, non concerné par la demande)
         LocalDate weekEnd = now.plusDays(7);
         dto.setClosingThisWeekCount(visible.stream()
                 .filter(item -> !item.isWon() && !item.isLost())
@@ -999,28 +1006,33 @@ public class CrmService {
                         && !item.getClosingDate().isAfter(weekEnd))
                 .count());
 
-        // ✅ "Won vs annual target" — filtré par owner = current user
+        // ✅ "Won vs annual target" — Lead voit somme équipe, sinon filtré par owner
         int currentYear = now.getYear();
         LocalDateTime yearStart = LocalDate.of(currentYear, 1, 1).atStartOfDay();
         BigDecimal wonThisYear = visible.stream()
                 .filter(item -> item.isWon() && !item.getUpdatedAt().isBefore(yearStart))
-                .filter(item -> item.getOwner() != null && Objects.equals(item.getOwner().getId(), me.getId()))
+                .filter(item -> isLead || (item.getOwner() != null && Objects.equals(item.getOwner().getId(), me.getId())))
                 .map(item -> zero(item.getValue()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         dto.setWonThisYear(wonThisYear);
 
-        BigDecimal myTarget = targetRepo.findByOrganisation_IdAndUser_IdAndTargetYear(organisationId, me.getId(), currentYear)
-                .map(CrmSalesTarget::getAmount)
-                .orElse(BigDecimal.ZERO);
-        dto.setAnnualTarget(myTarget);
+        BigDecimal target;
+        if (isLead) {
+            target = targetRepo.sumAmountByOrganisation_IdAndTargetYear(organisationId, currentYear);
+        } else {
+            target = targetRepo.findByOrganisation_IdAndUser_IdAndTargetYear(organisationId, me.getId(), currentYear)
+                    .map(CrmSalesTarget::getAmount)
+                    .orElse(BigDecimal.ZERO);
+        }
+        dto.setAnnualTarget(target);
 
         dto.setRecentActivities(activityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId, PageRequest.of(0, 10))
                 .stream().filter(item -> item.getOpportunity() == null || visibleIds.contains(item.getOpportunity().getId()))
                 .map(this::toActivityDto).toList());
 
-        // ✅ "Closing this month" — filtré par owner = current user
+        // ✅ "Closing this month" — Lead voit toute l'équipe, sinon filtré par owner
         dto.setClosingThisMonth(visible.stream()
-                .filter(item -> item.getOwner() != null && Objects.equals(item.getOwner().getId(), me.getId()))
+                .filter(item -> isLead || (item.getOwner() != null && Objects.equals(item.getOwner().getId(), me.getId())))
                 .filter(item -> item.getClosingDate() != null
                         && !item.getClosingDate().isBefore(currentMonthStart)
                         && !item.getClosingDate().isAfter(currentMonthEnd))
