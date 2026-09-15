@@ -33,4 +33,5 @@ public interface CrmSalesTargetRepository extends JpaRepository<CrmSalesTarget, 
             @Param("orgId") Long orgId,
             @Param("year") int year
     );
+    
 }
