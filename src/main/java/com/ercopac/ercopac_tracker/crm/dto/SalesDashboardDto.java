@@ -12,7 +12,7 @@ public class SalesDashboardDto {
     private List<StageMetricDto> pipelineByStage;
     private List<CrmOpportunityDto> topOpportunities;
 
-    // Getters et Setters (génère-les via ton IDE)
+    // Getters et Setters
     public BigDecimal getOrderIntakeMtd() { return orderIntakeMtd; }
     public void setOrderIntakeMtd(BigDecimal orderIntakeMtd) { this.orderIntakeMtd = orderIntakeMtd; }
     public BigDecimal getPipelineValue() { return pipelineValue; }
@@ -42,12 +42,14 @@ public class SalesDashboardDto {
 
     public static class StageMetricDto {
         private String stageName;
+        private String stageColor;
         private Long count;
         private BigDecimal value;
-        public StageMetricDto(String stageName, Long count, BigDecimal value) {
-            this.stageName = stageName; this.count = count; this.value = value;
+        public StageMetricDto(String stageName, String stageColor, Long count, BigDecimal value) {
+            this.stageName = stageName; this.stageColor = stageColor; this.count = count; this.value = value;
         }
         public String getStageName() { return stageName; }
+        public String getStageColor() { return stageColor; }
         public Long getCount() { return count; }
         public BigDecimal getValue() { return value; }
     }

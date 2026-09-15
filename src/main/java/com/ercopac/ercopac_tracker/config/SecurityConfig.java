@@ -50,14 +50,16 @@ public class SecurityConfig {
         private static final String[] COMPANY_DASHBOARD_ROLES = { "MANAGER", "ROLE_MANAGER" };
 
         private static final String[] CRM_ROLES = {
-                        "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
-                        "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
-                        "PROJECT_MANAGER_LEAD", "ROLE_PROJECT_MANAGER_LEAD",
-                        "SALES_MANAGER_LEAD", "ROLE_SALES_MANAGER_LEAD",
-                        "SALES_MANAGER", "ROLE_SALES_MANAGER",
-                        "SYSTEM_ENGINEER", "ROLE_SYSTEM_ENGINEER"
-        };
-
+        	    "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
+        	    "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
+        	    "PROJECT_MANAGER_LEAD", "ROLE_PROJECT_MANAGER_LEAD",
+        	    "SALES_MANAGER_LEAD", "ROLE_SALES_MANAGER_LEAD",
+        	    "SALES_MANAGER", "ROLE_SALES_MANAGER",
+        	    "SYSTEM_ENGINEER", "ROLE_SYSTEM_ENGINEER",
+        	    // ✅ AJOUT DES RÔLES GENERAL MANAGER POUR ACCÉDER AU DASHBOARD CRM
+        	    "MANAGER", "ROLE_MANAGER",
+        	    "ORG_ADMIN", "ROLE_ORG_ADMIN"
+        	};
         public SecurityConfig(JwtAuthFilter jwtAuthFilter, CorsConfigurationSource corsConfigurationSource) {
                 this.jwtAuthFilter = jwtAuthFilter;
                 this.corsConfigurationSource = corsConfigurationSource;
