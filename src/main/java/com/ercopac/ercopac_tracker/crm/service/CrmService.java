@@ -1036,6 +1036,7 @@ public class CrmService {
         }).toList(); dto.setPipeline(stages);
         return dto;
     }
+    
     public CrmReportsDto getReports(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
         migrateLegacySupplyCategories(organisationId);

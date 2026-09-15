@@ -34,6 +34,7 @@ public class CrmController {
             @RequestParam(required = false) String opportunityType) {
         return service.getAnalytics(orgId, opportunityType);
     }
+    
     @GetMapping("/users") @PreAuthorize(CRM_READ)
     public List<CrmUserDto> users(@PathVariable Long orgId) { return service.getCrmUsers(orgId); }
     @GetMapping("/notification-preferences") @PreAuthorize(CRM_READ)
