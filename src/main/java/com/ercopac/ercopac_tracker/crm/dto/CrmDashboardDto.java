@@ -20,7 +20,26 @@ public class CrmDashboardDto {
     private List<CrmOpportunityDto> closingThisMonth;
     private Map<String, Long> leadsBySource;
     private List<CrmPipelineStageDto> pipeline;
+    private BigDecimal salesOrderIntakeToday;
+    private BigDecimal salesPipelineValue;
+    private Long salesOpenOpportunities;
+    private Long salesActiveDeals;
+    private Long salesClosingThisMonth;
+    private Double salesWonVsTarget;
 
+    // Add getters and setters for all these fields
+    public BigDecimal getSalesOrderIntakeToday() { return salesOrderIntakeToday; }
+    public void setSalesOrderIntakeToday(BigDecimal salesOrderIntakeToday) { this.salesOrderIntakeToday = salesOrderIntakeToday; }
+    public BigDecimal getSalesPipelineValue() { return salesPipelineValue; }
+    public void setSalesPipelineValue(BigDecimal salesPipelineValue) { this.salesPipelineValue = salesPipelineValue; }
+    public Long getSalesOpenOpportunities() { return salesOpenOpportunities; }
+    public void setSalesOpenOpportunities(Long salesOpenOpportunities) { this.salesOpenOpportunities = salesOpenOpportunities; }
+    public Long getSalesActiveDeals() { return salesActiveDeals; }
+    public void setSalesActiveDeals(Long salesActiveDeals) { this.salesActiveDeals = salesActiveDeals; }
+    public Long getSalesClosingThisMonth() { return salesClosingThisMonth; }
+    public void setSalesClosingThisMonth(Long salesClosingThisMonth) { this.salesClosingThisMonth = salesClosingThisMonth; }
+    public Double getSalesWonVsTarget() { return salesWonVsTarget; }
+    public void setSalesWonVsTarget(Double salesWonVsTarget) { this.salesWonVsTarget = salesWonVsTarget; }
     public CrmDashboardDto() {}
 
     public long getOpenOpportunities() { return openOpportunities; }
