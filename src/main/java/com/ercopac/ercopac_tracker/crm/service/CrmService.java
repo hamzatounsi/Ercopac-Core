@@ -963,20 +963,15 @@ public class CrmService {
         item.setClosingDate(opportunity.getClosingDate()); item.setModifiedBy(user); stageHistoryRepo.save(item);
     }
 
-    @Transactional(readOnly = true)
     public CrmDashboardDto getDashboard(Long requestedOrganisationId) {
-        Long organisationId = tenant(requestedOrganisationId);
-        seedConfiguration(organisationId);
+        Long organisationId = tenant(requestedOrganisationId); seedConfiguration(organisationId);
         AppUser me = currentUser();
-        boolean isLead = me.getPrimaryRole() == Role.SALES_MANAGER_LEAD;
+        boolean isLead = me.hasRole(Role.SALES_MANAGER_LEAD);
 
         List<CrmOpportunity> visible = opportunityVisibility.visible(
                 opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId));
         Set<Long> visibleIds = visible.stream().map(CrmOpportunity::getId).collect(Collectors.toSet());
-        
         CrmDashboardDto dto = new CrmDashboardDto();
-        
-        // --- Métriques de base existantes ---
         dto.setOpenOpportunities(visible.stream().filter(item -> !item.isWon() && !item.isLost()).count());
         dto.setPipelineValue(visible.stream().filter(item -> !item.isWon() && !item.isLost())
                 .map(CrmOpportunityValueCalculator::total).reduce(BigDecimal.ZERO, BigDecimal::add));
@@ -987,7 +982,7 @@ public class CrmService {
         LocalDate lastMonthStart = currentMonthStart.minusMonths(1);
         LocalDate lastMonthEnd = lastMonthStart.withDayOfMonth(lastMonthStart.lengthOfMonth());
 
-        // Leads contacted
+        // ✅ "Leads contacted this month" — Lead voit toute l'équipe, sinon filtré par owner
         if (isLead) {
             dto.setActiveLeads(leadRepo.countByOrganisation_IdAndContactedDateBetween(
                     organisationId, currentMonthStart, currentMonthEnd));
@@ -1011,7 +1006,7 @@ public class CrmService {
                         && !item.getClosingDate().isAfter(weekEnd))
                 .count());
 
-        // Won vs Annual Target
+        // ✅ "Won vs annual target" — Lead voit somme équipe, sinon filtré par owner
         int currentYear = now.getYear();
         LocalDateTime yearStart = LocalDate.of(currentYear, 1, 1).atStartOfDay();
         BigDecimal wonThisYear = visible.stream()
@@ -1031,6 +1026,11 @@ public class CrmService {
         }
         dto.setAnnualTarget(target);
 
+        dto.setRecentActivities(activityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId, PageRequest.of(0, 10))
+                .stream().filter(item -> item.getOpportunity() == null || visibleIds.contains(item.getOpportunity().getId()))
+                .map(this::toActivityDto).toList());
+
+        // ✅ "Closing this month" — Lead voit toute l'équipe, sinon filtré par owner
         dto.setClosingThisMonth(visible.stream()
                 .filter(item -> isLead || (item.getOwner() != null && Objects.equals(item.getOwner().getId(), me.getId())))
                 .filter(item -> item.getClosingDate() != null
@@ -1039,73 +1039,13 @@ public class CrmService {
                 .sorted(Comparator.comparing(CrmOpportunity::getClosingDate)).map(this::toOpportunityDto).toList());
 
         Map<String, Long> sources = new LinkedHashMap<>();
-        leadRepo.countBySource(organisationId).forEach(row -> sources.put(row[0].toString(), (Long) row[1]));
-        dto.setLeadsBySource(sources);
-        
+        leadRepo.countBySource(organisationId).forEach(row -> sources.put(row[0].toString(), (Long) row[1])); dto.setLeadsBySource(sources);
         Map<Long, Long> counts = new HashMap<>();
         visible.stream().filter(item -> item.getStage() != null)
                 .forEach(item -> counts.merge(item.getStage().getId(), 1L, Long::sum));
         List<CrmPipelineStageDto> stages = stageRepo.findByOrganisation_IdOrderByDisplayOrderAsc(organisationId).stream().map(value -> {
-            CrmPipelineStageDto stageDto = toStageDto(value);
-            stageDto.setOpportunityCount(counts.getOrDefault(value.getId(), 0L).intValue());
-            return stageDto;
-        }).toList();
-        dto.setPipeline(stages);
-
-        // ==========================================================
-        // ✅ NOUVELLES MÉTRIQUES SALES POUR LE COMMAND CENTER
-        // Récupère TOUTES les opportunités de l'organisation pour les stats globales
-        // (sans le filtre strict de visibilité qui les cache aux Managers)
-        // ==========================================================
-        List<CrmOpportunity> allOrgOpportunities = opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId);
-
-        // 1. Order Intake Today (gagné aujourd'hui)
-        LocalDateTime todayStart = now.atStartOfDay();
-        LocalDateTime todayEnd = now.atTime(23, 59, 59);
-        BigDecimal orderIntakeToday = allOrgOpportunities.stream()
-                .filter(o -> o.isWon() && !o.getUpdatedAt().isBefore(todayStart) && !o.getUpdatedAt().isAfter(todayEnd))
-                .map(o -> zero(o.getValue()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        dto.setSalesOrderIntakeToday(orderIntakeToday);
-
-        // 2. Pipeline Value & Open Opportunities (toutes les opportunités ouvertes de l'org)
-        BigDecimal pipelineValue = allOrgOpportunities.stream()
-                .filter(o -> !o.isWon() && !o.isLost())
-                .map(o -> zero(o.getValue()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        dto.setSalesPipelineValue(pipelineValue);
-        
-        Long openOpps = allOrgOpportunities.stream()
-                .filter(o -> !o.isWon() && !o.isLost())
-                .count();
-        dto.setSalesOpenOpportunities(openOpps);
-
-        // 3. Active Deals (toutes les opportunités non perdues)
-        Long activeDeals = allOrgOpportunities.stream().filter(o -> !o.isLost()).count();
-        dto.setSalesActiveDeals(activeDeals);
-
-        // 4. Closing This Month
-        Long closingThisMonthCount = allOrgOpportunities.stream()
-                .filter(o -> !o.isWon() && !o.isLost())
-                .filter(o -> o.getClosingDate() != null
-                          && !o.getClosingDate().isBefore(currentMonthStart)
-                          && !o.getClosingDate().isAfter(currentMonthEnd))
-                .count();
-        dto.setSalesClosingThisMonth(closingThisMonthCount);
-
-        // 5. Won vs Target percentage (Global organisation target)
-        BigDecimal wonValue = allOrgOpportunities.stream()
-                .filter(o -> o.isWon())
-                .map(o -> zero(o.getValue()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        
-        BigDecimal orgTarget = targetRepo.sumAmountByOrganisation_IdAndTargetYear(organisationId, currentYear);
-        Double wonVsTarget = orgTarget != null && orgTarget.compareTo(BigDecimal.ZERO) > 0 
-                ? (wonValue.doubleValue() / orgTarget.doubleValue()) * 100 
-                : 0.0;
-        dto.setSalesWonVsTarget(wonVsTarget);
-        // ==========================================================
-
+            CrmPipelineStageDto stageDto = toStageDto(value); stageDto.setOpportunityCount(counts.getOrDefault(value.getId(), 0L).intValue()); return stageDto;
+        }).toList(); dto.setPipeline(stages);
         return dto;
     }
     public CrmReportsDto getReports(Long requestedOrganisationId) {
@@ -1178,92 +1118,6 @@ public class CrmService {
 
     private CrmUserDto toCrmUserDto(AppUser user) {
         return new CrmUserDto(user.getId(), user.getFullName(), user.getEmail(), crmRoleName(user));
-    }
-    @Transactional(readOnly = true)
-    public SalesDashboardDto getSalesDashboard(Long requestedOrganisationId) {
-        Long organisationId = tenant(requestedOrganisationId);
-     // ✅ Managers et Leads voient TOUTES les opportunités de l'organisation
-        AppUser currentUser = currentUser();
-        boolean isManagerOrLead = currentUser.getPrimaryRole() == Role.MANAGER 
-                               || currentUser.getRoles().stream().anyMatch(r -> r == Role.MANAGER || r == Role.SALES_MANAGER_LEAD);
-
-        List<CrmOpportunity> allOpps;
-        if (isManagerOrLead) {
-            // Manager/Lead voit tout
-            allOpps = opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId);
-        } else {
-            // Sales Manager normal voit seulement ses opportunités visibles
-            allOpps = opportunityVisibility.visible(
-                opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId));
-        }
-        System.out.println("🔥 SalesDashboard: User=" + currentUser.getFullName() + ", isManager=" + isManagerOrLead + ", Total opps=" + allOpps.size());
-        SalesDashboardDto dto = new SalesDashboardDto();
-        java.time.LocalDate now = java.time.LocalDate.now();
-        java.time.LocalDate monthStart = now.withDayOfMonth(1);
-        java.time.LocalDateTime monthStartDt = monthStart.atStartOfDay();
-
-        // 1. KPIs
-        BigDecimal intakeMtd = allOpps.stream()
-                .filter(o -> o.isWon() && !o.getUpdatedAt().isBefore(monthStartDt))
-                .map(o -> zero(o.getValue())).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
-        dto.setOrderIntakeMtd(intakeMtd);
-
-        java.math.BigDecimal pipelineVal = allOpps.stream()
-                .filter(o -> !o.isWon() && !o.isLost())
-                .map(o -> zero(o.getValue())).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
-        dto.setPipelineValue(pipelineVal);
-
-        Long openCount = allOpps.stream().filter(o -> !o.isWon() && !o.isLost()).count();
-        dto.setOpenOpportunities(openCount);
-
-        Long wonCount = allOpps.stream().filter(CrmOpportunity::isWon).count();
-        Long lostCount = allOpps.stream().filter(CrmOpportunity::isLost).count();
-        double totalClosed = wonCount + lostCount;
-        dto.setWinRate(totalClosed > 0 ? (wonCount * 100.0 / totalClosed) : 0.0);
-
-        // 2. Pipeline by Stage (uniquement les opportunités ouvertes)
-        java.util.Map<Long, List<CrmOpportunity>> byStage = allOpps.stream()
-                .filter(o -> !o.isWon() && !o.isLost() && o.getStage() != null)
-                .collect(java.util.stream.Collectors.groupingBy(o -> o.getStage().getId()));
-        
-        List<SalesDashboardDto.StageMetricDto> stages = stageRepo.findByOrganisation_IdOrderByDisplayOrderAsc(organisationId).stream()
-                .map(stage -> {
-                    List<CrmOpportunity> stageOpps = byStage.getOrDefault(stage.getId(), java.util.List.of());
-                    java.math.BigDecimal val = stageOpps.stream().map(o -> zero(o.getValue())).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
-                    return new SalesDashboardDto.StageMetricDto(stage.getName(), stage.getColor(), (long) stageOpps.size(), val);
-                }).toList();
-        dto.setPipelineByStage(stages);
-
-        // 3. Top 5 Opportunities (ouvertes, triées par valeur)
-        List<CrmOpportunityDto> topOpps = allOpps.stream()
-                .filter(o -> !o.isWon() && !o.isLost())
-                .sorted(java.util.Comparator.comparing((CrmOpportunity o) -> zero(o.getValue())).reversed())
-                .limit(5)
-                .map(this::toOpportunityDto).toList();
-        dto.setTopOpportunities(topOpps);
-
-        // 4. Monthly Revenue vs Target (6 derniers mois)
-        List<SalesDashboardDto.MonthlyRevenueDto> monthly = new java.util.ArrayList<>();
-        java.math.BigDecimal annualTarget = targetRepo.sumAmountByOrganisation_IdAndTargetYear(organisationId, now.getYear());
-        if (annualTarget == null) annualTarget = java.math.BigDecimal.ZERO;
-        java.math.BigDecimal monthlyTarget = annualTarget.divide(java.math.BigDecimal.valueOf(12), 2, java.math.RoundingMode.HALF_UP);
-
-        for (int i = 5; i >= 0; i--) {
-            java.time.LocalDate mStart = now.minusMonths(i).withDayOfMonth(1);
-            java.time.LocalDate mEnd = mStart.withDayOfMonth(mStart.lengthOfMonth());
-            java.time.LocalDateTime mStartDt = mStart.atStartOfDay();
-            java.time.LocalDateTime mEndDt = mEnd.atTime(23, 59, 59);
-            
-            java.math.BigDecimal actual = allOpps.stream()
-                    .filter(o -> o.isWon() && !o.getUpdatedAt().isBefore(mStartDt) && !o.getUpdatedAt().isAfter(mEndDt))
-                    .map(o -> zero(o.getValue())).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
-            
-            String monthLabel = mStart.format(java.time.format.DateTimeFormatter.ofPattern("MMM yyyy"));
-            monthly.add(new SalesDashboardDto.MonthlyRevenueDto(monthLabel, monthlyTarget, actual));
-        }
-        dto.setMonthlyRevenue(monthly);
-
-        return dto;
     }
 
     public CrmManagerViewDto getManagerView(Long requestedOrganisationId, int year) {
@@ -1357,6 +1211,83 @@ public class CrmService {
         if (!CrmOpportunityValueCalculator.splitMatches(left, right, total)) {
             throw badRequest(label + " must equal Total Value.");
         }
+    }
+    @Transactional(readOnly = true)
+    public SalesDashboardDto getSalesDashboard(Long requestedOrganisationId) {
+        Long organisationId = tenant(requestedOrganisationId);
+        AppUser currentUser = currentUser();
+        // Le Sales Manager Lead ou le Manager voit toutes les données de l'organisation
+        boolean isManagerOrLead = currentUser.hasRole(Role.SALES_MANAGER_LEAD) || currentUser.hasRole(Role.MANAGER);
+
+        List<CrmOpportunity> allOpps;
+        if (isManagerOrLead) {
+            allOpps = opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId);
+        } else {
+            allOpps = opportunityVisibility.visible(opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId));
+        }
+        
+        SalesDashboardDto dto = new SalesDashboardDto();
+        java.time.LocalDate now = java.time.LocalDate.now();
+        java.time.LocalDateTime monthStartDt = now.withDayOfMonth(1).atStartOfDay();
+
+        // 1. KPIs
+        dto.setOrderIntakeMtd(allOpps.stream()
+                .filter(o -> o.isWon() && !o.getUpdatedAt().isBefore(monthStartDt))
+                .map(o -> zero(o.getValue())).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
+
+        dto.setPipelineValue(allOpps.stream()
+                .filter(o -> !o.isWon() && !o.isLost())
+                .map(o -> zero(o.getValue())).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
+
+        dto.setOpenOpportunities(allOpps.stream().filter(o -> !o.isWon() && !o.isLost()).count());
+
+        Long wonCount = allOpps.stream().filter(CrmOpportunity::isWon).count();
+        Long lostCount = allOpps.stream().filter(CrmOpportunity::isLost).count();
+        double totalClosed = wonCount + lostCount;
+        dto.setWinRate(totalClosed > 0 ? (wonCount * 100.0 / totalClosed) : 0.0);
+
+        // 2. Pipeline by Stage
+        java.util.Map<Long, List<CrmOpportunity>> byStage = allOpps.stream()
+                .filter(o -> !o.isWon() && !o.isLost() && o.getStage() != null)
+                .collect(java.util.stream.Collectors.groupingBy(o -> o.getStage().getId()));
+        
+        dto.setPipelineByStage(stageRepo.findByOrganisation_IdOrderByDisplayOrderAsc(organisationId).stream()
+                .map(stage -> {
+                    List<CrmOpportunity> stageOpps = byStage.getOrDefault(stage.getId(), java.util.List.of());
+                    java.math.BigDecimal val = stageOpps.stream().map(o -> zero(o.getValue())).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+                    return new SalesDashboardDto.StageMetricDto(stage.getName(), stage.getColor(), (long) stageOpps.size(), val);
+                }).collect(java.util.stream.Collectors.toList()));
+
+        // 3. Top 5 Opportunities
+        dto.setTopOpportunities(allOpps.stream()
+                .filter(o -> !o.isWon() && !o.isLost())
+                .sorted(java.util.Comparator.comparing((CrmOpportunity o) -> zero(o.getValue())).reversed())
+                .limit(5)
+                .map(this::toOpportunityDto)
+                .collect(java.util.stream.Collectors.toList()));
+
+        // 4. Monthly Revenue vs Target (6 derniers mois)
+        java.math.BigDecimal annualTarget = targetRepo.sumAmountByOrganisation_IdAndTargetYear(organisationId, now.getYear());
+        if (annualTarget == null) annualTarget = java.math.BigDecimal.ZERO;
+        java.math.BigDecimal monthlyTarget = annualTarget.divide(java.math.BigDecimal.valueOf(12), 2, java.math.RoundingMode.HALF_UP);
+
+        java.util.List<SalesDashboardDto.MonthlyRevenueDto> monthly = new java.util.ArrayList<>();
+        for (int i = 5; i >= 0; i--) {
+            java.time.LocalDate mStart = now.minusMonths(i).withDayOfMonth(1);
+            java.time.LocalDate mEnd = mStart.withDayOfMonth(mStart.lengthOfMonth());
+            java.time.LocalDateTime mStartDt = mStart.atStartOfDay();
+            java.time.LocalDateTime mEndDt = mEnd.atTime(23, 59, 59);
+            
+            java.math.BigDecimal actual = allOpps.stream()
+                    .filter(o -> o.isWon() && !o.getUpdatedAt().isBefore(mStartDt) && !o.getUpdatedAt().isAfter(mEndDt))
+                    .map(o -> zero(o.getValue())).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+            
+            String monthLabel = mStart.format(java.time.format.DateTimeFormatter.ofPattern("MMM yyyy"));
+            monthly.add(new SalesDashboardDto.MonthlyRevenueDto(monthLabel, monthlyTarget, actual));
+        }
+        dto.setMonthlyRevenue(monthly);
+
+        return dto;
     }
     private BigDecimal sum(BigDecimal left, BigDecimal right) { return zero(left).add(zero(right)); }
     private BigDecimal zero(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
