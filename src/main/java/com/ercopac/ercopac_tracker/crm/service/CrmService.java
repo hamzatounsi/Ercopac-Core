@@ -1213,10 +1213,9 @@ public class CrmService {
         }
     }
     @Transactional(readOnly = true)
-    public SalesDashboardDto getSalesDashboard(Long requestedOrganisationId) {
+    public SalesDashboardDto getSalesDashboard(Long requestedOrganisationId, String opportunityType) { // ✅ Paramètre ajouté ici
         Long organisationId = tenant(requestedOrganisationId);
         AppUser currentUser = currentUser();
-        // Le Sales Manager Lead ou le Manager voit toutes les données de l'organisation
         boolean isManagerOrLead = currentUser.hasRole(Role.SALES_MANAGER_LEAD) || currentUser.hasRole(Role.MANAGER);
 
         List<CrmOpportunity> allOpps;
@@ -1224,6 +1223,14 @@ public class CrmService {
             allOpps = opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId);
         } else {
             allOpps = opportunityVisibility.visible(opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId));
+        }
+
+        // ✅ NOUVEAU : Filtrer par opportunityType si fourni ('BP' ou 'CS')
+        if (opportunityType != null && !opportunityType.isBlank()) {
+            final String typeFilter = opportunityType.trim().toUpperCase();
+            allOpps = allOpps.stream()
+                    .filter(opp -> typeFilter.equals(opp.getOpportunityType()))
+                    .collect(java.util.stream.Collectors.toList());
         }
         
         SalesDashboardDto dto = new SalesDashboardDto();
