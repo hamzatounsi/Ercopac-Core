@@ -35,8 +35,10 @@ public class CrmController {
         return service.getAnalytics(orgId, opportunityType);
     }
     @GetMapping("/sales-dashboard") 
-    public SalesDashboardDto salesDashboard(@PathVariable Long orgId) { 
-        return service.getSalesDashboard(orgId); 
+    public SalesDashboardDto salesDashboard(
+            @PathVariable Long orgId, 
+            @RequestParam(required = false) String opportunityType) { // ✅ AJOUTÉ
+        return service.getSalesDashboard(orgId, opportunityType); 
     }
     
     @GetMapping("/users") @PreAuthorize(CRM_READ)
