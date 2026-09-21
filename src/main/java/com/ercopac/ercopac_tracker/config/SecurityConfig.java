@@ -25,141 +25,154 @@ import java.time.Instant;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-        private final JwtAuthFilter jwtAuthFilter;
-        private final CorsConfigurationSource corsConfigurationSource;
+    private final JwtAuthFilter jwtAuthFilter;
+    private final CorsConfigurationSource corsConfigurationSource;
 
-        private static final String[] PLATFORM_ROLES = {
-                        "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER"
-        };
+    private static final String[] PLATFORM_ROLES = {
+            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER"
+    };
 
-        private static final String[] ORG_ADMIN_ROLES = {
-                        "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
-                        "ORG_ADMIN", "ROLE_ORG_ADMIN"
-        };
+    private static final String[] ORG_ADMIN_ROLES = {
+            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
+            "ORG_ADMIN", "ROLE_ORG_ADMIN"
+    };
 
-        private static final String[] ORG_ADMIN_ONLY = { "ORG_ADMIN", "ROLE_ORG_ADMIN" };
+    private static final String[] ORG_ADMIN_ONLY = { "ORG_ADMIN", "ROLE_ORG_ADMIN" };
 
-        private static final String[] MANAGER_ROLES = {
-                        "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
-                        "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
-                        "PROJECT_MANAGER_LEAD", "ROLE_PROJECT_MANAGER_LEAD",
-                        "DEPARTMENT_MANAGER", "ROLE_DEPARTMENT_MANAGER"
-        };
+    private static final String[] MANAGER_ROLES = {
+            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
+            "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
+            "PROJECT_MANAGER_LEAD", "ROLE_PROJECT_MANAGER_LEAD",
+            "DEPARTMENT_MANAGER", "ROLE_DEPARTMENT_MANAGER"
+    };
 
-        private static final String[] EMPLOYEE_ROLES = { "EMPLOYEE", "ROLE_EMPLOYEE" };
-        private static final String[] COMPANY_DASHBOARD_ROLES = { "MANAGER", "ROLE_MANAGER" };
+    private static final String[] EMPLOYEE_ROLES = { "EMPLOYEE", "ROLE_EMPLOYEE" };
+    
+    private static final String[] COMPANY_DASHBOARD_ROLES = { "MANAGER", "ROLE_MANAGER" };
 
-        private static final String[] CRM_ROLES = {
-        	    "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
-        	    "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
-        	    "PROJECT_MANAGER_LEAD", "ROLE_PROJECT_MANAGER_LEAD",
-        	    "SALES_MANAGER_LEAD", "ROLE_SALES_MANAGER_LEAD",
-        	    "SALES_MANAGER", "ROLE_SALES_MANAGER",
-        	    "SYSTEM_ENGINEER", "ROLE_SYSTEM_ENGINEER",
-        	    // ✅ AJOUT DES RÔLES GENERAL MANAGER POUR ACCÉDER AU DASHBOARD CRM
-        	    "MANAGER", "ROLE_MANAGER",
-        	    "ORG_ADMIN", "ROLE_ORG_ADMIN"
-        	};
-        public SecurityConfig(JwtAuthFilter jwtAuthFilter, CorsConfigurationSource corsConfigurationSource) {
-                this.jwtAuthFilter = jwtAuthFilter;
-                this.corsConfigurationSource = corsConfigurationSource;
-        }
+    private static final String[] CRM_ROLES = {
+            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
+            "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
+            "PROJECT_MANAGER_LEAD", "ROLE_PROJECT_MANAGER_LEAD",
+            "SALES_MANAGER_LEAD", "ROLE_SALES_MANAGER_LEAD",
+            "SALES_MANAGER", "ROLE_SALES_MANAGER",
+            "SYSTEM_ENGINEER", "ROLE_SYSTEM_ENGINEER",
+            "MANAGER", "ROLE_MANAGER",
+            "ORG_ADMIN", "ROLE_ORG_ADMIN"
+    };
 
-        @Bean
-        public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    // 👈 NOUVEAU : Tableau des rôles autorisés pour le module Ticketing
+    private static final String[] TICKET_ROLES = {
+            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
+            "ORG_ADMIN", "ROLE_ORG_ADMIN",
+            "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
+            "PROJECT_MANAGER_LEAD", "ROLE_PROJECT_MANAGER_LEAD",
+            "MANAGER", "ROLE_MANAGER",
+            "DEPARTMENT_MANAGER", "ROLE_DEPARTMENT_MANAGER",
+            "EMPLOYEE", "ROLE_EMPLOYEE",
+            "CLIENT", "ROLE_CLIENT",
+            "H24", "ROLE_H24",          // 👈 AJOUT
+            "H24_LEAD", "ROLE_H24_LEAD" // 👈 AJOUT
+    };
 
-                http
-                                .csrf(csrf -> csrf.disable())
-                                .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                                .exceptionHandling(exceptions -> exceptions
-                                                .authenticationEntryPoint((request, response,
-                                                                exception) -> writeSecurityError(response,
-                                                                                HttpServletResponse.SC_UNAUTHORIZED,
-                                                                                "Unauthorized",
-                                                                                "Authentication is required."))
-                                                .accessDeniedHandler((request, response,
-                                                                exception) -> writeSecurityError(response,
-                                                                                HttpServletResponse.SC_FORBIDDEN,
-                                                                                "Forbidden",
-                                                                                "You do not have permission to access this resource.")))
-                                .authorizeHttpRequests(auth -> auth
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter, CorsConfigurationSource corsConfigurationSource) {
+        this.jwtAuthFilter = jwtAuthFilter;
+        this.corsConfigurationSource = corsConfigurationSource;
+    }
 
-                                                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
-                                                .requestMatchers(
-                                                                "/api/auth/password-reset/pending",
-                                                                "/api/auth/password-reset/*/approve",
-                                                                "/api/auth/password-reset/*/reject")
-                                                .hasAnyAuthority(ORG_ADMIN_ONLY)
+        http
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, exception) -> writeSecurityError(response,
+                                HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized", "Authentication is required."))
+                        .accessDeniedHandler((request, response, exception) -> writeSecurityError(response,
+                                HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have permission to access this resource.")))
+                .authorizeHttpRequests(auth -> auth
 
-                                                .requestMatchers(
-                                                                "/api/auth/**",
-                                                                "/ws/tickets/**",
-                                                                "/api/health",
-                                                                "/actuator/health",
-                                                                "/error")
-                                                .permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                                                .requestMatchers("/api/platform/**")
-                                                .hasAnyAuthority(PLATFORM_ROLES)
+                        .requestMatchers(
+                                "/api/auth/password-reset/pending",
+                                "/api/auth/password-reset/*/approve",
+                                "/api/auth/password-reset/*/reject")
+                        .hasAnyAuthority(ORG_ADMIN_ONLY)
 
-                                                .requestMatchers("/api/org-admin/**")
-                                                .hasAnyAuthority(ORG_ADMIN_ONLY)
+                        .requestMatchers(
+                                "/api/auth/**",
+                                "/ws/tickets/**",
+                                "/api/health",
+                                "/actuator/health",
+                                "/error")
+                        .permitAll()
 
-                                                .requestMatchers("/api/company-dashboard/**")
-                                                .hasAnyAuthority(COMPANY_DASHBOARD_ROLES)
+                        .requestMatchers("/api/platform/**")
+                        .hasAnyAuthority(PLATFORM_ROLES)
 
-                                                .requestMatchers("/api/admin/**")
-                                                .hasAnyAuthority(ORG_ADMIN_ROLES)
+                        .requestMatchers("/api/org-admin/**")
+                        .hasAnyAuthority(ORG_ADMIN_ONLY)
 
-                                                .requestMatchers("/api/crm/**")
-                                                .hasAnyAuthority(CRM_ROLES)
+                        .requestMatchers("/api/company-dashboard/**")
+                        .hasAnyAuthority(COMPANY_DASHBOARD_ROLES)
 
-                                                .requestMatchers(
-                                                                "/api/gm/**",
-                                                                "/api/projects/**",
-                                                                "/api/tasks/**",
-                                                                "/api/resources/**",
-                                                                "/api/suppliers/**",
-                                                                "/api/department/**",
-                                                                "/api/department-dashboard/**",
-                                                                "/api/resource-config/**",
-                                                                "/api/finance/**",
-                                                                "/api/risks/**",
-                                                                "/api/ai/**")
-                                                .hasAnyAuthority(MANAGER_ROLES)
+                        .requestMatchers("/api/admin/**")
+                        .hasAnyAuthority(ORG_ADMIN_ROLES)
 
-                                                .requestMatchers("/api/employee/**")
-                                                .hasAnyAuthority(EMPLOYEE_ROLES)
+                        .requestMatchers("/api/crm/**")
+                        .hasAnyAuthority(CRM_ROLES)
 
-                                                .anyRequest().authenticated());
+                        // 👈 NOUVEAU : Mapping explicite pour le module Ticketing
+                        .requestMatchers("/api/tickets/**")
+                        .hasAnyAuthority(TICKET_ROLES)
 
-                http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                        .requestMatchers(
+                                "/api/gm/**",
+                                "/api/projects/**",
+                                "/api/tasks/**",
+                                "/api/resources/**",
+                                "/api/suppliers/**",
+                                "/api/department/**",
+                                "/api/department-dashboard/**",
+                                "/api/resource-config/**",
+                                "/api/finance/**",
+                                "/api/risks/**",
+                                "/api/ai/**")
+                        .hasAnyAuthority(MANAGER_ROLES)
 
-                return http.build();
-        }
+                        .requestMatchers("/api/employee/**")
+                        .hasAnyAuthority(EMPLOYEE_ROLES)
 
-        @Bean
-        public PasswordEncoder passwordEncoder() {
-                return new BCryptPasswordEncoder();
-        }
+                        .anyRequest().authenticated());
 
-        @Bean
-        public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) throws Exception {
-                return cfg.getAuthenticationManager();
-        }
+        http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
-        private static void writeSecurityError(
-                        HttpServletResponse response,
-                        int status,
-                        String error,
-                        String message) throws IOException {
-                response.setStatus(status);
-                response.setContentType("application/json");
-                response.setCharacterEncoding("UTF-8");
-                response.getWriter().write(
-                                "{\"timestamp\":\"" + Instant.now() + "\",\"status\":" + status
-                                                + ",\"error\":\"" + error + "\",\"message\":\"" + message + "\"}");
-        }
+        return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) throws Exception {
+        return cfg.getAuthenticationManager();
+    }
+
+    private static void writeSecurityError(
+            HttpServletResponse response,
+            int status,
+            String error,
+            String message) throws IOException {
+        response.setStatus(status);
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        response.getWriter().write(
+                "{\"timestamp\":\"" + Instant.now() + "\",\"status\":" + status
+                        + ",\"error\":\"" + error + "\",\"message\":\"" + message + "\"}");
+    }
 }

@@ -52,7 +52,9 @@ public class OrganisationAdminService {
             Role.SALES_MANAGER_LEAD,
             Role.SALES_MANAGER,
             Role.SYSTEM_ENGINEER,
-            Role.CLIENT
+            Role.CLIENT,
+            Role.H24,
+            Role.H24_LEAD
     );
 
     private static final Set<String> SESSION_TIMEOUTS = Set.of(
@@ -648,7 +650,6 @@ public class OrganisationAdminService {
             throw conflict("The organisation active user limit has been reached.");
         }
     }
-
     private void enforceRoleCapacity(Organisation organisation, Role role) {
         int limit = switch (role) {
             case ORG_ADMIN -> organisation.getOrgAdminLicenceLimit();
@@ -659,7 +660,9 @@ public class OrganisationAdminService {
             case PLATFORM_OWNER -> 0;
             case SALES_MANAGER_LEAD, SALES_MANAGER, SYSTEM_ENGINEER -> organisation.getSalesManagerLicenceLimit();
             case CLIENT -> organisation.getClientLicenceLimit();
+            case H24, H24_LEAD -> Integer.MAX_VALUE; // 👈 AJOUT
         };
+        // ... (le reste de la méthode reste inchangé)
 
         long used = role.isProjectManagerRole()
                 ? userRepository.countByOrganisation_IdAndRoleInAndActiveTrue(
@@ -864,9 +867,10 @@ public class OrganisationAdminService {
             case SALES_MANAGER -> "Sales Manager";
             case SYSTEM_ENGINEER -> "System Engineer";
             case CLIENT -> "Client";
+            case H24 -> "Agent H24";        // 👈 AJOUT
+            case H24_LEAD -> "Lead H24";    // 👈 AJOUT
         };
     }
-
     private String roleDescription(Role role) {
         return switch (role) {
             case ORG_ADMIN -> "Manages this organisation's profile, users, departments, and security configuration.";
@@ -880,6 +884,8 @@ public class OrganisationAdminService {
             case SALES_MANAGER -> "Manages accounts, contacts, opportunities, and normal CRM operations.";
             case SYSTEM_ENGINEER -> "Reviews CRM accounts, contacts, opportunities, and reports without changing business data.";
             case CLIENT -> "Submits and follows support tickets for their organisation.";
+            case H24 -> "Handles 24/7 support tickets and operational tasks.";        // 👈 AJOUT
+            case H24_LEAD -> "Supervises H24 agents and manages escalated tickets.";  // 👈 AJOUT
         };
     }
 

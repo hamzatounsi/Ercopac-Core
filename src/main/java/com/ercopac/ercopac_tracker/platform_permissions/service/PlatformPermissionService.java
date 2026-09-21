@@ -48,7 +48,9 @@ public class PlatformPermissionService {
                 Role.SALES_MANAGER_LEAD.name(),
                 Role.SALES_MANAGER.name(),
                 Role.SYSTEM_ENGINEER.name(),
-                Role.CLIENT.name()
+                Role.CLIENT.name(),
+                Role.H24.name(),        // 👈 AJOUT : Rôle reconnu par le système de permissions
+                Role.H24_LEAD.name()    // 👈 AJOUT : Rôle reconnu par le système de permissions
         );
     }
 
@@ -86,8 +88,8 @@ public class PlatformPermissionService {
                             label(module),
                             group(module),
                             icon(module),
-                            fixedCrmRole || p != null && p.isCanRead(),
-                            fixedCrmRole ? role.isSalesManagerRole() : p != null && p.isCanWrite()
+                            fixedCrmRole || (p != null && p.isCanRead()),
+                            fixedCrmRole ? role.isSalesManagerRole() : (p != null && p.isCanWrite())
                     );
                 })
                 .forEach(result::add);
@@ -104,12 +106,13 @@ public class PlatformPermissionService {
         Organisation organisation = organisationRepository.findById(organisationId)
                 .orElseThrow(() -> new RuntimeException("Organisation not found"));
 
-        if (request.permissions == null) {
+        // Utilisation des champs publics comme dans ton code original
+        if (request.permissions == null) { 
             return getPermissions(organisationId, role);
         }
 
         for (RolePermissionDto dto : request.permissions) {
-            if (VIRTUAL_SCHEDULE.equals(dto.module)) {
+            if (VIRTUAL_SCHEDULE.equals(dto.module)) { 
                 for (PermissionModule module : SCHEDULE_MODULES) {
                     saveSinglePermission(
                             organisation,
@@ -168,14 +171,10 @@ public class PlatformPermissionService {
         return switch (module) {
             case OWNER_DASHBOARD, ORGANISATIONS, BILLING, PLATFORM_ANALYTICS,
                  INFRASTRUCTURE, SUPPORT, PERMISSIONS, PLATFORM_SETTINGS -> "Platform";
-
             case CRM, FINANCE, FORECAST, RISKS, CHANGE_REQUESTS,
                  ACTIONS, RESOURCES, SUPPLIERS -> "Organisation Workspace";
-
             case GM_DASHBOARD, PROJECTS, PLANNING, TASKS -> "Schedule";
-
             case DEPARTMENT_DASHBOARD -> "Department Workspace";
-
             case EMPLOYEE_DASHBOARD -> "Employee Workspace";
         };
     }
@@ -190,7 +189,6 @@ public class PlatformPermissionService {
             case SUPPORT -> "Support Tickets";
             case PERMISSIONS -> "Role Permissions";
             case PLATFORM_SETTINGS -> "Platform Settings";
-
             case GM_DASHBOARD -> "GM Dashboard";
             case CRM -> "CRM";
             case PROJECTS -> "Projects";
@@ -203,7 +201,6 @@ public class PlatformPermissionService {
             case ACTIONS -> "Actions";
             case RESOURCES -> "Resources";
             case SUPPLIERS -> "Suppliers";
-
             case DEPARTMENT_DASHBOARD -> "Department Dashboard";
             case EMPLOYEE_DASHBOARD -> "Employee Dashboard";
         };
@@ -219,7 +216,6 @@ public class PlatformPermissionService {
             case SUPPORT -> "🎯";
             case PERMISSIONS -> "🔐";
             case PLATFORM_SETTINGS -> "⚙";
-
             case GM_DASHBOARD -> "🧭";
             case CRM -> "🤝";
             case PROJECTS -> "📁";
@@ -232,7 +228,6 @@ public class PlatformPermissionService {
             case ACTIONS -> "📌";
             case RESOURCES -> "👥";
             case SUPPLIERS -> "🚚";
-
             case DEPARTMENT_DASHBOARD -> "🏭";
             case EMPLOYEE_DASHBOARD -> "👤";
         };

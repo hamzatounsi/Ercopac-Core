@@ -390,6 +390,7 @@ public class AdminService {
             case PLATFORM_OWNER -> 0;
             case SALES_MANAGER_LEAD, SALES_MANAGER, SYSTEM_ENGINEER -> organisation.getSalesManagerLicenceLimit();
             case CLIENT -> organisation.getClientLicenceLimit();
+            case H24, H24_LEAD -> Integer.MAX_VALUE; // 👈 AJOUT : Limite illimitée par défaut (à adapter si besoin)
         };
     }
 
@@ -404,7 +405,6 @@ public class AdminService {
             );
         }
     }
-
     private String roleLabel(Role role) {
         return switch (role) {
             case ORG_ADMIN -> "Organisation Admin";
@@ -418,6 +418,9 @@ public class AdminService {
             case SYSTEM_ENGINEER -> "System Engineer";
             case CLIENT -> "Client";
             case PLATFORM_OWNER -> "Platform Owner";
+            case H24 -> "Agent H24";        // 👈 AJOUT
+            case H24_LEAD -> "Lead H24"; 
+            default -> role.name(); /// 👈 AJOUT
         };
     }
 

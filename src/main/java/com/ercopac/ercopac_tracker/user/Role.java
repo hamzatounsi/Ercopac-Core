@@ -11,13 +11,10 @@ public enum Role {
     SALES_MANAGER_LEAD,
     SALES_MANAGER,
     SYSTEM_ENGINEER,
-    CLIENT;
+    CLIENT,
+    H24,        // 👈 NOUVEAU RÔLE
+    H24_LEAD;   // 👈 NOUVEAU RÔLE
 
-    /**
-     * Delivery/workforce users participate in department capacity and need a
-     * tenant-owned department and resource type. CRM roles consume a sales
-     * licence, but are not project resources.
-     */
     public boolean requiresResourceProfile() {
         return this == PROJECT_MANAGER
                 || this == PROJECT_MANAGER_LEAD
@@ -39,5 +36,10 @@ public enum Role {
 
     public boolean isSalesManagerRole() {
         return this == SALES_MANAGER_LEAD || this == SALES_MANAGER || this == SYSTEM_ENGINEER;
+    }
+
+    // 👇 NOUVELLE MÉTHODE UTILITAIRE pour sécuriser le contrôleur Ticketing
+    public boolean isH24Role() {
+        return this == H24 || this == H24_LEAD;
     }
 }
