@@ -42,6 +42,7 @@ public class PermissionChecker {
         if (module == PermissionModule.TASKS && user.hasRole(Role.MANAGER)) {
             return true;
         }
+        
         return user.getRoles().stream().map(this::effectiveRole).distinct().anyMatch(role ->
                 permissionRepository.findByOrganisation_IdAndRoleAndModule(
                         user.getOrganisation().getId(), role, module)

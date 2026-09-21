@@ -311,9 +311,10 @@ public class PlatformOrganisationService {
             case SYSTEM_ENGINEER -> "System Engineer";
             case CLIENT -> "Client";
             case PLATFORM_OWNER -> "Platform Owner";
+            case H24 -> "Agent H24";
+            case H24_LEAD -> "Lead H24";
         };
     }
-
     private PlatformOrganisationDto toDto(Organisation organisation) {
         PlatformOrganisationDto dto = new PlatformOrganisationDto();
 

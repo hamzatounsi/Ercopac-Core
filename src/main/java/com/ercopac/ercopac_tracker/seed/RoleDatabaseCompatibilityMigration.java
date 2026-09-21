@@ -51,7 +51,8 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                     select count(*) from public.users
                     where role is not null and role not in (
                         'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
-                        'DEPARTMENT_MANAGER', 'EMPLOYEE', 'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT'
+                        'DEPARTMENT_MANAGER', 'EMPLOYEE', 'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT',
+                        'H24', 'H24_LEAD'
                     )
                     """, Integer.class);
             if (unsupportedLegacyRoles != null && unsupportedLegacyRoles > 0) {
@@ -118,7 +119,8 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                   and role not in (
                     'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
                     'DEPARTMENT_MANAGER', 'EMPLOYEE',
-                    'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT'
+                    'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT',
+                    'H24', 'H24_LEAD'
                   )
                 """, Integer.class);
         if (unsupportedRoles != null && unsupportedRoles > 0) {
@@ -131,7 +133,8 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                     role in (
                         'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
                         'DEPARTMENT_MANAGER', 'EMPLOYEE',
-                        'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT'
+                        'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT',
+                        'H24', 'H24_LEAD'
                     )
                 )
                 """);
@@ -141,7 +144,8 @@ public class RoleDatabaseCompatibilityMigration implements CommandLineRunner {
                     role in (
                         'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', 'PROJECT_MANAGER_LEAD', 'MANAGER',
                         'DEPARTMENT_MANAGER', 'EMPLOYEE',
-                        'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT'
+                        'SALES_MANAGER_LEAD', 'SALES_MANAGER', 'SYSTEM_ENGINEER', 'CLIENT',
+                        'H24', 'H24_LEAD'
                     )
                 )
                 """);
