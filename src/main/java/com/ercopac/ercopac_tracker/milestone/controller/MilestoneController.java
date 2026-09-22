@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/milestones")
@@ -43,6 +44,18 @@ public class MilestoneController {
     public ResponseEntity<MilestoneTypeDto> createMilestoneType(@PathVariable Long projectId, @RequestBody MilestoneTypeDto dto) {
         return ResponseEntity.ok(milestoneTypeService.createMilestoneType(projectId, dto));
     }
+
+@PatchMapping("/projects/{projectId}/types/{id}/sharing")
+@PreAuthorize(MILESTONES_WRITE)
+public ResponseEntity<Void> updateMilestoneTypeSharing(
+        @PathVariable Long projectId,
+        @PathVariable Long id,
+        @RequestBody Map<String, Boolean> request) {
+    
+    Boolean shared = request.get("shared");
+    milestoneTypeService.updateMilestoneTypeSharing(projectId, id, shared);
+    return ResponseEntity.ok().build();
+}
 
     @PutMapping("/projects/{projectId}/types/{id}")
     @PreAuthorize(MILESTONES_WRITE)

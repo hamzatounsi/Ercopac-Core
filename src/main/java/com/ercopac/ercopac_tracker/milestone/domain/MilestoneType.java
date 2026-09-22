@@ -39,6 +39,16 @@ public class MilestoneType {
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
+@Column(name = "shared")
+private Boolean shared = false;
+
+public Boolean getShared() {
+    return shared;
+}
+
+public void setShared(Boolean shared) {
+    this.shared = shared;
+}
     // --- Getters & Setters ---
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
