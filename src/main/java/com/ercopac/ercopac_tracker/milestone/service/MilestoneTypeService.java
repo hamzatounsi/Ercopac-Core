@@ -83,16 +83,17 @@ public class MilestoneTypeService {
         dto.setColor(type.getColor());
         dto.setLetterCode(type.getLetterCode());
         dto.setActive(type.isActive());
+        dto.setShared(type.getShared()); 
         return dto;
     }
-    @Transactional
-    public void updateMilestoneTypeSharing(Long projectId, Long id, Boolean shared) {
-        MilestoneType milestoneType = milestoneTypeRepository.findById(id)
-            .orElseThrow(() -> new IllegalArgumentException("Milestone type not found with id: " + id));
-        
-        milestoneType.setShared(shared != null ? shared : false);
-        milestoneTypeRepository.save(milestoneType);
-    }
+
+@Transactional
+public void updateMilestoneTypeSharing(Long projectId, Long id, Boolean shared) {
+    MilestoneType milestoneType = milestoneTypeRepository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("Milestone type not found"));
+    milestoneType.setShared(shared != null ? shared : false);
+    milestoneTypeRepository.save(milestoneType);
+}
 
     /** Creates only missing definitions; it never schedules milestone events. */
     public void ensureDefaultMilestoneTypes(Project project) {
