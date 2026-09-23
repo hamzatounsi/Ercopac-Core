@@ -19,8 +19,11 @@ public class ProjectMilestoneDto {
     private String status;
     private String pmCode;
     private String notes;
+    
+    // ✅ ADD THIS FIELD
+    private Boolean shared;
 
-    // Generate Getters and Setters for ALL fields above
+    // --- Existing Getters and Setters ---
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getProjectId() { return projectId; }
@@ -53,4 +56,8 @@ public class ProjectMilestoneDto {
     public void setPmCode(String pmCode) { this.pmCode = pmCode; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
+    // ✅ ADD GETTER AND SETTER FOR SHARED
+    public Boolean getShared() { return shared; }
+    public void setShared(Boolean shared) { this.shared = shared; }
 }
