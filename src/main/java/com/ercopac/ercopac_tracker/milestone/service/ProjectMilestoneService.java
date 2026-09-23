@@ -42,6 +42,8 @@ public class ProjectMilestoneService {
     public List<ProjectMilestoneDto> getMilestonesByProject(Long projectId) {
         projectAccessService.getAccessibleProject(projectId);
         return taskRepository.findMilestoneTasksByProjectId(projectId).stream()
+                // ✅ FILTER: Only include milestones that are checked (shared = true)
+                .filter(task -> task.getMilestoneType() != null && Boolean.TRUE.equals(task.getMilestoneType().getShared()))
                 .map(this::mapTaskToMilestoneDto).collect(Collectors.toList());
     }
 
@@ -56,20 +58,27 @@ public class ProjectMilestoneService {
             milestones = milestoneRepository.findByOrganisationIdAndDateRange(orgId, startDate, endDate);
         }
         
-        return milestones.stream().map(this::toDto).collect(Collectors.toList());
+        return milestones.stream()
+                // ✅ FILTER: Only include milestones that are checked (shared = true)
+                .filter(m -> m.getMilestoneType() != null && Boolean.TRUE.equals(m.getMilestoneType().getShared()))
+                .map(this::toDto).collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<ProjectMilestoneDto> getMilestonesByDateRange(List<Long> projectIds, LocalDate startDate, LocalDate endDate) {
-
         List<Long> accessibleProjectIds = projectAccessService.getAccessibleProjects(null).stream()
                 .map(Project::getId).filter(projectIds::contains).toList();
         if (accessibleProjectIds.isEmpty()) return List.of();
+        
         List<ProjectTask> milestoneTasks = taskRepository.findMilestoneTasksByDateRange(accessibleProjectIds, startDate, endDate);
-        return milestoneTasks.stream().map(this::mapTaskToMilestoneDto).collect(Collectors.toList());
+        
+        return milestoneTasks.stream()
+                // ✅ FILTER: Only include milestones that are checked (shared = true)
+                .filter(task -> task.getMilestoneType() != null && Boolean.TRUE.equals(task.getMilestoneType().getShared()))
+                .map(this::mapTaskToMilestoneDto)
+                .collect(Collectors.toList());
     }
 
-    // ✅ ADD THIS NEW HELPER METHOD:
     private ProjectMilestoneDto mapTaskToMilestoneDto(ProjectTask task) {
         ProjectMilestoneDto dto = new ProjectMilestoneDto();
         dto.setId(task.getId());
@@ -77,21 +86,20 @@ public class ProjectMilestoneService {
         dto.setTaskId(task.getId());
         dto.setMilestoneTypeId(task.getMilestoneTypeId());
         
-        // Use baselineStart, fallback to plannedStart for the date
         dto.setMilestoneDate(task.getBaselineStart() != null ? task.getBaselineStart() : task.getPlannedStart());
         
-        // Enrich with Project Info
         if (task.getProject() != null) {
             dto.setProjectCode(task.getProject().getCode());
             dto.setProjectName(task.getProject().getName());
         }
         
-        // Enrich with Milestone Type info (This is where the COLOR and LETTER come from!)
         if (task.getMilestoneType() != null) {
             dto.setMilestoneTypeCode(task.getMilestoneType().getCode());
             dto.setMilestoneTypeLabel(task.getMilestoneType().getLabel());
             dto.setMilestoneTypeColor(task.getMilestoneType().getColor());
             dto.setMilestoneTypeLetterCode(task.getMilestoneType().getLetterCode());
+            // ✅ ADD THIS: Map the shared status
+            dto.setShared(task.getMilestoneType().getShared());
         }
         
         return dto;
@@ -156,6 +164,8 @@ public class ProjectMilestoneService {
             dto.setMilestoneTypeLabel(milestone.getMilestoneType().getLabel());
             dto.setMilestoneTypeColor(milestone.getMilestoneType().getColor());
             dto.setMilestoneTypeLetterCode(milestone.getMilestoneType().getLetterCode());
+            // ✅ ADD THIS: Map the shared status
+            dto.setShared(milestone.getMilestoneType().getShared());
         }
 
         return dto;
