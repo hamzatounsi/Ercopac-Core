@@ -1,4 +1,4 @@
-package com.ercopac.ercopac_tracker.crm.service; // Adapte le package si nécessaire
+package com.ercopac.ercopac_tracker.crm.service;
 
 import com.ercopac.ercopac_tracker.crm.domain.CrmOpportunity;
 import java.math.BigDecimal;
@@ -54,5 +54,22 @@ public class CrmOpportunityValueCalculator {
      */
     public static BigDecimal discounted(CrmOpportunity opp) {
         return total(opp);
+    }
+
+    /**
+     * ✅ MÉTHODE MANQUANTE AJOUTÉE ICI ✅
+     * Vérifie si la somme de deux valeurs (left + right) est égale à la valeur totale.
+     * Utilisé pour valider les répartitions (sales split, resale split) dans CrmService.validateSplit().
+     * On normalise à 2 décimales pour éviter les faux négatifs dus aux micro-différences d'arrondi.
+     */
+    public static boolean splitMatches(BigDecimal left, BigDecimal right, BigDecimal total) {
+        if (total == null) total = BigDecimal.ZERO;
+        if (left == null) left = BigDecimal.ZERO;
+        if (right == null) right = BigDecimal.ZERO;
+        
+        BigDecimal sum = left.add(right).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal normalizedTotal = total.setScale(2, RoundingMode.HALF_UP);
+        
+        return sum.compareTo(normalizedTotal) == 0;
     }
 }

@@ -1208,7 +1208,7 @@ public class CrmService {
         return discount.setScale(2, RoundingMode.HALF_UP);
     }
     private void validateSplit(BigDecimal left, BigDecimal right, BigDecimal total, String label) {
-        if (!CrmOpportunityValueCalculator.splitMatches(left, right, total)) {
+        if (!CrmOpportunityValueCalculator.splitMatches(left, right, total)) { // <--- Appelait une méthode inexistante
             throw badRequest(label + " must equal Total Value.");
         }
     }
