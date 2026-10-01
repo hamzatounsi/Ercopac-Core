@@ -1,51 +1,75 @@
 package com.ercopac.ercopac_tracker.crm.service;
 
 import com.ercopac.ercopac_tracker.crm.domain.CrmOpportunity;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-/** Authoritative CRM opportunity value calculations. */
-public final class CrmOpportunityValueCalculator {
-    private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
+public class CrmOpportunityValueCalculator {
 
-    private CrmOpportunityValueCalculator() { }
-
-    public static BigDecimal total(CrmOpportunity opportunity) {
-        return money(zero(opportunity.getMaterialValue()).add(zero(opportunity.getServicesValue())));
+    /**
+     * Calcule la Valeur Nette (après application de la remise).
+     * C'est cette valeur qui doit être stockée dans entity.setValue()
+     */
+    public static BigDecimal total(CrmOpportunity opp) {
+        if (opp == null) return BigDecimal.ZERO;
+        
+        BigDecimal material = opp.getMaterialValue() != null ? opp.getMaterialValue() : BigDecimal.ZERO;
+        BigDecimal services = opp.getServicesValue() != null ? opp.getServicesValue() : BigDecimal.ZERO;
+        BigDecimal baseValue = material.add(services);
+        
+        BigDecimal discount = opp.getDiscount() != null ? opp.getDiscount() : BigDecimal.ZERO;
+        
+        // Formule : Valeur de base * (1 - (Remise / 100))
+        // On utilise 4 décimales pour le facteur de division afin d'éviter les pertes de précision
+        BigDecimal discountFactor = BigDecimal.ONE.subtract(
+            discount.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP)
+        );
+        
+        BigDecimal netValue = baseValue.multiply(discountFactor);
+        
+        // On arrondit finalement à 2 décimales pour la monnaie
+        return netValue.setScale(2, RoundingMode.HALF_UP);
     }
 
-    public static BigDecimal discounted(CrmOpportunity opportunity) {
-        BigDecimal discount = zero(opportunity.getDiscount());
-        return money(total(opportunity)
-                .multiply(ONE_HUNDRED.subtract(discount))
-                .divide(ONE_HUNDRED, 6, RoundingMode.HALF_UP));
+    /**
+     * Calcule le Revenu Attendu (Expected Revenue).
+     * Il est basé sur la Valeur Nette (après remise), PAS sur la valeur brute.
+     */
+    public static BigDecimal expectedRevenue(CrmOpportunity opp) {
+        if (opp == null) return BigDecimal.ZERO;
+        
+        // On réutilise la méthode total() qui contient déjà la logique de remise
+        BigDecimal netValue = total(opp); 
+        
+        int probability = opp.getProbability() != null ? opp.getProbability() : 0;
+        
+        // Formule : Valeur Nette * (Probabilité / 100)
+        BigDecimal probFactor = BigDecimal.valueOf(probability).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+        
+        return netValue.multiply(probFactor).setScale(2, RoundingMode.HALF_UP);
     }
 
-    public static BigDecimal expectedRevenue(CrmOpportunity opportunity) {
-        return money(expectedRevenueBeforeDiscount(opportunity).subtract(discountAmount(opportunity)));
+    /**
+     * Méthode de commodité pour le DTO (retourne la même chose que total)
+     */
+    public static BigDecimal discounted(CrmOpportunity opp) {
+        return total(opp);
     }
 
-    public static BigDecimal expectedRevenueBeforeDiscount(CrmOpportunity opportunity) {
-        return total(opportunity);
-    }
-
-    public static BigDecimal discountAmount(CrmOpportunity opportunity) {
-        return money(total(opportunity)
-                .multiply(zero(opportunity.getDiscount()))
-                .divide(ONE_HUNDRED, 6, RoundingMode.HALF_UP));
-    }
-
+    /**
+     * ✅ MÉTHODE MANQUANTE AJOUTÉE ICI ✅
+     * Vérifie si la somme de deux valeurs (left + right) est égale à la valeur totale.
+     * Utilisé pour valider les répartitions (sales split, resale split) dans CrmService.validateSplit().
+     * On normalise à 2 décimales pour éviter les faux négatifs dus aux micro-différences d'arrondi.
+     */
     public static boolean splitMatches(BigDecimal left, BigDecimal right, BigDecimal total) {
-        if (left == null && right == null) return true;
-        return money(zero(left).add(zero(right))).compareTo(money(total)) == 0;
-    }
-
-    public static BigDecimal money(BigDecimal value) {
-        return zero(value).setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private static BigDecimal zero(BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value;
+        if (total == null) total = BigDecimal.ZERO;
+        if (left == null) left = BigDecimal.ZERO;
+        if (right == null) right = BigDecimal.ZERO;
+        
+        BigDecimal sum = left.add(right).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal normalizedTotal = total.setScale(2, RoundingMode.HALF_UP);
+        
+        return sum.compareTo(normalizedTotal) == 0;
     }
 }
