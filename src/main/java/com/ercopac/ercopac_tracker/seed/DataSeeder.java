@@ -12,6 +12,14 @@ import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
+import com.ercopac.ercopac_tracker.ticketing.domain.EquipmentType;
+import com.ercopac.ercopac_tracker.ticketing.domain.TicketPriority;
+import com.ercopac.ercopac_tracker.ticketing.domain.TicketPriorityConfig;
+import com.ercopac.ercopac_tracker.ticketing.domain.TicketStatus;
+import com.ercopac.ercopac_tracker.ticketing.domain.TicketStatusConfig;
+import com.ercopac.ercopac_tracker.ticketing.repository.EquipmentTypeRepository; // 👈 AJOUT
+import com.ercopac.ercopac_tracker.ticketing.repository.TicketPriorityConfigRepository;
+import com.ercopac.ercopac_tracker.ticketing.repository.TicketStatusConfigRepository;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.ResourceType;
@@ -39,9 +47,14 @@ public class DataSeeder implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
     private final RolePermissionRepository rolePermissionRepository;
     
-    // ✅ ADDED: Department Repository
     private final DepartmentRepository departmentRepository;
     private final ResourceTypeRepository resourceTypeRepository;
+    
+    private final TicketStatusConfigRepository statusConfigRepo;
+    private final TicketPriorityConfigRepository priorityConfigRepo;
+    
+    // 👈 AJOUT : Injection du repository pour l'équipement
+    private final EquipmentTypeRepository equipmentTypeRepository;
 
     @Override
     public void run(String... args) {
@@ -69,7 +82,7 @@ public class DataSeeder implements CommandLineRunner {
         organisationRepository.save(org);
 
         // =========================================================
-        // 2. DEPARTMENTS (Crucial for Finance Dropdowns)
+        // 2. DEPARTMENTS
         // =========================================================
         Department deptDesign = new Department("DES", "Design", org);
         departmentRepository.save(deptDesign);
@@ -80,15 +93,12 @@ public class DataSeeder implements CommandLineRunner {
         ResourceType engineeringType = resourceType(org, "SOFTWARE_ENGINEER", "Software Engineer");
 
         // =========================================================
-        // 3. USERS (Linked to Departments)
+        // 3. USERS
         // =========================================================
         AppUser platformOwner = seedUser("hamza@projectum.com", "Hamza Tounsi", "Hamza123!", Role.PLATFORM_OWNER, null, "Executive", null, null);
         AppUser orgAdmin = seedUser("admin@pharmastore.com", "Organisation Admin", "Hamza123!", Role.ORG_ADMIN, org, "Administration", null, null);
         
-        // ✅ Link GM to Design Department
         AppUser gm = seedUser("gm@pharmastore.com", "Michael Weber", "Hamza123!", Role.PROJECT_MANAGER, org, "Management", deptDesign, projectManagerType);
-        
-        // ✅ Link DM to Engineering Department
         AppUser dm = seedUser("dm@pharmastore.com", "Sarah Engineering", "Hamza123!", Role.DEPARTMENT_MANAGER, org, "Engineering", deptEng, engineeringType);
         
         AppUser employee1 = seedUser("employee3@pharmastore.com", "John Developer", "Hamza123!", Role.EMPLOYEE, org, "Engineering", deptEng, engineeringType);
@@ -132,9 +142,16 @@ public class DataSeeder implements CommandLineRunner {
         createTask(project, org, "3.1", "QA Validation", 1, summary3, LocalDate.now().plusDays(30), LocalDate.now().plusDays(40), 0, "NOT_STARTED", employee1);
         createTask(project, org, "3.2", "Production Deployment", 1, summary3, LocalDate.now().plusDays(45), LocalDate.now().plusDays(55), 0, "NOT_STARTED", gm);
 
+        // =========================================================
+        // 6. TICKET CONFIGS & EQUIPMENT
+        // =========================================================
+        seedTicketConfigs();
+        seedEquipmentCatalogue(); // 👈 AJOUT : Appel de la méthode
+
         System.out.println("=======================================");
         System.out.println("✅ PROJECTUM DEMO DATA SEEDED SUCCESSFULLY");
         System.out.println("✅ Departments 'Design' and 'Engineering' created.");
+        System.out.println("✅ Ticket Statuses, Priorities and Equipment seeded.");
         System.out.println("=======================================");
     }
 
@@ -215,5 +232,89 @@ public class DataSeeder implements CommandLineRunner {
             task.setAssignedUser(assignedUser);
         }
         return projectTaskRepository.save(task);
+    }
+
+    private void seedTicketConfigs() {
+        TicketStatusConfig open = new TicketStatusConfig();
+        open.setStatus(TicketStatus.OPEN);
+        open.setLabel("Open");
+        open.setDescription("First response SLA starts");
+        open.setDisplayOrder(1);
+        open.setSlaTrigger("First response SLA starts");
+        statusConfigRepo.save(open);
+
+        TicketStatusConfig inProgress = new TicketStatusConfig();
+        inProgress.setStatus(TicketStatus.IN_PROGRESS);
+        inProgress.setLabel("In progress");
+        inProgress.setDescription("Agent working on fix");
+        inProgress.setDisplayOrder(2);
+        statusConfigRepo.save(inProgress);
+
+        TicketStatusConfig escalated = new TicketStatusConfig();
+        escalated.setStatus(TicketStatus.ESCALATED);
+        escalated.setLabel("Escalated L2");
+        escalated.setDescription("L2 team handling");
+        escalated.setDisplayOrder(3);
+        statusConfigRepo.save(escalated);
+
+        TicketStatusConfig resolved = new TicketStatusConfig();
+        resolved.setStatus(TicketStatus.RESOLVED);
+        resolved.setLabel("Resolved");
+        resolved.setDescription("Solution delivered");
+        resolved.setDisplayOrder(4);
+        statusConfigRepo.save(resolved);
+
+        TicketStatusConfig closed = new TicketStatusConfig();
+        closed.setStatus(TicketStatus.CLOSED);
+        closed.setLabel("Closed");
+        closed.setDescription("No further action");
+        closed.setDisplayOrder(5);
+        statusConfigRepo.save(closed);
+
+        TicketPriorityConfig high = new TicketPriorityConfig();
+        high.setPriority(TicketPriority.HIGH);
+        high.setLabel("High");
+        high.setFirstResponseSlaHours(1);
+        high.setResolutionSlaHours(8);
+        priorityConfigRepo.save(high);
+
+        TicketPriorityConfig medium = new TicketPriorityConfig();
+        medium.setPriority(TicketPriority.MEDIUM);
+        medium.setLabel("Medium");
+        medium.setFirstResponseSlaHours(4);
+        medium.setResolutionSlaHours(24);
+        priorityConfigRepo.save(medium);
+
+        TicketPriorityConfig low = new TicketPriorityConfig();
+        low.setPriority(TicketPriority.LOW);
+        low.setLabel("Low");
+        low.setFirstResponseSlaHours(24);
+        low.setResolutionSlaHours(72);
+        priorityConfigRepo.save(low);
+    }
+
+    // 👈 AJOUT : Méthode pour insérer le catalogue d'équipements
+    private void seedEquipmentCatalogue() {
+        String[][] equipmentData = {
+            {"Server", "eq1", "🖥️"},
+            {"Network switch", "eq2", "🔌"},
+            {"Firewall", "eq3", "🛡️"},
+            {"NAS / Storage", "eq4", "💾"},
+            {"UPS", "eq5", "⚡"},
+            {"Workstation", "eq6", "💻"},
+            {"Printer", "eq7", "🖨️"},
+            {"Router", "eq8", "📡"},
+            {"Access point", "eq9", "📶"},
+            {"Camera / CCTV", "eq10", "📷"}
+        };
+
+        for (String[] data : equipmentData) {
+            EquipmentType eq = new EquipmentType();
+            eq.setName(data[0]);
+            eq.setCode(data[1]);
+            eq.setIcon(data[2]);
+            eq.setActive(true);
+            equipmentTypeRepository.save(eq);
+        }
     }
 }

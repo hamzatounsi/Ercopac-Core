@@ -48,12 +48,10 @@ public class AppUser {
     @Column(name = "employee_code", length = 40)
     private String employeeCode;
 
-    // ── PROPER FK to Department ─────────────────────────────────
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id")
     private Department department1;
 
-    // ── KEPT for backward compat ────────────────────────────────
     @Column(name = "department_code", length = 30)
     private String departmentCode;
 
@@ -99,6 +97,23 @@ public class AppUser {
 
     private Boolean emailNotificationsEnabled = true;
 
+    // ═══════════════════════════════════════════════════════════
+    // 👇 NOUVEAUX CHAMPS POUR LE MODULE H24 TICKETING
+    // ═══════════════════════════════════════════════════════════
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "agent_status", length = 20)
+    private AgentStatus agentStatus = AgentStatus.OFFLINE;
+
+    @Column(name = "specialization", length = 100)
+    private String specialization;
+
+    @Column(name = "is_l2_technician", nullable = false)
+    private boolean isL2Technician = false;
+
+    @Column(name = "preferred_language", length = 10)
+    private String preferredLanguage = "en";
+
     public AppUser() {}
 
     public AppUser(String fullName, String email, String passwordHash, Role role) {
@@ -113,6 +128,10 @@ public class AppUser {
         this.workdays = "MON-FRI";
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // GETTERS & SETTERS EXISTANTS
+    // ═══════════════════════════════════════════════════════════
+    
     public Long getId() { return id; }
     public String getFullName() { return fullName; }
     public void setFullName(String fullName) { this.fullName = fullName; }
@@ -135,7 +154,6 @@ public class AppUser {
     public boolean requiresResourceProfile() {
         return roles.stream().anyMatch(Role::requiresResourceProfile);
     }
-    /** For legacy display-only DTOs; authorization must always inspect the full role set. */
     public Role getPrimaryRole() {
         return roles.stream().sorted().findFirst().orElse(null);
     }
@@ -144,14 +162,12 @@ public class AppUser {
     public String getEmployeeCode() { return employeeCode; }
     public void setEmployeeCode(String employeeCode) { this.employeeCode = employeeCode; }
 
-    // Department FK — keeps departmentCode string in sync
     public Department getDepartment() { return department1; }
     public void setDepartment(Department department) {
         this.department1 = department;
         this.departmentCode = department != null ? department.getCode() : null;
     }
 
-    // departmentCode string — derived from FK
     public String getDepartmentCode() {
         if (department1 != null) return department1.getCode();
         return departmentCode;
@@ -187,4 +203,28 @@ public class AppUser {
     public Boolean getEmailNotificationsEnabled() { return emailNotificationsEnabled; }
     public void setEmailNotificationsEnabled(Boolean v) { this.emailNotificationsEnabled = v; }
     public String getUsername() { return email; }
+
+    // ═══════════════════════════════════════════════════════════
+    // 👇 NOUVEAUX GETTERS & SETTERS POUR H24 TICKETING
+    // ═══════════════════════════════════════════════════════════
+    
+    public AgentStatus getAgentStatus() { return agentStatus; }
+    public void setAgentStatus(AgentStatus agentStatus) { this.agentStatus = agentStatus; }
+
+    public String getSpecialization() { return specialization; }
+    public void setSpecialization(String specialization) { this.specialization = specialization; }
+
+    public boolean isL2Technician() { return isL2Technician; }
+    public void setL2Technician(boolean l2Technician) { this.isL2Technician = l2Technician; }
+
+    public String getPreferredLanguage() { return preferredLanguage; }
+    public void setPreferredLanguage(String preferredLanguage) { this.preferredLanguage = preferredLanguage; }
+
+    // ═══════════════════════════════════════════════════════════
+    // 👇 ENUM AGENT STATUS (peut aussi être dans un fichier séparé)
+    // ═══════════════════════════════════════════════════════════
+    
+    public enum AgentStatus {
+        ONLINE, AWAY, OFFLINE
+    }
 }

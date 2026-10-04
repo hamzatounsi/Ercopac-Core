@@ -326,6 +326,7 @@ public class CrmService {
         entity.setIndustry(industry == null ? blank(dto.industry()) : industry.getName());
         entity.setCountry(blank(dto.country()));
         entity.setCity(blank(dto.city()));
+        entity.setPostalCode(blank(dto.postalCode())); // ✅ NOUVEAU
         entity.setAddress(blank(dto.address()));
         entity.setPhone(blank(dto.phone()));
         entity.setWebsite(blank(dto.website()));
@@ -344,12 +345,17 @@ public class CrmService {
         long opportunities = visibleOpportunities.size();
         BigDecimal pipeline = visibleOpportunities.stream().map(CrmOpportunityValueCalculator::total)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return new CrmAccountDto(entity.getId(), entity.getName(), entity.getIndustry(),
-                entity.getIndustryReference() == null ? null : entity.getIndustryReference().getId(), entity.getCountry(), entity.getCity(),
-                entity.getAddress(), entity.getPhone(), entity.getWebsite(), entity.getEmployees(), entity.getAnnualRevenue(),
-                entity.getCurrency(), entity.getOwner() == null ? null : entity.getOwner().getId(),
-                entity.getOwner() == null ? null : entity.getOwner().getFullName(), entity.getNotes(), leads, opportunities,
-                pipeline, entity.getCreatedAt(), entity.getUpdatedAt());
+        return new CrmAccountDto(
+                entity.getId(), entity.getName(), entity.getIndustry(),
+                entity.getIndustryReference() == null ? null : entity.getIndustryReference().getId(), 
+                entity.getCountry(), entity.getCity(), entity.getPostalCode(), // ✅ postalCode ajouté ici
+                entity.getAddress(), entity.getPhone(), entity.getWebsite(), entity.getEmployees(), 
+                entity.getAnnualRevenue(), entity.getCurrency(), 
+                entity.getOwner() == null ? null : entity.getOwner().getId(),
+                entity.getOwner() == null ? null : entity.getOwner().getFullName(), 
+                entity.getNotes(), leads, opportunities, pipeline, 
+                entity.getCreatedAt(), entity.getUpdatedAt()
+        );
     }
 
     private void syncLegacyAccountNames(Long organisationId, CrmAccount entity) {
