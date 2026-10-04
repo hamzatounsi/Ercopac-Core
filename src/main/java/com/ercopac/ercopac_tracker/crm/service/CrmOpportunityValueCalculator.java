@@ -11,28 +11,60 @@ public final class CrmOpportunityValueCalculator {
 
     private CrmOpportunityValueCalculator() { }
 
+    /**
+     * Calcule la Valeur Totale Nette.
+     * La remise s'applique UNIQUEMENT à la valeur matériel. Les services ne sont pas remisés.
+     */
     public static BigDecimal total(CrmOpportunity opportunity) {
-        return money(zero(opportunity.getMaterialValue()).add(zero(opportunity.getServicesValue())));
+        BigDecimal material = zero(opportunity.getMaterialValue());
+        BigDecimal services = zero(opportunity.getServicesValue());
+        BigDecimal discount = zero(opportunity.getDiscount());
+
+        // 1. Appliquer la remise uniquement sur le matériel
+        BigDecimal discountedMaterial = material
+                .multiply(ONE_HUNDRED.subtract(discount))
+                .divide(ONE_HUNDRED, 6, RoundingMode.HALF_UP);
+
+        // 2. La valeur totale est : Matériel (avec remise) + Services (sans remise)
+        return money(discountedMaterial.add(services));
     }
 
+    /**
+     * Retourne la valeur après remise (identique à total() désormais, 
+     * car total() inclut déjà la logique de remise sur le matériel).
+     */
     public static BigDecimal discounted(CrmOpportunity opportunity) {
-        BigDecimal discount = zero(opportunity.getDiscount());
+        return total(opportunity);
+    }
+
+    /**
+     * Calcule le revenu attendu en appliquant la probabilité sur la valeur totale nette.
+     */
+    public static BigDecimal expectedRevenue(CrmOpportunity opportunity) {
+        int probability = opportunity.getProbability() != null ? opportunity.getProbability() : 0;
+        BigDecimal probFactor = BigDecimal.valueOf(probability);
+        
         return money(total(opportunity)
-                .multiply(ONE_HUNDRED.subtract(discount))
+                .multiply(probFactor)
                 .divide(ONE_HUNDRED, 6, RoundingMode.HALF_UP));
     }
 
-    public static BigDecimal expectedRevenue(CrmOpportunity opportunity) {
-        return money(expectedRevenueBeforeDiscount(opportunity).subtract(discountAmount(opportunity)));
-    }
-
+    /**
+     * Pour compatibilité : retourne la valeur totale (qui est déjà la valeur nette).
+     */
     public static BigDecimal expectedRevenueBeforeDiscount(CrmOpportunity opportunity) {
         return total(opportunity);
     }
 
+    /**
+     * Calcule le montant exact de la remise (uniquement sur le matériel).
+     */
     public static BigDecimal discountAmount(CrmOpportunity opportunity) {
-        return money(total(opportunity)
-                .multiply(zero(opportunity.getDiscount()))
+        BigDecimal material = zero(opportunity.getMaterialValue());
+        BigDecimal discount = zero(opportunity.getDiscount());
+        
+        return money(material
+                .multiply(discount)
                 .divide(ONE_HUNDRED, 6, RoundingMode.HALF_UP));
     }
 

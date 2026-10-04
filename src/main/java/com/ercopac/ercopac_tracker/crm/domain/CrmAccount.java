@@ -21,6 +21,7 @@ public class CrmAccount {
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "industry_id") private CrmIndustry industryReference;
     @Column(length = 100) private String country;
     @Column(length = 100) private String city;
+    @Column(length = 20) private String postalCode; // ✅ NOUVEAU : Champ CAP / Code Postal
     @Column(length = 300) private String address;
     @Column(length = 40) private String phone;
     @Column(length = 250) private String website;
@@ -33,7 +34,8 @@ public class CrmAccount {
     @Column(name = "created_at", nullable = false, updatable = false) private LocalDateTime createdAt = LocalDateTime.now();
     @Column(name = "updated_at", nullable = false) private LocalDateTime updatedAt = LocalDateTime.now();
     @PreUpdate void updated() { updatedAt = LocalDateTime.now(); }
-
+    public String getPostalCode() { return postalCode; }
+    public void setPostalCode(String value) { postalCode = value; }
     public Long getId() { return id; }
     public Organisation getOrganisation() { return organisation; }
     public void setOrganisation(Organisation value) { organisation = value; }
