@@ -22,6 +22,8 @@ public final class CrmOpportunityValueCalculator {
                 .divide(ONE_HUNDRED, 6, RoundingMode.HALF_UP));
     }
 
+    
+    
     public static BigDecimal expectedRevenue(CrmOpportunity opportunity) {
         return money(expectedRevenueBeforeDiscount(opportunity).subtract(discountAmount(opportunity)));
     }
