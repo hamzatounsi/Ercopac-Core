@@ -329,6 +329,13 @@ public class OrganisationAdminService {
         user.setEmployeeCode(normalizeUpper(request.employeeCode()));
         user.setJobTitle(normalize(request.jobTitle()));
         user.setActive(targetActive);
+        
+        // ✅ NOUVEAU : Mettre à jour le mot de passe uniquement s'il est fourni
+        if (request.password() != null && !request.password().isBlank()) {
+            validatePassword(request.password(), organisation);
+            user.setPasswordHash(passwordEncoder.encode(request.password()));
+        }
+        
         applyResourceProfile(user, targetRoles, request.departmentId(), request.resourceTypeId(), organisationId);
 
         return toUserSummary(userRepository.save(user));
@@ -351,7 +358,21 @@ public class OrganisationAdminService {
         user.setActive(active);
         return toUserSummary(userRepository.save(user));
     }
+    public void deleteUser(Long id) {
+        Long organisationId = currentOrganisationId();
+        AppUser user = findOrganisationUser(id, organisationId);
 
+        // ✅ Empêcher la suppression de son propre compte
+        if (user.getId().equals(securityUtils.getCurrentUserId())) {
+            throw conflict("You cannot delete your own account.");
+        }
+
+        // ✅ S'assurer qu'il reste au moins un ORG_ADMIN actif dans l'organisation
+        ensureRequiredAdminRemains(user, user.getRoles(), false, organisationId);
+
+        // ✅ Supprimer l'utilisateur
+        userRepository.delete(user);
+    }
     @Transactional(readOnly = true)
     public List<OrgAdminDtos.DepartmentSummary> getDepartments() {
         Long organisationId = currentOrganisationId();

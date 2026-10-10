@@ -148,7 +148,11 @@ public final class OrgAdminDtos {
 
             @NotNull(message = "Account status is required") Boolean active,
 
-            String role
+            String role,
+            
+            // ✅ NOUVEAU : Champ mot de passe optionnel pour la mise à jour
+            @Size(min = 8, max = 128, message = "Password must contain 8 to 128 characters if provided")
+            String password
     ) {
         public UpdateUserRequest(
                 String fullName,
@@ -160,7 +164,8 @@ public final class OrgAdminDtos {
                 String jobTitle,
                 Boolean active
         ) {
-            this(fullName, email, roles, departmentId, resourceTypeId, employeeCode, jobTitle, active, null);
+            // Appel du constructeur canonique avec 'role' et 'password' à null
+            this(fullName, email, roles, departmentId, resourceTypeId, employeeCode, jobTitle, active, null, null);
         }
     }
 

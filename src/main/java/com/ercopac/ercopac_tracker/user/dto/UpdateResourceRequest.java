@@ -18,6 +18,7 @@ public record UpdateResourceRequest(
         String currency,
         String color,
         String notes,
-        Boolean active
+        Boolean active,
+        String password
 ) {
 }
