@@ -19,5 +19,6 @@ public record UpdateResourceRequest(
         String color,
         String notes,
         Boolean active
+        
 ) {
 }

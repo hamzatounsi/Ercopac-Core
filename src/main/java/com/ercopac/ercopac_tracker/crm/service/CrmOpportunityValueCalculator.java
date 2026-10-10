@@ -11,21 +11,54 @@ public final class CrmOpportunityValueCalculator {
 
     private CrmOpportunityValueCalculator() { }
 
+    /**
+     * ✅ TOTAL VALUE : Matériel + Services (SANS remise)
+     */
     public static BigDecimal total(CrmOpportunity opportunity) {
         return money(zero(opportunity.getMaterialValue()).add(zero(opportunity.getServicesValue())));
     }
 
-    public static BigDecimal discounted(CrmOpportunity opportunity) {
+    /**
+     * ✅ EXPECTED REVENUE : Applique la remise UNIQUEMENT sur le matériel + probabilité
+     */
+    public static BigDecimal expectedRevenue(CrmOpportunity opportunity) {
+        if (opportunity == null) return BigDecimal.ZERO;
+        
+        BigDecimal material = zero(opportunity.getMaterialValue());
+        BigDecimal services = zero(opportunity.getServicesValue());
         BigDecimal discount = zero(opportunity.getDiscount());
-        return money(total(opportunity)
-                .multiply(ONE_HUNDRED.subtract(discount))
-                .divide(ONE_HUNDRED, 6, RoundingMode.HALF_UP));
+        int probability = opportunity.getProbability() != null ? opportunity.getProbability() : 0;
+
+        // 1. Appliquer la remise UNIQUEMENT sur le matériel
+        BigDecimal discountFactor = BigDecimal.ONE.subtract(
+            discount.divide(ONE_HUNDRED, 4, RoundingMode.HALF_UP)
+        );
+        BigDecimal discountedMaterial = material.multiply(discountFactor).setScale(2, RoundingMode.HALF_UP);
+        
+        // 2. Valeur nette = Matériel remis + Services (sans remise)
+        BigDecimal netValue = discountedMaterial.add(services);
+        
+        // 3. Appliquer la probabilité
+        BigDecimal probFactor = BigDecimal.valueOf(probability).divide(ONE_HUNDRED, 4, RoundingMode.HALF_UP);
+        return money(netValue.multiply(probFactor));
     }
 
-    
-    
-    public static BigDecimal expectedRevenue(CrmOpportunity opportunity) {
-        return money(expectedRevenueBeforeDiscount(opportunity).subtract(discountAmount(opportunity)));
+    /**
+     * ✅ VALEUR APRÈS REMISE (sans probabilité) - pour affichage
+     */
+    public static BigDecimal discounted(CrmOpportunity opportunity) {
+        if (opportunity == null) return BigDecimal.ZERO;
+        
+        BigDecimal material = zero(opportunity.getMaterialValue());
+        BigDecimal services = zero(opportunity.getServicesValue());
+        BigDecimal discount = zero(opportunity.getDiscount());
+
+        BigDecimal discountFactor = BigDecimal.ONE.subtract(
+            discount.divide(ONE_HUNDRED, 4, RoundingMode.HALF_UP)
+        );
+        BigDecimal discountedMaterial = material.multiply(discountFactor).setScale(2, RoundingMode.HALF_UP);
+        
+        return money(discountedMaterial.add(services));
     }
 
     public static BigDecimal expectedRevenueBeforeDiscount(CrmOpportunity opportunity) {
@@ -33,9 +66,13 @@ public final class CrmOpportunityValueCalculator {
     }
 
     public static BigDecimal discountAmount(CrmOpportunity opportunity) {
-        return money(total(opportunity)
-                .multiply(zero(opportunity.getDiscount()))
-                .divide(ONE_HUNDRED, 6, RoundingMode.HALF_UP));
+        if (opportunity == null) return BigDecimal.ZERO;
+        
+        BigDecimal material = zero(opportunity.getMaterialValue());
+        BigDecimal discount = zero(opportunity.getDiscount());
+        
+        // Remise UNIQUEMENT sur le matériel
+        return money(material.multiply(discount).divide(ONE_HUNDRED, 2, RoundingMode.HALF_UP));
     }
 
     public static boolean splitMatches(BigDecimal left, BigDecimal right, BigDecimal total) {
