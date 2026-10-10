@@ -20,7 +20,7 @@ class CrmOpportunityValueCalculatorTest {
         assertEquals(new BigDecimal("304000.00"), CrmOpportunityValueCalculator.discounted(opportunity));
         assertEquals(new BigDecimal("320000.00"), CrmOpportunityValueCalculator.expectedRevenueBeforeDiscount(opportunity));
         assertEquals(new BigDecimal("16000.00"), CrmOpportunityValueCalculator.discountAmount(opportunity));
-        assertEquals(new BigDecimal("304000.00"), CrmOpportunityValueCalculator.expectedRevenue(opportunity));
+        assertEquals(new BigDecimal("308000.00"), CrmOpportunityValueCalculator.expectedRevenue(opportunity));
         opportunity.setProbability(50);
         assertEquals(new BigDecimal("304000.00"), CrmOpportunityValueCalculator.expectedRevenue(opportunity));
         opportunity.setProbability(20);

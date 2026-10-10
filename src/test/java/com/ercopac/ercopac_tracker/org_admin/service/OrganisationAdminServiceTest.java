@@ -228,9 +228,10 @@ class OrganisationAdminServiceTest {
                 null, null, null, null, true));
         assertThat(withoutSecondRole.roles()).containsExactly("CLIENT");
 
+        // ✅ CORRECTION ICI : Ajout de ", null" à la fin pour correspondre au nouveau constructeur à 9 arguments
         OrgAdminDtos.UserSummary legacyRequest = service.updateUser(21L, new OrgAdminDtos.UpdateUserRequest(
                 "Admin", "admin@example.com", null,
-                null, null, null, null, true, "CLIENT"));
+                null, null, null, null, true, "CLIENT", null));
         assertThat(legacyRequest.roles()).containsExactly("CLIENT");
     }
 
