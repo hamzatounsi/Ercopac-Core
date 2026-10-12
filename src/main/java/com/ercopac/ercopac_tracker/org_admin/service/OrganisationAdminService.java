@@ -362,16 +362,19 @@ public class OrganisationAdminService {
         Long organisationId = currentOrganisationId();
         AppUser user = findOrganisationUser(id, organisationId);
 
-        // ✅ Empêcher la suppression de son propre compte
+        // ✅ Empêcher la désactivation de son propre compte
         if (user.getId().equals(securityUtils.getCurrentUserId())) {
-            throw conflict("You cannot delete your own account.");
+            throw conflict("You cannot deactivate your own account.");
         }
 
         // ✅ S'assurer qu'il reste au moins un ORG_ADMIN actif dans l'organisation
         ensureRequiredAdminRemains(user, user.getRoles(), false, organisationId);
 
-        // ✅ Supprimer l'utilisateur
-        userRepository.delete(user);
+        // ✅ CORRECTION : Désactiver l'utilisateur au lieu de le supprimer physiquement.
+        // Cela évite l'erreur de contrainte de clé étrangère (ex: crm_sales_targets)
+        // et préserve l'historique des données (objectifs, tickets, activités, etc.).
+        user.setActive(false);
+        userRepository.save(user);
     }
     @Transactional(readOnly = true)
     public List<OrgAdminDtos.DepartmentSummary> getDepartments() {
