@@ -51,7 +51,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${STAGING_DB_NAME:-projectum_staging}
       SPRING_DATASOURCE_USERNAME: ${STAGING_DB_USER:-projectum_staging}
       FRONTEND_BASE_URL: ${STAGING_PUBLIC_URL:?Set STAGING_PUBLIC_URL in the staging .env file}
-      APP_SEED_ENABLED: ${APP_SEED_ENABLED:-false}
+      APP_STAGING_SEED_ENABLED: ${APP_STAGING_SEED_ENABLED:-false}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70.0 -XX:+ExitOnOutOfMemoryError
     secrets:
       - source: db_password
@@ -59,7 +59,7 @@ services:
       - source: jwt_secret
         target: jwt.secret
       - source: demo_password
-        target: app.seed.default-password
+        target: app.staging-seed.password
     volumes:
       - uploads:/app/uploads
       - backend-logs:/app/logs

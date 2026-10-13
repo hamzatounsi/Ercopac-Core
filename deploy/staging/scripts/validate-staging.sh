@@ -19,6 +19,14 @@ docker info >/dev/null
   echo "STAGING_HTTP_PORT must be 18080." >&2
   exit 1
 }
+[[ "$(env_value APP_STAGING_SEED_ENABLED)" == "false" ]] || {
+  echo "APP_STAGING_SEED_ENABLED must remain false in the staging .env file." >&2
+  exit 1
+}
+[[ "${APP_STAGING_SEED_ENABLED:-false}" == "false" ]] || {
+  echo "Refusing an ambient APP_STAGING_SEED_ENABLED override; use seed-staging-demo.sh." >&2
+  exit 1
+}
 
 for secret in postgres_password jwt_secret demo_password; do
   path="${STAGING_ROOT}/secrets/${secret}"
@@ -46,6 +54,7 @@ grep -q 'context: /opt/projectum-staging/backend' "${rendered}"
 grep -q 'context: /opt/projectum-staging/frontend' "${rendered}"
 grep -q 'target: spring.datasource.password' "${rendered}"
 grep -q 'target: jwt.secret' "${rendered}"
+grep -q 'target: app.staging-seed.password' "${rendered}"
 grep -q 'POSTGRES_PASSWORD_FILE: /run/secrets/db_password' "${rendered}"
 grep -q 'SPRING_CONFIG_IMPORT: configtree:/run/secrets/' "${rendered}"
 grep -q 'file: /opt/projectum-staging/secrets/postgres_password' "${rendered}"
