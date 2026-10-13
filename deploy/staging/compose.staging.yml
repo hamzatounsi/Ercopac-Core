@@ -112,6 +112,7 @@ services:
       - "127.0.0.1:${STAGING_HTTP_PORT:-18080}:80"
     networks:
       - staging-internal
+      - staging-edge
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
       interval: 15s
@@ -130,9 +131,12 @@ services:
 
 networks:
   staging-internal:
-    # Intentional runtime egress deny. SMTP and AI are disabled in the staging
-    # profile. Docker builds use their own build network and are unaffected.
     internal: true
+    labels:
+      com.ercopac.environment: staging
+
+  staging-edge:
+    driver: bridge
     labels:
       com.ercopac.environment: staging
 
