@@ -13,13 +13,22 @@ public class ProjectumMailService {
     private static final Logger log = LoggerFactory.getLogger(ProjectumMailService.class);
     private final JavaMailSender mailSender;
     private final String from;
+    private final boolean deliveryEnabled;
 
-    public ProjectumMailService(JavaMailSender mailSender, @Value("${spring.mail.username:}") String from) {
+    public ProjectumMailService(
+            JavaMailSender mailSender,
+            @Value("${spring.mail.username:}") String from,
+            @Value("${app.mail.delivery-enabled:true}") boolean deliveryEnabled) {
         this.mailSender = mailSender;
         this.from = from;
+        this.deliveryEnabled = deliveryEnabled;
     }
 
     public void sendText(String recipient, String subject, String body) {
+        if (!deliveryEnabled) {
+            log.info("Email delivery is disabled; suppressed message to {}", recipient);
+            return;
+        }
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
