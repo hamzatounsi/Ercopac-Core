@@ -1,0 +1,156 @@
+name: projectum-staging
+
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${STAGING_DB_NAME:-projectum_staging}
+      POSTGRES_USER: ${STAGING_DB_USER:-projectum_staging}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - source: db_password
+        target: db_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - staging-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 512m
+    cpus: 0.75
+    pids_limit: 200
+    security_opt:
+      - no-new-privileges:true
+    logging: *bounded-logging
+
+  backend:
+    image: projectum-staging-backend:${BACKEND_IMAGE_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: staging
+      # Fail closed when Docker secrets are absent. Config-tree filenames map
+      # directly to spring.datasource.password and jwt.secret.
+      SPRING_CONFIG_IMPORT: configtree:/run/secrets/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${STAGING_DB_NAME:-projectum_staging}
+      SPRING_DATASOURCE_USERNAME: ${STAGING_DB_USER:-projectum_staging}
+      FRONTEND_BASE_URL: ${STAGING_PUBLIC_URL:?Set STAGING_PUBLIC_URL in the staging .env file}
+      APP_SEED_ENABLED: ${APP_SEED_ENABLED:-false}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70.0 -XX:+ExitOnOutOfMemoryError
+    secrets:
+      - source: db_password
+        target: spring.datasource.password
+      - source: jwt_secret
+        target: jwt.secret
+      - source: demo_password
+        target: app.seed.default-password
+    volumes:
+      - uploads:/app/uploads
+      - backend-logs:/app/logs
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    expose:
+      - "10000"
+    networks:
+      - staging-internal
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -ec
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/10000;
+          printf 'GET /actuator/health HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3;
+          timeout 5 cat <&3 | grep -q '"status":"UP"'
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 256
+    init: true
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      org.opencontainers.image.revision: ${BACKEND_DEPLOYMENT_ID:-manual}
+      com.ercopac.environment: staging
+    logging: *bounded-logging
+
+  frontend:
+    image: projectum-staging-frontend:${FRONTEND_IMAGE_TAG:-local}
+    build:
+      context: ../../../frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ../../../frontend/nginx.staging.conf:/etc/nginx/conf.d/default.conf:ro
+    tmpfs:
+      - /var/cache/nginx:size=32m
+      - /var/run:size=1m
+    ports:
+      - "127.0.0.1:${STAGING_HTTP_PORT:-18080}:80"
+    networks:
+      - staging-internal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    mem_limit: 128m
+    cpus: 0.50
+    pids_limit: 100
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      org.opencontainers.image.revision: ${FRONTEND_DEPLOYMENT_ID:-manual}
+      com.ercopac.environment: staging
+    logging: *bounded-logging
+
+networks:
+  staging-internal:
+    # Intentional runtime egress deny. SMTP and AI are disabled in the staging
+    # profile. Docker builds use their own build network and are unaffected.
+    internal: true
+    labels:
+      com.ercopac.environment: staging
+
+volumes:
+  postgres-data:
+    labels:
+      com.ercopac.environment: staging
+  uploads:
+    labels:
+      com.ercopac.environment: staging
+  backend-logs:
+    labels:
+      com.ercopac.environment: staging
+
+secrets:
+  db_password:
+    file: ../../../secrets/postgres_password
+  jwt_secret:
+    file: ../../../secrets/jwt_secret
+  demo_password:
+    file: ../../../secrets/demo_password
