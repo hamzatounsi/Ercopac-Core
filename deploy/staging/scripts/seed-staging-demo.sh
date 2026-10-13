@@ -59,6 +59,13 @@ trap finish EXIT
   exit 1
 }
 
+# Pin Compose operations to the successfully deployed staging images.
+export BACKEND_IMAGE_TAG="$(state_value BACKEND_IMAGE_TAG)"
+export BACKEND_DEPLOYMENT_ID="$(state_value BACKEND_COMMIT)"
+export FRONTEND_IMAGE_TAG="$(state_value FRONTEND_IMAGE_TAG)"
+export FRONTEND_DEPLOYMENT_ID="$(state_value FRONTEND_COMMIT)"
+refresh_compose_command
+
 backend_tag="$(state_value BACKEND_IMAGE_TAG)"
 require_image "projectum-staging-backend:${backend_tag}" || {
   echo "Recorded immutable backend image projectum-staging-backend:${backend_tag} is missing." >&2
