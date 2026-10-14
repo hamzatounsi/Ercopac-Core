@@ -39,6 +39,8 @@ public class CrmOpportunity {
     @JoinColumn(name = "stage_id")
     private CrmPipelineStage stage;
 
+    @Column(name = "archived_at")
+    private LocalDateTime archivedAt;
     @Column(precision = 15, scale = 2)
     private BigDecimal value;
 
@@ -147,6 +149,13 @@ public class CrmOpportunity {
 
     public CrmOpportunity() {}
 
+    public boolean isArchived() { return archived; }
+    public void setArchived(boolean archived) { this.archived = archived; }
+    
+    public LocalDateTime getArchivedAt() { return archivedAt; }
+    public void setArchivedAt(LocalDateTime archivedAt) { this.archivedAt = archivedAt; }   // ✅ AJOUTE columnDefinition pour donner une valeur par défaut en base de données
+    @Column(name = "is_archived", nullable = false, columnDefinition = "boolean default false")
+    private boolean archived = false;
     public Long getId() { return id; }
     public Organisation getOrganisation() { return organisation; }
     public void setOrganisation(Organisation o) { this.organisation = o; }
