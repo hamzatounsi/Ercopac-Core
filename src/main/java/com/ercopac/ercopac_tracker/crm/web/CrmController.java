@@ -40,7 +40,22 @@ public class CrmController {
             @RequestParam(required = false) String opportunityType) { // ✅ AJOUTÉ
         return service.getSalesDashboard(orgId, opportunityType); 
     }
-    
+    @PatchMapping("/opportunities/{id}/archive") @PreAuthorize(CRM_WRITE)
+    public ResponseEntity<Void> archiveOpportunity(@PathVariable Long orgId, @PathVariable Long id) {
+        service.archiveOpportunity(orgId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/opportunities/archived") @PreAuthorize(CRM_READ)
+    public ResponseEntity<List<CrmOpportunityDto>> getArchivedOpportunities(@PathVariable Long orgId) {
+        return ResponseEntity.ok(service.getArchivedOpportunities(orgId));
+    }
+
+    @PatchMapping("/opportunities/{id}/restore") @PreAuthorize(CRM_WRITE)
+    public ResponseEntity<Void> restoreOpportunity(@PathVariable Long orgId, @PathVariable Long id) {
+        service.restoreOpportunity(orgId, id);
+        return ResponseEntity.noContent().build();
+    }
     @GetMapping("/users") @PreAuthorize(CRM_READ)
     public List<CrmUserDto> users(@PathVariable Long orgId) { return service.getCrmUsers(orgId); }
     @GetMapping("/notification-preferences") @PreAuthorize(CRM_READ)

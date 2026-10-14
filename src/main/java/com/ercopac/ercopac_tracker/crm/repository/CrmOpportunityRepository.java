@@ -76,4 +76,6 @@ public interface CrmOpportunityRepository extends JpaRepository<CrmOpportunity, 
            "WHERE o.organisation.id = :orgId AND o.stage IS NOT NULL " +
            "GROUP BY o.stage.id")
     List<Object[]> countByStage(@Param("orgId") Long orgId);
+    // ✅ Récupère uniquement les opportunités archivées pour la page "Archives"
+    List<CrmOpportunity> findByOrganisation_IdAndArchivedTrueOrderByArchivedAtDesc(Long orgId);
 }
