@@ -717,6 +717,38 @@ public class CrmService {
 
         opportunityRepo.delete(entity);
     }
+    // ✅ NOUVEAU : Archiver une opportunité
+    public void archiveOpportunity(Long requestedOrganisationId, Long id) {
+        Long organisationId = tenant(requestedOrganisationId);
+        // On récupère directement par ID pour éviter les filtres de visibilité qui pourraient bloquer
+        CrmOpportunity entity = opportunityRepo.findByIdAndOrganisation_Id(id, organisationId)
+                .orElseThrow(() -> notFound("Opportunity not found."));
+        
+        entity.setArchived(true);
+        entity.setArchivedAt(LocalDateTime.now());
+        opportunityRepo.save(entity);
+    }
+
+    // ✅ NOUVEAU : Récupérer la liste des opportunités archivées
+    @Transactional(readOnly = true)
+    public List<CrmOpportunityDto> getArchivedOpportunities(Long requestedOrganisationId) {
+        Long organisationId = tenant(requestedOrganisationId);
+        return opportunityRepo.findByOrganisation_IdAndArchivedTrueOrderByArchivedAtDesc(organisationId)
+                .stream()
+                .map(this::toOpportunityDto)
+                .toList();
+    }
+
+    // ✅ NOUVEAU : Restaurer une opportunité archivée
+    public void restoreOpportunity(Long requestedOrganisationId, Long id) {
+        Long organisationId = tenant(requestedOrganisationId);
+        CrmOpportunity entity = opportunityRepo.findByIdAndOrganisation_Id(id, organisationId)
+                .orElseThrow(() -> notFound("Opportunity not found."));
+        
+        entity.setArchived(false);
+        entity.setArchivedAt(null);
+        opportunityRepo.save(entity);
+    }
 
     private void mapOpportunity(CrmOpportunity entity, CrmOpportunityDto dto, boolean creating) {
         Long organisationId = entity.getOrganisation().getId();

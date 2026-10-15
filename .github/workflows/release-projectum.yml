@@ -1,0 +1,142 @@
+name: Release Projectum to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Verify staging and production only (no production changes)'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: projectum-production-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: ${{ inputs.dry_run && 'Production dry run' || 'Deploy Projectum to production' }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 90
+    steps:
+      - name: Validate production VPS and deploy approved commits
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          timeout: 30s
+          command_timeout: 80m
+          script_stop: true
+          envs: DRY_RUN
+          script: |
+            set -Eeuo pipefail
+            cd /opt/projectum
+            command -v docker >/dev/null
+            command -v git >/dev/null
+            docker compose ps --status running --services | grep -qx 'projectum-db'
+            test -d backend/.git && test -d frontend/.git
+            test -z "$(git -C backend status --porcelain)" || { echo 'Backend checkout has uncommitted changes'; exit 1; }
+            test -z "$(git -C frontend status --porcelain)" || { echo 'Frontend checkout has uncommitted changes'; exit 1; }
+
+            # Read deployed revisions, not branch tips (which may be untested).
+            STATE=/opt/projectum-staging/.deployment-state
+            test -r "$STATE" || { echo 'Missing staging deployment state'; exit 1; }
+            BACKEND_SHA=$(sed -n 's/^BACKEND_COMMIT=//p' "$STATE")
+            FRONTEND_SHA=$(sed -n 's/^FRONTEND_COMMIT=//p' "$STATE")
+            BACKEND_TAG=$(sed -n 's/^BACKEND_IMAGE_TAG=//p' "$STATE")
+            FRONTEND_TAG=$(sed -n 's/^FRONTEND_IMAGE_TAG=//p' "$STATE")
+            for value in "$BACKEND_SHA" "$FRONTEND_SHA" "$BACKEND_TAG" "$FRONTEND_TAG"; do
+              [[ "$value" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid staging release state'; exit 1; }
+            done
+            [ "$BACKEND_SHA" = "$BACKEND_TAG" ] && [ "$FRONTEND_SHA" = "$FRONTEND_TAG" ] || {
+              echo 'Staging image tags differ from recorded commits'; exit 1;
+            }
+            docker inspect projectum-staging-backend-1 --format '{{.Config.Image}}' | grep -Fxq "projectum-staging-backend:$BACKEND_SHA"
+            docker inspect projectum-staging-frontend-1 --format '{{.Config.Image}}' | grep -Fxq "projectum-staging-frontend:$FRONTEND_SHA"
+            [ "$(docker inspect projectum-staging-backend-1 --format '{{.State.Health.Status}}')" = healthy ]
+            [ "$(docker inspect projectum-staging-frontend-1 --format '{{.State.Health.Status}}')" = healthy ]
+            BACKEND_PREV=$(git -C backend rev-parse HEAD)
+            FRONTEND_PREV=$(git -C frontend rev-parse HEAD)
+            echo "Currently deployed staging: backend=$BACKEND_SHA frontend=$FRONTEND_SHA"
+            echo "Current production: backend=$BACKEND_PREV frontend=$FRONTEND_PREV"
+
+            # Fetch without reading the token-bearing origin remote URL.
+            # Public source access is a prerequisite; do not reintroduce PATs in remotes.
+            git -C backend fetch --no-tags https://github.com/hamzatounsi/Ercopac-Core.git staging
+            git -C frontend fetch --no-tags https://github.com/hamzatounsi/Ercopac-UI.git staging
+            git -C backend cat-file -e "$BACKEND_SHA^{commit}"
+            git -C frontend cat-file -e "$FRONTEND_SHA^{commit}"
+            git -C backend merge-base --is-ancestor "$BACKEND_SHA" FETCH_HEAD
+            git -C frontend merge-base --is-ancestor "$FRONTEND_SHA" FETCH_HEAD
+
+            if [ "$DRY_RUN" = true ]; then
+              echo 'DRY RUN passed. No backups, containers, or production checkouts changed.'
+              exit 0
+            fi
+
+            # Do not start a live release while a PAT is embedded in the Git remote.
+            if git -C frontend remote get-url origin | grep -Eq 'x-access-token:|ghp_|github_pat_'; then
+              echo 'BLOCKED: remove and revoke the exposed token before live release.'
+              exit 1
+            fi
+            # Recheck staging hasn't changed while verifying commits.
+            [ "$(sed -n 's/^BACKEND_COMMIT=//p' "$STATE")" = "$BACKEND_SHA" ]
+            [ "$(sed -n 's/^FRONTEND_COMMIT=//p' "$STATE")" = "$FRONTEND_SHA" ]
+
+            # Back up the production database before changing either service.
+            BACKUP="/opt/projectum/backups/projectum_release_$(date -u +%Y%m%d_%H%M%S)_${BACKEND_SHA:0:8}_${FRONTEND_SHA:0:8}.sql"
+            umask 077
+            docker compose exec -T projectum-db pg_dump -U projectum_user -d projectum_db > "$BACKUP"
+            test -s "$BACKUP" || { echo 'Database backup is empty'; exit 1; }
+            echo "Database backup: $BACKUP"
+
+            rollback() {
+              local code=$?
+              trap - ERR
+              echo "Deployment failed (exit $code). Attempting application rollback."
+              git -C /opt/projectum/backend checkout --detach "$BACKEND_PREV" || true
+              git -C /opt/projectum/frontend checkout --detach "$FRONTEND_PREV" || true
+              cd /opt/projectum
+              docker compose build projectum-backend projectum-frontend || true
+              docker compose up -d --no-deps projectum-backend projectum-frontend || true
+              echo "Rollback attempted. Backup retained: $BACKUP"
+              echo 'WARNING: Database schema is NOT automatically rolled back.'
+              exit "$code"
+            }
+            trap rollback ERR
+
+            git -C backend checkout --detach "$BACKEND_SHA"
+            git -C frontend checkout --detach "$FRONTEND_SHA"
+
+            docker compose build projectum-backend
+            docker compose up -d --no-deps projectum-backend
+            backend_ok=false
+            for i in $(seq 1 24); do
+              if docker compose exec -T projectum-backend wget -qO- http://localhost:10000/actuator/health 2>/dev/null | grep -q '"status":"UP"'; then
+                backend_ok=true; break
+              fi
+              sleep 5
+            done
+            [ "$backend_ok" = true ] || { echo 'Backend health check failed'; false; }
+
+            docker compose build projectum-frontend
+            docker compose up -d --no-deps projectum-frontend
+            frontend_ok=false
+            for i in $(seq 1 24); do
+              if curl -fsS http://localhost:8080/ >/dev/null; then
+                frontend_ok=true; break
+              fi
+              sleep 5
+            done
+            [ "$frontend_ok" = true ] || { echo 'Frontend health check failed'; false; }
+
+            echo "SUCCESS: backend=$BACKEND_SHA frontend=$FRONTEND_SHA"
+            docker compose ps
