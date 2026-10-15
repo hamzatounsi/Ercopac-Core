@@ -22,6 +22,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -31,6 +32,9 @@ import java.util.List;
 @RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
 public class DataSeeder implements CommandLineRunner {
+
+    @Value("${app.seed.default-password:Hamza123!}")
+    private String defaultPassword;
 
     private final OrganisationRepository organisationRepository;
     private final UserRepository userRepository;
@@ -82,17 +86,17 @@ public class DataSeeder implements CommandLineRunner {
         // =========================================================
         // 3. USERS (Linked to Departments)
         // =========================================================
-        AppUser platformOwner = seedUser("hamza@projectum.com", "Hamza Tounsi", "Hamza123!", Role.PLATFORM_OWNER, null, "Executive", null, null);
-        AppUser orgAdmin = seedUser("admin@pharmastore.com", "Organisation Admin", "Hamza123!", Role.ORG_ADMIN, org, "Administration", null, null);
+        AppUser platformOwner = seedUser("hamza@projectum.com", "Hamza Tounsi", defaultPassword, Role.PLATFORM_OWNER, null, "Executive", null, null);
+        AppUser orgAdmin = seedUser("admin@pharmastore.com", "Organisation Admin", defaultPassword, Role.ORG_ADMIN, org, "Administration", null, null);
         
         // ✅ Link GM to Design Department
-        AppUser gm = seedUser("gm@pharmastore.com", "Michael Weber", "Hamza123!", Role.PROJECT_MANAGER, org, "Management", deptDesign, projectManagerType);
+        AppUser gm = seedUser("gm@pharmastore.com", "Michael Weber", defaultPassword, Role.PROJECT_MANAGER, org, "Management", deptDesign, projectManagerType);
         
         // ✅ Link DM to Engineering Department
-        AppUser dm = seedUser("dm@pharmastore.com", "Sarah Engineering", "Hamza123!", Role.DEPARTMENT_MANAGER, org, "Engineering", deptEng, engineeringType);
+        AppUser dm = seedUser("dm@pharmastore.com", "Sarah Engineering", defaultPassword, Role.DEPARTMENT_MANAGER, org, "Engineering", deptEng, engineeringType);
         
-        AppUser employee1 = seedUser("employee3@pharmastore.com", "John Developer", "Hamza123!", Role.EMPLOYEE, org, "Engineering", deptEng, engineeringType);
-        AppUser employee2 = seedUser("employee2@pharmastore.com", "Emma Planner", "Hamza123!", Role.EMPLOYEE, org, "Design", deptDesign, projectManagerType);
+        AppUser employee1 = seedUser("employee3@pharmastore.com", "John Developer", defaultPassword, Role.EMPLOYEE, org, "Engineering", deptEng, engineeringType);
+        AppUser employee2 = seedUser("employee2@pharmastore.com", "Emma Planner", defaultPassword, Role.EMPLOYEE, org, "Design", deptDesign, projectManagerType);
 
         seedGeneralManagerPermissions(org);
 
