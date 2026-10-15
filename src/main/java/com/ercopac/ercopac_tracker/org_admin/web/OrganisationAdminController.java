@@ -34,7 +34,11 @@ public class OrganisationAdminController {
     public OrgAdminDtos.Overview overview() {
         return service.getOverview();
     }
-
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        service.deleteUser(id);
+        return ResponseEntity.noContent().build();
+    }
     @GetMapping("/profile")
     public OrgAdminDtos.OrganisationProfile profile() {
         return service.getProfile();

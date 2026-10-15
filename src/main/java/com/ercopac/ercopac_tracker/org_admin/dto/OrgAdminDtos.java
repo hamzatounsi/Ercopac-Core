@@ -148,8 +148,27 @@ public final class OrgAdminDtos {
 
             @NotNull(message = "Account status is required") Boolean active,
 
-            String role
+            String role,
+            
+            @Size(min = 8, max = 128, message = "Password must contain 8 to 128 characters if provided")
+            String password
     ) {
+        // ✅ Constructeur à 9 arguments (utilisé par tes tests)
+        public UpdateUserRequest(
+                String fullName,
+                String email,
+                Set<String> roles,
+                Long departmentId,
+                Long resourceTypeId,
+                String employeeCode,
+                String jobTitle,
+                Boolean active,
+                String password
+        ) {
+            this(fullName, email, roles, departmentId, resourceTypeId, employeeCode, jobTitle, active, null, password);
+        }
+
+        // ✅ Constructeur à 8 arguments (pour l'usage standard sans mot de passe ni rôle explicite)
         public UpdateUserRequest(
                 String fullName,
                 String email,
@@ -160,7 +179,7 @@ public final class OrgAdminDtos {
                 String jobTitle,
                 Boolean active
         ) {
-            this(fullName, email, roles, departmentId, resourceTypeId, employeeCode, jobTitle, active, null);
+            this(fullName, email, roles, departmentId, resourceTypeId, employeeCode, jobTitle, active, null, null);
         }
     }
 

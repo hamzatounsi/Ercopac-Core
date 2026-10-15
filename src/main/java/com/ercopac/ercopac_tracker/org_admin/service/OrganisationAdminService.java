@@ -329,6 +329,13 @@ public class OrganisationAdminService {
         user.setEmployeeCode(normalizeUpper(request.employeeCode()));
         user.setJobTitle(normalize(request.jobTitle()));
         user.setActive(targetActive);
+        
+        // ✅ NOUVEAU : Mettre à jour le mot de passe uniquement s'il est fourni
+        if (request.password() != null && !request.password().isBlank()) {
+            validatePassword(request.password(), organisation);
+            user.setPasswordHash(passwordEncoder.encode(request.password()));
+        }
+        
         applyResourceProfile(user, targetRoles, request.departmentId(), request.resourceTypeId(), organisationId);
 
         return toUserSummary(userRepository.save(user));
@@ -351,7 +358,24 @@ public class OrganisationAdminService {
         user.setActive(active);
         return toUserSummary(userRepository.save(user));
     }
+    public void deleteUser(Long id) {
+        Long organisationId = currentOrganisationId();
+        AppUser user = findOrganisationUser(id, organisationId);
 
+        // ✅ Empêcher la désactivation de son propre compte
+        if (user.getId().equals(securityUtils.getCurrentUserId())) {
+            throw conflict("You cannot deactivate your own account.");
+        }
+
+        // ✅ S'assurer qu'il reste au moins un ORG_ADMIN actif dans l'organisation
+        ensureRequiredAdminRemains(user, user.getRoles(), false, organisationId);
+
+        // ✅ CORRECTION : Désactiver l'utilisateur au lieu de le supprimer physiquement.
+        // Cela évite l'erreur de contrainte de clé étrangère (ex: crm_sales_targets)
+        // et préserve l'historique des données (objectifs, tickets, activités, etc.).
+        user.setActive(false);
+        userRepository.save(user);
+    }
     @Transactional(readOnly = true)
     public List<OrgAdminDtos.DepartmentSummary> getDepartments() {
         Long organisationId = currentOrganisationId();
