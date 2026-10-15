@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Staging runtime secrets and local overrides (the example stays tracked).
+/deploy/staging/.env
+/deploy/staging/secrets/

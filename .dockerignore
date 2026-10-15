@@ -1,0 +1,11 @@
+.git
+.github
+.settings
+.vscode
+bin
+target
+uploads
+*.log
+hs_err_pid*
+.env
+deploy/staging/secrets
