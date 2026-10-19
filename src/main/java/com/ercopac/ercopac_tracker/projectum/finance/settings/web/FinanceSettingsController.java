@@ -4,7 +4,9 @@ import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.ApplyFinanceTe
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.ApplyFinanceTemplateResultDto;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.FinanceSettingsDto;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.ImportFinanceWbsTemplateRequest;
+import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.PaymentScheduleDto; // ✅ NOUVEAU
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.SaveFinanceSettingsRequest;
+import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.SavePaymentScheduleRequest; // ✅ NOUVEAU
 import com.ercopac.ercopac_tracker.projectum.finance.settings.service.FinanceSettingsService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -35,7 +37,7 @@ public class FinanceSettingsController {
 
     @PostMapping("/apply-template")
     public ResponseEntity<ApplyFinanceTemplateResultDto> applyTemplate(
-            @RequestParam Long projectId, // ✅ Requis pour savoir quel projet appliquer
+            @RequestParam Long projectId,
             @RequestBody ApplyFinanceTemplateRequest request
     ) {
         return ResponseEntity.ok(financeSettingsService.applyTemplate(projectId, request));
@@ -47,5 +49,22 @@ public class FinanceSettingsController {
             @Valid @RequestBody ImportFinanceWbsTemplateRequest request
     ) {
         return ResponseEntity.ok(financeSettingsService.importWbsTemplate(projectId, request));
+    }
+
+    // ==========================================
+    // ✅ NOUVEAUX : Endpoints pour les Payments
+    // ==========================================
+
+    @GetMapping("/payments")
+    public ResponseEntity<PaymentScheduleDto> getPaymentSchedule(@RequestParam Long projectId) {
+        return ResponseEntity.ok(financeSettingsService.getPaymentSchedule(projectId));
+    }
+
+    @PutMapping("/payments")
+    public ResponseEntity<PaymentScheduleDto> savePaymentSchedule(
+            @RequestParam Long projectId,
+            @Valid @RequestBody SavePaymentScheduleRequest request
+    ) {
+        return ResponseEntity.ok(financeSettingsService.savePaymentSchedule(projectId, request));
     }
 }
