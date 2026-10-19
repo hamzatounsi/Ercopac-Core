@@ -8,9 +8,11 @@ import com.ercopac.ercopac_tracker.projectum.finance.domain.FinanceEntry;
 import com.ercopac.ercopac_tracker.projectum.finance.repository.FinanceEntryRepository;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceSettings;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.FinanceWbsTemplateRow;
-import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.*;
+import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.PaymentMilestone; // ✅ NOUVEAU
+import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.*; // ✅ Inclut les nouveaux DTOs Payment
 import com.ercopac.ercopac_tracker.projectum.finance.settings.repository.FinanceSettingsRepository;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.repository.FinanceWbsTemplateRowRepository;
+import com.ercopac.ercopac_tracker.projectum.finance.settings.repository.PaymentMilestoneRepository; // ✅ NOUVEAU
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
@@ -24,6 +26,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import com.ercopac.ercopac_tracker.user.ResourceType;
 import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
+
 @Service
 @Transactional
 public class FinanceSettingsService {
@@ -37,6 +40,8 @@ public class FinanceSettingsService {
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
     private final ResourceTypeRepository resourceTypeRepository;
+    private final PaymentMilestoneRepository paymentMilestoneRepository; // ✅ NOUVEAU
+
     public FinanceSettingsService(
             FinanceSettingsRepository financeSettingsRepository,
             FinanceWbsTemplateRowRepository templateRowRepository,
@@ -46,7 +51,8 @@ public class FinanceSettingsService {
             SecurityUtils securityUtils,
             DepartmentRepository departmentRepository,
             UserRepository userRepository,
-            ResourceTypeRepository resourceTypeRepository
+            ResourceTypeRepository resourceTypeRepository,
+            PaymentMilestoneRepository paymentMilestoneRepository // ✅ NOUVEAU
     ) {
         this.financeSettingsRepository = financeSettingsRepository;
         this.templateRowRepository = templateRowRepository;
@@ -55,8 +61,9 @@ public class FinanceSettingsService {
         this.organisationRepository = organisationRepository;
         this.securityUtils = securityUtils;
         this.departmentRepository = departmentRepository;
-        this.userRepository = userRepository; // ✅ MANQUAIT
+        this.userRepository = userRepository;
         this.resourceTypeRepository = resourceTypeRepository;
+        this.paymentMilestoneRepository = paymentMilestoneRepository; // ✅ NOUVEAU
     }
 
     @Transactional(readOnly = true)
@@ -75,11 +82,8 @@ public class FinanceSettingsService {
 
         List<FinanceWbsTemplateRow> rows;
         if (projectId != null) {
-            // ✅ STRICT : Charger UNIQUEMENT les templates du projet spécifique. 
-            // Plus de fallback vers le global ! Un nouveau projet sera donc vide.
             rows = templateRowRepository.findAllByProjectIdOrderBySortOrderAscIdAsc(projectId);
         } else {
-            // Si projectId est null, retourner les templates globaux (utile pour l'admin)
             rows = templateRowRepository.findAllByOrganisationIdAndProjectIsNullOrderBySortOrderAscIdAsc(orgId);
         }
 
@@ -127,12 +131,9 @@ public class FinanceSettingsService {
                 row.setDepartment(dept);
             }
             
-            // ✅ CORRECTION : Sauvegarder le resource_type correctement
             if (dto.getResourceType() != null && !dto.getResourceType().isBlank()) {
-                // Extraire le code si c'est au format "Project Manager (PROJEC"
                 String resourceTypeCode = extractResourceTypeCode(dto.getResourceType());
                 row.setResourceType(resourceTypeCode);
-                System.out.println("💾 TEMPLATE - Saving ResourceType: " + resourceTypeCode);
             } else {
                 row.setResourceType(null);
             }
@@ -162,8 +163,6 @@ public class FinanceSettingsService {
         return getSettings(projectId);
     }
 
-   
-
     @Transactional
     public ApplyFinanceTemplateResultDto applyTemplate(Long projectId, ApplyFinanceTemplateRequest request) {
         Long orgId = requireOrganisationId();
@@ -180,20 +179,17 @@ public class FinanceSettingsService {
         Map<String, FinanceEntry> existingByWbs = existingRows.stream()
                 .collect(Collectors.toMap(FinanceEntry::getWbsCode, e -> e, (a, b) -> a));
 
-        // ✅ 1. Identifier les codes WBS qui DOIVENT exister
         Set<String> expectedWbsCodes = new HashSet<>();
         for (FinanceWbsTemplateRow template : templateRows) {
             expectedWbsCodes.add(buildFinalWbsCode(template.getCodeTemplate(), project.getCode()));
         }
 
-        // ✅ 2. SUPPRIMER les entrées qui ne sont plus dans le template
         for (FinanceEntry existing : existingRows) {
             if (!expectedWbsCodes.contains(existing.getWbsCode())) {
                 financeEntryRepository.delete(existing);
             }
         }
 
-        // ✅ 3. Créer ou mettre à jour les entrées du template
         int generatedRows = 0;
         for (FinanceWbsTemplateRow template : templateRows) {
             String finalWbsCode = buildFinalWbsCode(template.getCodeTemplate(), project.getCode());
@@ -215,38 +211,23 @@ public class FinanceSettingsService {
             entry.setIsSummary("SUMMARY".equalsIgnoreCase(template.getType() != null ? template.getType().name() : ""));
             entry.setOwnerName(resolveOwnerDisplay(template.getOwnerKey()));
             
-         // ✅ CORRECTION : Sauvegarder le RESOURCE TYPE CODE correctement
             String resourceTypeCode = null;
-
-            // Cas 1: Le template a une chaîne de resource type
             if (template.getResourceType() != null && !template.getResourceType().isBlank()) {
                 String rawValue = template.getResourceType().trim();
-                
-                // Chercher le code exact dans la base de données
                 List<ResourceType> allTypes = resourceTypeRepository.findByOrganisation_IdAndActiveTrue(orgId);
                 ResourceType matched = allTypes.stream()
-                    .filter(rt -> rt.getCode().equalsIgnoreCase(rawValue) || 
-                                 rt.getLabel().equalsIgnoreCase(rawValue))
+                    .filter(rt -> rt.getCode().equalsIgnoreCase(rawValue) || rt.getLabel().equalsIgnoreCase(rawValue))
                     .findFirst()
                     .orElse(null);
                 
                 if (matched != null) {
                     resourceTypeCode = matched.getCode();
-                    System.out.println("✅ Matched Resource Type: " + resourceTypeCode + " (from: " + rawValue + ")");
                 } else {
-                    // Fallback: extraire le code entre parenthèses si format "Project Manager (PROJEC"
                     resourceTypeCode = extractResourceTypeCode(rawValue);
-                    System.out.println("⚠️ Fallback extraction: " + resourceTypeCode + " (from: " + rawValue + ")");
                 }
             }
 
             entry.setResourceTypeCode(resourceTypeCode);
-            System.out.println("💾 SAVING - WBS: " + finalWbsCode + ", ResourceTypeCode: " + resourceTypeCode);
-            
-            entry.setResourceTypeCode(resourceTypeCode);
-            System.out.println("💾 SAVING - WBS: " + finalWbsCode + ", ResourceTypeCode: " + resourceTypeCode);
-            
-            // ✅ Sauvegarder l'ordre du template
             entry.setDisplayOrder(template.getSortOrder() != null ? template.getSortOrder() : 0);
 
             if (isNew) {
@@ -267,37 +248,12 @@ public class FinanceSettingsService {
             generatedRows++;
         }
 
-        System.out.println("✅ Template applied successfully - " + generatedRows + " rows generated");
-        
         ApplyFinanceTemplateResultDto result = new ApplyFinanceTemplateResultDto();
         result.setProjectsProcessed(1);
         result.setRowsGenerated(generatedRows);
         return result;
     }
 
-    // ✅ NOUVELLE MÉTHODE : Extraire le code du Resource Type
-    private String extractResourceTypeCode(String resourceTypeDisplay) {
-        if (resourceTypeDisplay == null || resourceTypeDisplay.isBlank()) {
-            return null;
-        }
-        
-        System.out.println("🔍 Extracting code from: " + resourceTypeDisplay);
-        
-        // Si le format est "Project Manager (PROJEC", extraire "PROJEC"
-        if (resourceTypeDisplay.contains("(")) {
-            int startIndex = resourceTypeDisplay.indexOf("(") + 1;
-            int endIndex = resourceTypeDisplay.indexOf(")");
-            if (endIndex > startIndex) {
-                String code = resourceTypeDisplay.substring(startIndex, endIndex).trim();
-                System.out.println("✅ Extracted code: " + code);
-                return code;
-            }
-        }
-        
-        // Sinon, retourner la chaîne complète (au cas où c'est déjà le code)
-        System.out.println("✅ Using full string as code: " + resourceTypeDisplay.trim());
-        return resourceTypeDisplay.trim();
-    }
     public FinanceSettingsDto importWbsTemplate(Long projectId, ImportFinanceWbsTemplateRequest request) {
         Long orgId = requireOrganisationId();
         Organisation organisation = organisationRepository.findById(orgId)
@@ -345,7 +301,6 @@ public class FinanceSettingsService {
                 throw new IllegalArgumentException("Import failed: WBS row '" + dto.getCodeTemplate() + "' is missing the required TYPE.");
             }
             row.setType(dto.getType());
-            
             row.setResourceType(blankToNull(dto.getResourceType()));
             row.setOwnerKey(blankToNull(dto.getOwnerKey()));
             row.setHourRate(dto.getHourRate());
@@ -355,6 +310,107 @@ public class FinanceSettingsService {
         }
 
         return getSettings(projectId);
+    }
+
+    // ==========================================
+    // ✅ NOUVEAUX : Méthodes pour les Payments
+    // ==========================================
+
+    @Transactional(readOnly = true)
+    public PaymentScheduleDto getPaymentSchedule(Long projectId) {
+        Long orgId = requireOrganisationId();
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+
+        List<PaymentMilestone> milestones = paymentMilestoneRepository
+                .findAllByOrganisationIdAndProjectIdOrderByMilestoneOrderAsc(orgId, projectId);
+
+        PaymentScheduleDto dto = new PaymentScheduleDto();
+        dto.setProjectId(projectId);
+        dto.setProjectName(project.getName());
+
+        if (!milestones.isEmpty()) {
+            PaymentMilestone first = milestones.get(0);
+            dto.setSalesValue(first.getSalesValue());
+            dto.setCurrency(first.getCurrency());
+        }
+
+        int totalPercentage = milestones.stream()
+                .mapToInt(m -> m.getPercentage() != null ? m.getPercentage() : 0)
+                .sum();
+        dto.setTotalPercentage(totalPercentage);
+
+        dto.setMilestones(milestones.stream().map(this::toPaymentDto).collect(Collectors.toList()));
+        return dto;
+    }
+
+    public PaymentScheduleDto savePaymentSchedule(Long projectId, SavePaymentScheduleRequest request) {
+        Long orgId = requireOrganisationId();
+        Organisation organisation = organisationRepository.findById(orgId)
+                .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+
+        int totalPercentage = request.getMilestones().stream()
+                .mapToInt(m -> m.getPercentage() != null ? m.getPercentage() : 0)
+                .sum();
+
+        if (totalPercentage != 100) {
+            throw new IllegalArgumentException("Payment percentages must sum to exactly 100%. Current total: " + totalPercentage + "%");
+        }
+
+        paymentMilestoneRepository.deleteAllByProjectId(projectId);
+
+        int order = 1;
+        for (PaymentMilestoneDto milestoneDto : request.getMilestones()) {
+            PaymentMilestone milestone = new PaymentMilestone();
+            milestone.setOrganisation(organisation);
+            milestone.setProject(project);
+            milestone.setSalesValue(request.getSalesValue());
+            milestone.setCurrency(request.getCurrency());
+            milestone.setMilestoneOrder(order++);
+            milestone.setPercentage(milestoneDto.getPercentage());
+            milestone.setDueDate(milestoneDto.getDueDate());
+            milestone.setStatus(milestoneDto.getStatus() != null ? milestoneDto.getStatus() : "EXPECTED");
+            paymentMilestoneRepository.save(milestone);
+        }
+
+        return getPaymentSchedule(projectId);
+    }
+
+    private PaymentMilestoneDto toPaymentDto(PaymentMilestone milestone) {
+        PaymentMilestoneDto dto = new PaymentMilestoneDto();
+        dto.setId(milestone.getId());
+        dto.setMilestoneOrder(milestone.getMilestoneOrder());
+        dto.setPercentage(milestone.getPercentage());
+        dto.setDueDate(milestone.getDueDate());
+        dto.setStatus(milestone.getStatus());
+
+        if (milestone.getSalesValue() != null && milestone.getPercentage() != null) {
+            BigDecimal calculatedValue = milestone.getSalesValue()
+                    .multiply(BigDecimal.valueOf(milestone.getPercentage()))
+                    .divide(BigDecimal.valueOf(100), 2, BigDecimal.ROUND_HALF_UP);
+            dto.setCalculatedValue(calculatedValue);
+        }
+        return dto;
+    }
+
+    // ==========================================
+    // ✅ Méthodes utilitaires existantes
+    // ==========================================
+
+    private String extractResourceTypeCode(String resourceTypeDisplay) {
+        if (resourceTypeDisplay == null || resourceTypeDisplay.isBlank()) {
+            return null;
+        }
+        if (resourceTypeDisplay.contains("(")) {
+            int startIndex = resourceTypeDisplay.indexOf("(") + 1;
+            int endIndex = resourceTypeDisplay.indexOf(")");
+            if (endIndex > startIndex) {
+                return resourceTypeDisplay.substring(startIndex, endIndex).trim();
+            }
+        }
+        return resourceTypeDisplay.trim();
     }
 
     private FinanceWbsTemplateRowDto toDto(FinanceWbsTemplateRow row) {
@@ -370,12 +426,10 @@ public class FinanceSettingsService {
             dto.setDepartmentId(row.getDepartment().getId());
             dto.setDepartmentName(row.getDepartment().getLabel());
         }
-        
         if (row.getOwner() != null) {
             dto.setOwnerId(row.getOwner().getId());
             dto.setOwnerName(row.getOwner().getFullName());
         }
-        
         dto.setOwnerKey(row.getOwnerKey());
         dto.setResourceType(row.getResourceType());
         dto.setHourRate(row.getHourRate());
