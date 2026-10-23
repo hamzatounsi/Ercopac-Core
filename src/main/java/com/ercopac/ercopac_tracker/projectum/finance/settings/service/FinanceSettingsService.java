@@ -20,8 +20,10 @@ import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.ercopac.ercopac_tracker.projectum.finance.settings.domain.ForecastBaseline;
+import com.ercopac.ercopac_tracker.projectum.finance.settings.repository.ForecastBaselineRepository;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import com.ercopac.ercopac_tracker.user.ResourceType;
@@ -41,7 +43,7 @@ public class FinanceSettingsService {
     private final UserRepository userRepository;
     private final ResourceTypeRepository resourceTypeRepository;
     private final PaymentMilestoneRepository paymentMilestoneRepository; // ✅ NOUVEAU
-
+    private final ForecastBaselineRepository forecastBaselineRepository;
     public FinanceSettingsService(
             FinanceSettingsRepository financeSettingsRepository,
             FinanceWbsTemplateRowRepository templateRowRepository,
@@ -52,7 +54,8 @@ public class FinanceSettingsService {
             DepartmentRepository departmentRepository,
             UserRepository userRepository,
             ResourceTypeRepository resourceTypeRepository,
-            PaymentMilestoneRepository paymentMilestoneRepository // ✅ NOUVEAU
+            PaymentMilestoneRepository paymentMilestoneRepository,
+            ForecastBaselineRepository forecastBaselineRepository// ✅ NOUVEAU
     ) {
         this.financeSettingsRepository = financeSettingsRepository;
         this.templateRowRepository = templateRowRepository;
@@ -63,7 +66,8 @@ public class FinanceSettingsService {
         this.departmentRepository = departmentRepository;
         this.userRepository = userRepository;
         this.resourceTypeRepository = resourceTypeRepository;
-        this.paymentMilestoneRepository = paymentMilestoneRepository; // ✅ NOUVEAU
+        this.paymentMilestoneRepository = paymentMilestoneRepository; 
+        this.forecastBaselineRepository = forecastBaselineRepository; // ✅ NOUVEAU
     }
 
     @Transactional(readOnly = true)
@@ -162,7 +166,119 @@ public class FinanceSettingsService {
 
         return getSettings(projectId);
     }
+ // ==========================================
+ // ✅ FORECAST BASELINE - MÉTHODES
+ // ==========================================
 
+ @Transactional(readOnly = true)
+ public ForecastBaselineDto getForecastBaseline(Long projectId) {
+     Long orgId = requireOrganisationId();
+     Project project = projectRepository.findById(projectId)
+             .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+
+     ForecastBaselineDto dto = new ForecastBaselineDto();
+     dto.setProjectId(projectId);
+     dto.setProjectName(project.getName());
+
+     List<ForecastBaseline> baselines = forecastBaselineRepository
+             .findAllByOrganisationIdAndProjectIdOrderByWbsCodeAsc(orgId, projectId);
+
+     dto.setHasBaseline(!baselines.isEmpty());
+
+     if (!baselines.isEmpty()) {
+         dto.setBaselineDate(baselines.get(0).getBaselineDate());
+     }
+
+     // Récupérer les finance entries actuelles
+     List<FinanceEntry> currentEntries = financeEntryRepository
+             .findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(projectId, orgId);
+
+     Map<String, FinanceEntry> currentByWbs = currentEntries.stream()
+             .collect(Collectors.toMap(FinanceEntry::getWbsCode, e -> e, (a, b) -> a));
+
+     Map<String, ForecastBaseline> baselineByWbs = baselines.stream()
+             .collect(Collectors.toMap(ForecastBaseline::getWbsCode, b -> b, (a, b) -> a));
+
+     BigDecimal totalBaseline = BigDecimal.ZERO;
+     BigDecimal totalCurrent = BigDecimal.ZERO;
+
+     // Utiliser les entries courantes comme source de vérité pour les lignes
+     for (FinanceEntry entry : currentEntries) {
+         ForecastBaselineRowDto row = new ForecastBaselineRowDto();
+         row.setWbsCode(entry.getWbsCode());
+         row.setDescription(entry.getDescription());
+         row.setLevel(entry.getLevel());
+         row.setCurrentForecast(entry.getForecast() != null ? entry.getForecast() : BigDecimal.ZERO);
+
+         ForecastBaseline baseline = baselineByWbs.get(entry.getWbsCode());
+         if (baseline != null) {
+             row.setBaselineForecast(baseline.getBaselineForecast());
+             row.setBaselineDate(baseline.getBaselineDate());
+             totalBaseline = totalBaseline.add(baseline.getBaselineForecast());
+         } else {
+             row.setBaselineForecast(BigDecimal.ZERO);
+         }
+
+         BigDecimal current = row.getCurrentForecast();
+         totalCurrent = totalCurrent.add(current);
+
+         BigDecimal variance = current.subtract(row.getBaselineForecast());
+         row.setVariance(variance);
+
+         if (row.getBaselineForecast() != null && row.getBaselineForecast().compareTo(BigDecimal.ZERO) != 0) {
+             double variancePercent = variance.divide(row.getBaselineForecast(), 4, BigDecimal.ROUND_HALF_UP)
+                     .multiply(BigDecimal.valueOf(100)).doubleValue();
+             row.setVariancePercent(variancePercent);
+         } else {
+             row.setVariancePercent(null);
+         }
+
+         dto.getRows().add(row);
+     }
+
+     dto.setTotalBaselineForecast(totalBaseline);
+     dto.setTotalCurrentForecast(totalCurrent);
+     dto.setTotalVariance(totalCurrent.subtract(totalBaseline));
+
+     return dto;
+ }
+
+ public ForecastBaselineDto setForecastBaseline(Long projectId) {
+     Long orgId = requireOrganisationId();
+     Organisation organisation = organisationRepository.findById(orgId)
+             .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
+     Project project = projectRepository.findById(projectId)
+             .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+
+     // Supprimer l'ancienne baseline
+     forecastBaselineRepository.deleteAllByProjectId(projectId);
+
+     // Récupérer les finance entries actuelles
+     List<FinanceEntry> currentEntries = financeEntryRepository
+             .findAllByProjectIdAndOrganisationIdOrderByWbsCodeAsc(projectId, orgId);
+
+     LocalDateTime now = LocalDateTime.now();
+
+     // Créer une nouvelle baseline pour chaque ligne
+     for (FinanceEntry entry : currentEntries) {
+         ForecastBaseline baseline = new ForecastBaseline();
+         baseline.setOrganisation(organisation);
+         baseline.setProject(project);
+         baseline.setWbsCode(entry.getWbsCode());
+         baseline.setDescription(entry.getDescription());
+         baseline.setLevel(entry.getLevel());
+         baseline.setBaselineForecast(entry.getForecast() != null ? entry.getForecast() : BigDecimal.ZERO);
+         baseline.setBaselineDate(now);
+         forecastBaselineRepository.save(baseline);
+     }
+
+     return getForecastBaseline(projectId);
+ }
+
+ public ForecastBaselineDto resetForecastBaseline(Long projectId) {
+     forecastBaselineRepository.deleteAllByProjectId(projectId);
+     return getForecastBaseline(projectId);
+ }
     @Transactional
     public ApplyFinanceTemplateResultDto applyTemplate(Long projectId, ApplyFinanceTemplateRequest request) {
         Long orgId = requireOrganisationId();

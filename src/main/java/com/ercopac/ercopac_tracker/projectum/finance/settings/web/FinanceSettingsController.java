@@ -3,6 +3,7 @@ package com.ercopac.ercopac_tracker.projectum.finance.settings.web;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.ApplyFinanceTemplateRequest;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.ApplyFinanceTemplateResultDto;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.FinanceSettingsDto;
+import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.ForecastBaselineDto;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.ImportFinanceWbsTemplateRequest;
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.PaymentScheduleDto; // ✅ NOUVEAU
 import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.SaveFinanceSettingsRequest;
@@ -66,5 +67,19 @@ public class FinanceSettingsController {
             @Valid @RequestBody SavePaymentScheduleRequest request
     ) {
         return ResponseEntity.ok(financeSettingsService.savePaymentSchedule(projectId, request));
+    }
+    @GetMapping("/forecast-baseline")
+    public ResponseEntity<ForecastBaselineDto> getForecastBaseline(@RequestParam Long projectId) {
+        return ResponseEntity.ok(financeSettingsService.getForecastBaseline(projectId));
+    }
+
+    @PostMapping("/forecast-baseline/set")
+    public ResponseEntity<ForecastBaselineDto> setForecastBaseline(@RequestParam Long projectId) {
+        return ResponseEntity.ok(financeSettingsService.setForecastBaseline(projectId));
+    }
+
+    @PostMapping("/forecast-baseline/reset")
+    public ResponseEntity<ForecastBaselineDto> resetForecastBaseline(@RequestParam Long projectId) {
+        return ResponseEntity.ok(financeSettingsService.resetForecastBaseline(projectId));
     }
 }
