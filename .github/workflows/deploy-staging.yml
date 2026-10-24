@@ -1,25 +1,69 @@
+
 name: Build and Deploy Backend to Staging
 
 on:
   push:
-    branches:
-      - staging
+    branches: [staging]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: backend-staging
+  cancel-in-progress: false
+
 jobs:
-  staging:
-    name: Deploy Backend to Staging
+  deploy:
     if: github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
+    environment: staging
 
     steps:
-      - name: Checkout staging branch
-        uses: actions/checkout@v4
+      - name: Deploy staging backend
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          ROOT: ${{ vars.STAGING_ROOT }}
+          SERVICE: ${{ vars.STAGING_BACKEND_SERVICE }}
+          EXPECTED_SHA: ${{ github.sha }}
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          port: 22
+          command_timeout: 30m
+          envs: ROOT,SERVICE,EXPECTED_SHA
+          script: |
+            set -eu
 
-      - name: Confirm staging branch
-        run: |
-          echo "Deploying branch: $GITHUB_REF_NAME"
-          echo "Commit: $GITHUB_SHA"
+            test -n "$ROOT"
+            test -n "$SERVICE"
+            test "$ROOT" != "/opt/projectum"
+
+            cd "$ROOT/backend"
+            git fetch origin staging
+            git switch staging
+            git merge --ff-only origin/staging
+            test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+            cd "$ROOT"
+            docker compose config --services | grep -Fx "$SERVICE"
+
+            docker compose build "$SERVICE"
+            docker compose up -d --no-deps "$SERVICE"
+
+            echo "Checking staging backend..."
+            HEALTHY=false
+            for i in $(seq 1 12); do
+              if docker compose exec -T "$SERVICE" \
+                wget -qO- http://localhost:10000/actuator/health \
+                | grep -q '"status":"UP"'; then
+                HEALTHY=true
+                break
+              fi
+              sleep 5
+            done
+
+            test "$HEALTHY" = true
+            echo "Staging backend deployed: $EXPECTED_SHA"
+            docker compose ps "$SERVICE"
