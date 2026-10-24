@@ -1,7 +1,9 @@
-
 name: Build and Deploy Backend to Staging
 
 on:
+  push:
+    branches:
+      - staging
   workflow_dispatch:
 
 permissions:
@@ -9,9 +11,15 @@ permissions:
 
 jobs:
   staging:
-    name: Staging workflow launcher
+    name: Deploy Backend to Staging
     if: github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
+
     steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+
       - name: Confirm staging branch
-        run: echo "Staging branch selected."
+        run: |
+          echo "Deploying branch: $GITHUB_REF_NAME"
+          echo "Commit: $GITHUB_SHA"
