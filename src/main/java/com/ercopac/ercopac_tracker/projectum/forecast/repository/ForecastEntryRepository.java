@@ -2,14 +2,17 @@ package com.ercopac.ercopac_tracker.projectum.forecast.repository;
 
 import com.ercopac.ercopac_tracker.projectum.forecast.domain.ForecastEntry;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.EntityGraph;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface ForecastEntryRepository extends JpaRepository<ForecastEntry, Long> {
 
+    @EntityGraph(attributePaths = "financeEntry")
     List<ForecastEntry> findAllByProjectIdOrderByWbsCodeAscPeriodKeyAsc(Long projectId);
 
+    @EntityGraph(attributePaths = "financeEntry")
     List<ForecastEntry> findAllByProjectIdAndOrganisationIdOrderByWbsCodeAscPeriodKeyAsc(Long projectId, Long organisationId);
 
     Optional<ForecastEntry> findByProjectIdAndOrganisationIdAndWbsCodeAndPeriodKey(
@@ -18,6 +21,10 @@ public interface ForecastEntryRepository extends JpaRepository<ForecastEntry, Lo
 
     Optional<ForecastEntry> findByProjectIdAndWbsCodeAndPeriodKey(
             Long projectId, String wbsCode, String periodKey
+    );
+
+    Optional<ForecastEntry> findByProjectIdAndOrganisationIdAndFinanceEntryIdAndPeriodKey(
+            Long projectId, Long organisationId, Long financeEntryId, String periodKey
     );
 
     boolean existsByProjectIdAndWbsCodeAndPeriodKey(Long projectId, String wbsCode, String periodKey);

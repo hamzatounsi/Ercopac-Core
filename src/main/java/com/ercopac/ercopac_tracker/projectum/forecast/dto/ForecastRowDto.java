@@ -6,6 +6,7 @@ import java.util.List;
 
 public class ForecastRowDto {
     private Long financeEntryId;
+    private Long parentId;
     private String wbsCode;
     private String description;
     private Integer level;
@@ -26,9 +27,17 @@ public class ForecastRowDto {
     
     private List<ForecastGridCellDto> periods = new ArrayList<>();
 
+    private boolean leaf;
+    /** Cost rate applied to the hours of an HOUR leaf; null for rows that are forecast directly in money. */
+    private BigDecimal hourRate;
+    /** Remaining forecast cost (money) of this row; for parents the sum of their leaves. */
+    private BigDecimal remainingForecastCost;
+
     // Getters et Setters existants
     public Long getFinanceEntryId() { return financeEntryId; }
     public void setFinanceEntryId(Long financeEntryId) { this.financeEntryId = financeEntryId; }
+    public Long getParentId() { return parentId; }
+    public void setParentId(Long parentId) { this.parentId = parentId; }
 
     public String getWbsCode() { return wbsCode; }
     public void setWbsCode(String wbsCode) { this.wbsCode = wbsCode; }
@@ -62,6 +71,15 @@ public class ForecastRowDto {
 
     public List<ForecastGridCellDto> getPeriods() { return periods; }
     public void setPeriods(List<ForecastGridCellDto> periods) { this.periods = periods; }
+
+    public boolean isLeaf() { return leaf; }
+    public void setLeaf(boolean leaf) { this.leaf = leaf; }
+
+    public BigDecimal getHourRate() { return hourRate; }
+    public void setHourRate(BigDecimal hourRate) { this.hourRate = hourRate; }
+
+    public BigDecimal getRemainingForecastCost() { return remainingForecastCost; }
+    public void setRemainingForecastCost(BigDecimal remainingForecastCost) { this.remainingForecastCost = remainingForecastCost; }
 
     // ✅ NOUVEAUX GETTERS/SETTERS
     public String getLinkedScheduleWbs() { return linkedScheduleWbs; }

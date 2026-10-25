@@ -100,6 +100,7 @@ public class ForecastController {
                         : null;
 
         forecastService.updateLinkedScheduleWbs(
+                projectId,
                 financeEntryId,
                 linkedScheduleWbs
         );
@@ -108,36 +109,15 @@ public class ForecastController {
     }
 
     /**
-     * Update the WBS level of a Finance/Forecast row.
+     * Delete the forecast entry (all period values) of one WBS row.
+     * The Finance WBS node is kept.
      */
-    @PatchMapping("/level")
+    @DeleteMapping("/{financeEntryId}")
     @PreAuthorize(FORECAST_WRITE)
-    public ResponseEntity<Void> updateWbsLevel(
+    public ResponseEntity<Void> deleteForecastEntry(
             @PathVariable Long projectId,
-            @RequestBody Map<String, Object> request) {
-
-        Object financeEntryIdValue = request.get("financeEntryId");
-        Object levelValue = request.get("level");
-
-        if (!(financeEntryIdValue instanceof Number)) {
-            throw new IllegalArgumentException("financeEntryId is required");
-        }
-
-        if (!(levelValue instanceof Number)) {
-            throw new IllegalArgumentException("level is required");
-        }
-
-        Long financeEntryId =
-                ((Number) financeEntryIdValue).longValue();
-
-        Integer level =
-                ((Number) levelValue).intValue();
-
-        forecastService.updateWbsLevel(
-                financeEntryId,
-                level
-        );
-
-        return ResponseEntity.ok().build();
+            @PathVariable Long financeEntryId) {
+        forecastService.deleteForecastEntries(projectId, financeEntryId);
+        return ResponseEntity.noContent().build();
     }
 }

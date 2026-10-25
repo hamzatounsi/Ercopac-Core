@@ -1,7 +1,8 @@
 package com.ercopac.ercopac_tracker.projectum.forecast.service;
 
 import com.ercopac.ercopac_tracker.projectum.finance.domain.FinanceEntry;
-import com.ercopac.ercopac_tracker.projectum.finance.repository.FinanceEntryRepository;
+import com.ercopac.ercopac_tracker.projectum.finance.service.FinanceService;
+import com.ercopac.ercopac_tracker.projectum.finance.service.FinanceWbsHierarchy;
 import com.ercopac.ercopac_tracker.projectum.forecast.domain.ForecastEntry;
 import com.ercopac.ercopac_tracker.projectum.forecast.dto.ForecastGridCellDto;
 import com.ercopac.ercopac_tracker.projectum.forecast.dto.ForecastRowDto;
@@ -9,92 +10,63 @@ import com.ercopac.ercopac_tracker.projectum.forecast.dto.ForecastSummaryDto;
 import com.ercopac.ercopac_tracker.projectum.forecast.dto.UpsertForecastEntryRequest;
 import com.ercopac.ercopac_tracker.projectum.forecast.repository.ForecastEntryRepository;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
-import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
-import com.ercopac.ercopac_tracker.security.SecurityUtils;
+import com.ercopac.ercopac_tracker.projects.service.ProjectAccessService;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
-import com.ercopac.ercopac_tracker.user.ResourceType;
-import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.WeekFields;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * Time-phased forecast on top of the Finance WBS. The WBS rows, their order, their parents and their cost
+ * rates all come from {@link FinanceService}, so Forecast can never show a different structure than Finance.
+ */
 @Service
 @Transactional
 public class ForecastService {
 
     private final ForecastEntryRepository forecastEntryRepository;
-    private final FinanceEntryRepository financeEntryRepository;
-    private final ProjectRepository projectRepository;
+    private final FinanceService financeService;
+    private final ProjectAccessService projectAccessService;
     private final ProjectTaskRepository projectTaskRepository;
-    private final ResourceTypeRepository resourceTypeRepository;
-    private final SecurityUtils securityUtils;
 
     public ForecastService(ForecastEntryRepository forecastEntryRepository,
-                           FinanceEntryRepository financeEntryRepository,
-                           ProjectRepository projectRepository,
-                           ProjectTaskRepository projectTaskRepository,
-                           ResourceTypeRepository resourceTypeRepository,
-                           SecurityUtils securityUtils) {
+                           FinanceService financeService,
+                           ProjectAccessService projectAccessService,
+                           ProjectTaskRepository projectTaskRepository) {
         this.forecastEntryRepository = forecastEntryRepository;
-        this.financeEntryRepository = financeEntryRepository;
-        this.projectRepository = projectRepository;
+        this.financeService = financeService;
+        this.projectAccessService = projectAccessService;
         this.projectTaskRepository = projectTaskRepository;
-        this.resourceTypeRepository = resourceTypeRepository;
-        this.securityUtils = securityUtils;
     }
 
     @Transactional(readOnly = true)
     public List<ForecastRowDto> getForecastGrid(Long projectId, int periods, String periodType) {
-        Project project = getAccessibleProject(projectId);
-        Long orgId = project.getOrganisation().getId();
+        Project project = projectAccessService.getAccessibleProject(projectId);
         String safePeriodType = periodType != null ? periodType : "month";
 
-        // 1. Charger les lignes Finance
-        List<FinanceEntry> financeRows = securityUtils.isPlatformUser()
-                ? financeEntryRepository.findAllByProjectIdOrderByDisplayOrderAscWbsCodeAsc(projectId)
-                : financeEntryRepository.findAllByProjectIdAndOrganisationIdOrderByDisplayOrderAscWbsCodeAsc(projectId, orgId);
+        // 1. Finance WBS rows, entries and rates, loaded once and shared with Finance
+        List<FinanceEntry> financeRows = financeService.loadWbsRows(project);
+        Map<Long, List<ForecastEntry>> entriesByRow = financeService.forecastEntriesByRow(project, financeRows);
+        Map<Long, BigDecimal> factors = financeService.costFactors(project, financeRows);
+        Map<Long, Long> parents = FinanceWbsHierarchy.parents(financeRows);
+        Set<Long> leaves = FinanceWbsHierarchy.leafIds(financeRows.stream().map(FinanceEntry::getId).toList(), parents);
 
-        // Trier pour que le Niveau 1 (Total Projet) soit toujours en premier
-        List<FinanceEntry> sortedFinanceRows = financeRows.stream()
-                .sorted(Comparator.comparing((FinanceEntry e) -> (e.getLevel() != null && e.getLevel() == 1) ? 0 : 1)
-                        .thenComparing(e -> e.getDisplayOrder() != null ? e.getDisplayOrder() : 9999)
-                        .thenComparing(FinanceEntry::getWbsCode))
-                .collect(Collectors.toList());
-
-        // 2. Charger les données Forecast
-        List<ForecastEntry> fcRows = securityUtils.isPlatformUser()
-                ? forecastEntryRepository.findAllByProjectIdOrderByWbsCodeAscPeriodKeyAsc(projectId)
-                : forecastEntryRepository.findAllByProjectIdAndOrganisationIdOrderByWbsCodeAscPeriodKeyAsc(projectId, orgId);
-
-        Map<String, Map<String, BigDecimal>> fcMap = new HashMap<>();
-        for (ForecastEntry entry : fcRows) {
-            String periodKey = entry.getPeriodKey();
-            String targetKey = periodKey;
-            if ("month".equalsIgnoreCase(safePeriodType) && periodKey.contains("-W")) {
-                targetKey = convertWeekToMonth(periodKey);
-            }
-            fcMap.computeIfAbsent(entry.getWbsCode(), k -> new HashMap<>())
-                    .merge(targetKey, nvl(entry.getAmount()), BigDecimal::add);
-        }
-
-        // 3. Charger les tâches et les taux
-        List<ProjectTask> allTasks = projectTaskRepository.findByProjectIdOrderByDisplayOrderAsc(projectId);
+        // 2. Schedule tasks for HOUR rows
+        boolean hasHourRows = financeRows.stream().anyMatch(financeService::isHourRow);
+        List<ProjectTask> allTasks = hasHourRows ? projectTaskRepository.findByProjectIdOrderByDisplayOrderAsc(projectId) : List.of();
         Map<String, ProjectTask> tasksByWbs = allTasks.stream()
                 .filter(t -> t.getWbsCode() != null)
                 .collect(Collectors.toMap(ProjectTask::getWbsCode, t -> t, (a, b) -> a));
-
-        List<ResourceType> resourceTypes = resourceTypeRepository.findByOrganisation_IdAndActiveTrue(orgId);
-        Map<String, BigDecimal> ratesByCode = resourceTypes.stream()
-                .filter(rt -> rt.getCode() != null && rt.getDefaultRate() != null)
-                .collect(Collectors.toMap(ResourceType::getCode, ResourceType::getDefaultRate, (a, b) -> a));
 
         List<ForecastRowDto.ScheduleTaskOption> availableTasks = allTasks.stream()
                 .filter(t -> t.getWbsCode() != null)
@@ -111,71 +83,57 @@ public class ForecastService {
         List<String> periodKeys = buildPeriods(periods, safePeriodType);
         List<ForecastRowDto> result = new ArrayList<>();
 
-        for (FinanceEntry row : sortedFinanceRows) {
+        for (FinanceEntry row : financeRows) {
+            boolean hourRow = financeService.isHourRow(row);
+            BigDecimal factor = factors.getOrDefault(row.getId(), BigDecimal.ONE);
             ForecastRowDto dto = new ForecastRowDto();
             dto.setFinanceEntryId(row.getId());
+            dto.setParentId(parents.get(row.getId()));
+            dto.setLeaf(leaves.contains(row.getId()));
             dto.setWbsCode(row.getWbsCode());
             dto.setDescription(row.getDescription());
             dto.setLevel(row.getLevel() != null ? row.getLevel() : 1);
             dto.setBudget(nvl(row.getBudget()));
             dto.setRowType(row.getRowType() != null ? row.getRowType() : "COST");
             dto.setActualCost(nvl(row.getActualCost()));
-            
-            String resTypeCode = row.getResourceTypeCode();
-            dto.setResourceTypeCode(resTypeCode);
+            dto.setHourRate(hourRow ? factor : null);
+            dto.setResourceTypeCode(row.getResourceTypeCode());
             dto.setLinkedScheduleWbs(row.getLinkedScheduleWbs());
-            dto.setAvailableScheduleTasks(availableTasks);
+            dto.setAvailableScheduleTasks(hourRow ? availableTasks : List.of());
 
-            // ✅ CORRECTION 1 & 4 : Remaining Schedule = De AUJOURD'HUI à la fin (gère aussi les Summary Gantt)
+            // Remaining Schedule = outstanding hours of the linked Gantt task (or its leaves) times the row rate
             BigDecimal remainingHours = BigDecimal.ZERO;
             String linkedWbs = row.getLinkedScheduleWbs();
-            
-            if (linkedWbs != null && !linkedWbs.isBlank()) {
+            if (hourRow && linkedWbs != null && !linkedWbs.isBlank()) {
                 ProjectTask linkedTask = tasksByWbs.get(linkedWbs);
-                if (linkedTask != null) {
-                    remainingHours = calculateRemainingHoursFromToday(linkedTask, allTasks);
-                }
+                if (linkedTask != null) remainingHours = calculateRemainingHoursFromToday(linkedTask, allTasks);
             }
             dto.setRemainingHours(remainingHours);
+            dto.setRemainingCost(hourRow ? remainingHours.multiply(factor).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO);
 
-            // ✅ CORRECTION 2 : Calculer le montant en € (Heures restantes * Taux)
-            BigDecimal rate = ratesByCode.getOrDefault(resTypeCode, BigDecimal.ZERO);
-            BigDecimal remainingCost = remainingHours.multiply(rate);
-            // On attache remainingCost au DTO (assure-toi que ton ForecastRowDto a ce champ, sinon ajoute-le)
-            // Si ton DTO n'a pas setRemainingCost, on le met dans une extension ou on s'assure qu'il y est.
-            // (Supposons que ton DTO a déjà setRemainingCost basé sur nos échanges précédents)
-            try {
-                dto.getClass().getMethod("setRemainingCost", BigDecimal.class).invoke(dto, remainingCost);
-            } catch (Exception e) {
-                // Fallback si la méthode n'existe pas encore dans le DTO
-            }
-
-            // Calculer le Total Forecast
-            Map<String, BigDecimal> rowMap = fcMap.getOrDefault(row.getWbsCode(), Collections.emptyMap());
+            // Visible period cells plus the total over every period, in the row unit (hours for HOUR rows)
+            Map<String, BigDecimal> cellAmounts = new HashMap<>();
             BigDecimal totalFc = BigDecimal.ZERO;
-            List<ForecastGridCellDto> cells = new ArrayList<>();
-            
-            for (String periodKey : periodKeys) {
-                BigDecimal amount = nvl(rowMap.get(periodKey));
-                totalFc = totalFc.add(amount);
-                cells.add(new ForecastGridCellDto(periodKey, amount));
+            for (ForecastEntry entry : entriesByRow.getOrDefault(row.getId(), List.of())) {
+                totalFc = totalFc.add(nvl(entry.getAmount()));
+                String key = entry.getPeriodKey();
+                if ("month".equalsIgnoreCase(safePeriodType) && key.contains("-W")) key = convertWeekToMonth(key);
+                cellAmounts.merge(key, nvl(entry.getAmount()), BigDecimal::add);
             }
-
+            List<ForecastGridCellDto> cells = new ArrayList<>();
+            for (String periodKey : periodKeys) cells.add(new ForecastGridCellDto(periodKey, nvl(cellAmounts.get(periodKey))));
             dto.setPeriods(cells);
             dto.setTotalForecast(totalFc);
             result.add(dto);
         }
-        
-        // ✅ CORRECTION 3 : Calculer les totaux de la ligne Level 1 (Projet) et des Summary
-        result = calculateSummaryRows(result);
 
-        return result;
+        return rollupRows(result);
     }
 
-    private BigDecimal calculateRemainingHoursFromToday(ProjectTask task, List<ProjectTask> allTasks) {
+    BigDecimal calculateRemainingHoursFromToday(ProjectTask task, List<ProjectTask> allTasks) {
         List<ProjectTask> tasksToProcess = new ArrayList<>();
         boolean isSummary = allTasks.stream().anyMatch(t -> task.getId().equals(t.getParentId()));
-        
+
         if (isSummary) {
             tasksToProcess = getAllDescendants(task.getId(), allTasks);
         } else {
@@ -186,16 +144,32 @@ public class ForecastService {
         LocalDate today = LocalDate.now();
 
         for (ProjectTask t : tasksToProcess) {
+            if (allTasks.stream().anyMatch(child -> t.getId().equals(child.getParentId()))) continue;
+            if (t.getPlannedHours() != null && t.getActualHours() != null) {
+                totalRemaining = totalRemaining.add(t.getPlannedHours().subtract(t.getActualHours()).max(BigDecimal.ZERO));
+                continue;
+            }
+            if (t.getPlannedHours() != null && t.getPercentComplete() != null) {
+                int remainingPercent = 100 - Math.max(0, Math.min(100, t.getPercentComplete()));
+                totalRemaining = totalRemaining.add(t.getPlannedHours()
+                        .multiply(BigDecimal.valueOf(remainingPercent)).divide(BigDecimal.valueOf(100)));
+                continue;
+            }
+            if (t.getPlannedHours() != null) {
+                if (!"COMPLETED".equalsIgnoreCase(t.getStatus()) && !"DONE".equalsIgnoreCase(t.getStatus()))
+                    totalRemaining = totalRemaining.add(t.getPlannedHours());
+                continue;
+            }
             BigDecimal remainingForTask = BigDecimal.ZERO;
 
             if (t.getPlannedStart() != null && t.getPlannedEnd() != null && t.getPlannedEnd().isAfter(today)) {
                 long totalDays = ChronoUnit.DAYS.between(t.getPlannedStart(), t.getPlannedEnd());
                 long remainingDays = ChronoUnit.DAYS.between(today, t.getPlannedEnd());
-                
+
                 if (totalDays > 0) {
                     double ratio = (double) Math.max(0, remainingDays) / totalDays;
                     ratio = Math.min(1.0, ratio);
-                    
+
                     BigDecimal planned = t.getPlannedHours();
                     if (planned == null && t.getDurationDays() != null) {
                         int days = t.getDurationDays();
@@ -230,41 +204,60 @@ public class ForecastService {
         return descendants;
     }
 
- 
+    /**
+     * Parents show the sum of their leaves only. Leaf hours are converted to cost before they reach a parent,
+     * so parent period cells and totals are always money and never mix hours with euros.
+     */
+    List<ForecastRowDto> rollupRows(List<ForecastRowDto> rows) {
+        Map<Long, Long> parents = new HashMap<>();
+        List<Long> ids = new ArrayList<>();
+        for (ForecastRowDto row : rows) {
+            ids.add(row.getFinanceEntryId());
+            parents.put(row.getFinanceEntryId(), row.getParentId());
+        }
+        Set<Long> leaves = FinanceWbsHierarchy.leafIds(ids, parents);
+        Map<Long, BigDecimal> factor = new HashMap<>();
+        rows.forEach(row -> factor.put(row.getFinanceEntryId(),
+                "HOUR".equalsIgnoreCase(row.getRowType()) && row.getHourRate() != null ? row.getHourRate() : BigDecimal.ONE));
 
-    // ✅ AMÉLIORÉE : Somme TOUTES les colonnes pour les lignes Level 1 et SUMMARY
-    private List<ForecastRowDto> calculateSummaryRows(List<ForecastRowDto> rows) {
-        for (ForecastRowDto summaryRow : rows) {
-            if (summaryRow.getLevel() != null && (summaryRow.getLevel() == 1 || "SUMMARY".equals(summaryRow.getRowType()))) {
-                
-                List<ForecastRowDto> children = rows.stream()
-                    .filter(r -> !r.getWbsCode().equals(summaryRow.getWbsCode()))
-                    .filter(r -> r.getWbsCode().startsWith(summaryRow.getWbsCode() + ".") || 
-                                 r.getWbsCode().startsWith(summaryRow.getWbsCode() + "-") ||
-                                 (summaryRow.getLevel() == 1 && r.getLevel() != null && r.getLevel() > 1))
-                    .collect(Collectors.toList());
+        Map<Long, BigDecimal> budget = rollup(rows, ids, parents, r -> nvl(r.getBudget()));
+        Map<Long, BigDecimal> actual = rollup(rows, ids, parents, r -> nvl(r.getActualCost()));
+        Map<Long, BigDecimal> forecastCost = rollup(rows, ids, parents,
+                r -> cost(r.getTotalForecast(), factor.get(r.getFinanceEntryId())));
+        Map<Long, BigDecimal> remainingHours = rollup(rows, ids, parents, r -> nvl(r.getRemainingHours()));
+        Map<Long, BigDecimal> remainingCost = rollup(rows, ids, parents, r -> nvl(r.getRemainingCost()));
+        int periodCount = rows.stream().mapToInt(r -> r.getPeriods().size()).max().orElse(0);
+        List<Map<Long, BigDecimal>> periodCost = new ArrayList<>();
+        for (int i = 0; i < periodCount; i++) {
+            final int index = i;
+            periodCost.add(rollup(rows, ids, parents, r -> index < r.getPeriods().size()
+                    ? cost(r.getPeriods().get(index).getAmount(), factor.get(r.getFinanceEntryId())) : BigDecimal.ZERO));
+        }
 
-                if (!children.isEmpty()) {
-                    BigDecimal totalBudget = children.stream().map(r -> r.getBudget() != null ? r.getBudget() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
-                    BigDecimal totalActual = children.stream().map(r -> r.getActualCost() != null ? r.getActualCost() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
-                    BigDecimal totalForecast = children.stream().map(r -> r.getTotalForecast() != null ? r.getTotalForecast() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
-                    
-                    // ✅ Ajout de la somme des Remaining Hours et Remaining Cost pour la ligne Total
-                    BigDecimal totalRemainingHours = children.stream().map(r -> r.getRemainingHours() != null ? r.getRemainingHours() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
-                    BigDecimal totalRemainingCost = children.stream().map(r -> {
-                        try { return (BigDecimal) r.getClass().getMethod("getRemainingCost").invoke(r); } 
-                        catch (Exception e) { return BigDecimal.ZERO; }
-                    }).reduce(BigDecimal.ZERO, BigDecimal::add);
-
-                    summaryRow.setBudget(totalBudget);
-                    summaryRow.setActualCost(totalActual);
-                    summaryRow.setTotalForecast(totalForecast);
-                    summaryRow.setRemainingHours(totalRemainingHours);
-                    try { summaryRow.getClass().getMethod("setRemainingCost", BigDecimal.class).invoke(summaryRow, totalRemainingCost); } catch (Exception e) {}
-                }
-            }
+        for (ForecastRowDto row : rows) {
+            Long id = row.getFinanceEntryId();
+            row.setLeaf(leaves.contains(id));
+            row.setRemainingForecastCost(forecastCost.get(id));
+            if (leaves.contains(id)) continue;
+            row.setBudget(budget.get(id));
+            row.setActualCost(actual.get(id));
+            row.setTotalForecast(forecastCost.get(id));
+            row.setRemainingHours(remainingHours.get(id));
+            row.setRemainingCost(remainingCost.get(id));
+            for (int i = 0; i < row.getPeriods().size(); i++) row.getPeriods().get(i).setAmount(periodCost.get(i).get(id));
         }
         return rows;
+    }
+
+    private Map<Long, BigDecimal> rollup(List<ForecastRowDto> rows, List<Long> ids, Map<Long, Long> parents,
+                                         Function<ForecastRowDto, BigDecimal> value) {
+        Map<Long, BigDecimal> leafValues = new HashMap<>();
+        rows.forEach(row -> leafValues.put(row.getFinanceEntryId(), value.apply(row)));
+        return FinanceWbsHierarchy.rollup(ids, parents, leafValues);
+    }
+
+    private BigDecimal cost(BigDecimal quantity, BigDecimal factor) {
+        return nvl(quantity).multiply(factor == null ? BigDecimal.ONE : factor).setScale(2, RoundingMode.HALF_UP);
     }
 
     private String convertWeekToMonth(String weekKey) {
@@ -279,16 +272,13 @@ public class ForecastService {
         }
     }
 
-    public void updateLinkedScheduleWbs(Long financeEntryId, String linkedScheduleWbs) {
-        FinanceEntry entry = financeEntryRepository.findById(financeEntryId).orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
+    public void updateLinkedScheduleWbs(Long projectId, Long financeEntryId, String linkedScheduleWbs) {
+        Project project = projectAccessService.getAccessibleProject(projectId);
+        FinanceEntry entry = findRow(financeService.loadWbsRows(project), financeEntryId);
+        if (!financeService.isHourRow(entry)) {
+            throw new IllegalArgumentException("Only hour forecasts can link to a schedule task");
+        }
         entry.setLinkedScheduleWbs(linkedScheduleWbs);
-        financeEntryRepository.save(entry);
-    }
-
-    public void updateWbsLevel(Long financeEntryId, Integer level) {
-        FinanceEntry entry = financeEntryRepository.findById(financeEntryId).orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
-        entry.setLevel(level);
-        financeEntryRepository.save(entry);
     }
 
     @Transactional(readOnly = true)
@@ -296,7 +286,8 @@ public class ForecastService {
         List<ForecastRowDto> rows = getForecastGrid(projectId, periods, "month");
         BigDecimal totalForecast = BigDecimal.ZERO, totalBudget = BigDecimal.ZERO, totalActual = BigDecimal.ZERO;
         for (ForecastRowDto row : rows) {
-            totalForecast = totalForecast.add(nvl(row.getTotalForecast()));
+            if (row.getParentId() != null) continue;
+            totalForecast = totalForecast.add(nvl(row.getRemainingForecastCost()));
             totalBudget = totalBudget.add(nvl(row.getBudget()));
             totalActual = totalActual.add(nvl(row.getActualCost()));
         }
@@ -306,15 +297,43 @@ public class ForecastService {
         return dto;
     }
 
+    /** Creates, changes or (with 0) removes the forecast of one leaf for one period; other periods are never touched. */
     public void upsertForecast(Long projectId, UpsertForecastEntryRequest request) {
-        Project project = getAccessibleProject(projectId);
+        Project project = projectAccessService.getAccessibleProject(projectId);
         Long orgId = project.getOrganisation().getId();
-        ForecastEntry entry = securityUtils.isPlatformUser()
-                ? forecastEntryRepository.findByProjectIdAndWbsCodeAndPeriodKey(projectId, request.getWbsCode(), request.getPeriodKey()).orElseGet(ForecastEntry::new)
-                : forecastEntryRepository.findByProjectIdAndOrganisationIdAndWbsCodeAndPeriodKey(projectId, orgId, request.getWbsCode(), request.getPeriodKey()).orElseGet(ForecastEntry::new);
+        List<FinanceEntry> projectRows = financeService.loadWbsRows(project);
+        FinanceEntry financeRow = projectRows.stream()
+                .filter(row -> request.getFinanceEntryId() != null
+                        ? row.getId().equals(request.getFinanceEntryId())
+                        : row.getWbsCode().equals(request.getWbsCode()))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("Finance WBS row not found in this project"));
+        if (FinanceWbsHierarchy.parents(projectRows).containsValue(financeRow.getId()))
+            throw new IllegalArgumentException("Select a leaf Finance WBS row for the forecast amount");
+        if (request.getAmount() != null && request.getAmount().signum() < 0)
+            throw new IllegalArgumentException("Forecast amount must be non-negative");
+        ForecastEntry entry = forecastEntryRepository
+                .findByProjectIdAndOrganisationIdAndFinanceEntryIdAndPeriodKey(projectId, orgId, financeRow.getId(), request.getPeriodKey())
+                .or(() -> forecastEntryRepository.findByProjectIdAndOrganisationIdAndWbsCodeAndPeriodKey(
+                        projectId, orgId, financeRow.getWbsCode(), request.getPeriodKey()))
+                .orElseGet(ForecastEntry::new);
+        if (nvl(request.getAmount()).signum() == 0) {
+            if (entry.getId() != null) forecastEntryRepository.delete(entry);
+            return;
+        }
         entry.setProject(project); entry.setOrganisation(project.getOrganisation());
-        entry.setWbsCode(request.getWbsCode()); entry.setPeriodKey(request.getPeriodKey()); entry.setAmount(nvl(request.getAmount()));
+        entry.setFinanceEntry(financeRow);
+        entry.setWbsCode(financeRow.getWbsCode()); entry.setPeriodKey(request.getPeriodKey()); entry.setAmount(nvl(request.getAmount()));
         forecastEntryRepository.save(entry);
+    }
+
+    /** Deletes every forecast value of one WBS row. The Finance WBS node itself is never deleted here. */
+    public int deleteForecastEntries(Long projectId, Long financeEntryId) {
+        Project project = projectAccessService.getAccessibleProject(projectId);
+        List<FinanceEntry> rows = financeService.loadWbsRows(project);
+        findRow(rows, financeEntryId);
+        List<ForecastEntry> entries = financeService.forecastEntriesByRow(project, rows).getOrDefault(financeEntryId, List.of());
+        forecastEntryRepository.deleteAll(entries);
+        return entries.size();
     }
 
     @Transactional(readOnly = true)
@@ -330,23 +349,16 @@ public class ForecastService {
     }
 
     private List<String> buildWeekPeriods(int periods) {
-        LocalDate start = LocalDate.now().with(java.time.DayOfWeek.MONDAY);
+        LocalDate start = LocalDate.now();
         List<String> keys = new ArrayList<>();
-        for (int i = 0; i < periods; i++) {
-            LocalDate weekStart = start.plusWeeks(i);
-            keys.add(String.format("%d-W%02d", weekStart.getYear(), weekStart.get(WeekFields.of(java.time.DayOfWeek.MONDAY, 1).weekOfWeekBasedYear())));
-        }
+        for (int i = 0; i < periods; i++) keys.add(FinanceService.weekKey(start.plusWeeks(i)));
         return keys;
     }
 
-    private Project getAccessibleProject(Long projectId) {
-        if (securityUtils.isPlatformUser()) return projectRepository.findById(projectId).orElseThrow(() -> new IllegalArgumentException("Project not found"));
-        Long orgId = securityUtils.getCurrentOrganisationId();
-        if (orgId == null) throw new IllegalStateException("User has no organisation");
-        return projectRepository.findByIdAndOrganisationId(projectId, orgId).orElseThrow(() -> new IllegalArgumentException("Project not accessible"));
+    private FinanceEntry findRow(List<FinanceEntry> rows, Long financeEntryId) {
+        return rows.stream().filter(row -> row.getId().equals(financeEntryId)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Finance entry not found"));
     }
 
     private BigDecimal nvl(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
-
-    // (Tu peux garder ta méthode debugForecastRow ici si tu en as encore besoin)
 }
