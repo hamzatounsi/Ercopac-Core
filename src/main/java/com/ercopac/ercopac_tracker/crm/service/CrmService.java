@@ -31,7 +31,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
+import com.ercopac.ercopac_tracker.crm.repository.LostReasonRepository;
 @Service
 @Transactional
 public class CrmService {
@@ -64,6 +64,7 @@ public class CrmService {
     private final SecurityUtils security;
     private final CrmOpportunityVisibilityService opportunityVisibility;
     private final Path attachmentRoot;
+    private final LostReasonRepository lostReasonRepo;
 
     @Autowired
     public CrmService(CrmPipelineStageRepository stageRepo,
@@ -85,6 +86,7 @@ public class CrmService {
                       UserRepository userRepo,
                       SecurityUtils security,
                       CrmOpportunityVisibilityService opportunityVisibility,
+                      LostReasonRepository lostReasonRepo,
                       @Value("${crm.storage.path:uploads/crm}") String attachmentPath) {
         this.stageRepo = stageRepo;
         this.leadRepo = leadRepo;
@@ -105,30 +107,31 @@ public class CrmService {
         this.userRepo = userRepo;
         this.security = security;
         this.opportunityVisibility = opportunityVisibility;
+        this.lostReasonRepo = lostReasonRepo; 
         this.attachmentRoot = Paths.get(attachmentPath).toAbsolutePath().normalize();
     }
-
-    /** Compatibility seam for existing focused service tests. */
     CrmService(CrmPipelineStageRepository stageRepo,
-               CrmLeadRepository leadRepo,
-               CrmOpportunityRepository opportunityRepo,
-               CrmActivityRepository activityRepo,
-               CrmAccountRepository accountRepo,
-               CrmSupplyCategoryRepository categoryRepo,
-               CrmOpportunityNoteRepository noteRepo,
-               CrmOpportunityAttachmentRepository attachmentRepo,
-               CrmOpportunityHistoryRepository historyRepo,
-               CrmOpportunityStageHistoryRepository stageHistoryRepo,
-               CrmSalesTargetRepository targetRepo,
-               OrganisationRepository organisationRepo,
-               UserRepository userRepo,
-               SecurityUtils security,
-               String attachmentPath) {
-        this(stageRepo, leadRepo, opportunityRepo, activityRepo, accountRepo, null, categoryRepo, null,
-                noteRepo, attachmentRepo, historyRepo, stageHistoryRepo, targetRepo, null, null,
-                organisationRepo, userRepo, security, new CrmOpportunityVisibilityService(security), attachmentPath);
-    }
-
+            CrmLeadRepository leadRepo,
+            CrmOpportunityRepository opportunityRepo,
+            CrmActivityRepository activityRepo,
+            CrmAccountRepository accountRepo,
+            CrmSupplyCategoryRepository categoryRepo,
+            CrmOpportunityNoteRepository noteRepo,
+            CrmOpportunityAttachmentRepository attachmentRepo,
+            CrmOpportunityHistoryRepository historyRepo,
+            CrmOpportunityStageHistoryRepository stageHistoryRepo,
+            CrmSalesTargetRepository targetRepo,
+            OrganisationRepository organisationRepo,
+            UserRepository userRepo,
+            SecurityUtils security,
+            LostReasonRepository lostReasonRepo, // ✅ ADDED HERE
+            String attachmentPath) {
+     this(stageRepo, leadRepo, opportunityRepo, activityRepo, accountRepo, null, categoryRepo, null,
+             noteRepo, attachmentRepo, historyRepo, stageHistoryRepo, targetRepo, null, null,
+             organisationRepo, userRepo, security, new CrmOpportunityVisibilityService(security), 
+             lostReasonRepo, // ✅ ADDED HERE
+             attachmentPath);
+ }
     @Transactional(readOnly = true)
     public CrmNotificationPreferenceDto getNotificationPreferences(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
@@ -155,6 +158,57 @@ public class CrmService {
         return new CrmNotificationPreferenceDto(entity.isEmailNotifications(), entity.isStageChangeAlerts(), entity.isClosingDateReminders());
     }
 
+    
+    
+ // Get lost reasons
+    @Transactional(readOnly = true)
+    public List<LostReasonDto> getLostReasons(Long requestedOrganisationId) {
+        Long organisationId = tenant(requestedOrganisationId);
+        return lostReasonRepo.findByOrganisation_IdAndActiveTrueOrderByCreatedAtAsc(organisationId)
+                .stream().map(this::toLostReasonDto).toList();
+    }
+
+    // Create lost reason
+    public LostReasonDto createLostReason(Long requestedOrganisationId, LostReasonDto dto) {
+        Organisation organisation = organisation(requestedOrganisationId);
+        LostReason entity = new LostReason();
+        entity.setOrganisation(organisation);
+        entity.setName(dto.name());
+        entity.setDescription(dto.description());
+        entity.setActive(dto.active());
+        return toLostReasonDto(lostReasonRepo.save(entity));
+    }
+
+    // Update lost reason
+    public LostReasonDto updateLostReason(Long requestedOrganisationId, Long id, LostReasonDto dto) {
+        Long organisationId = tenant(requestedOrganisationId);
+        LostReason entity = lostReasonRepo.findByIdAndOrganisation_Id(id, organisationId)
+                .orElseThrow(() -> notFound("Lost reason not found."));
+        entity.setName(dto.name());
+        entity.setDescription(dto.description());
+        entity.setActive(dto.active());
+        return toLostReasonDto(lostReasonRepo.save(entity));
+    }
+
+    // Delete lost reason
+    public void deleteLostReason(Long requestedOrganisationId, Long id) {
+        Long organisationId = tenant(requestedOrganisationId);
+        LostReason entity = lostReasonRepo.findByIdAndOrganisation_Id(id, organisationId)
+                .orElseThrow(() -> notFound("Lost reason not found."));
+        entity.setActive(false);
+        lostReasonRepo.save(entity);
+    }
+
+    private LostReasonDto toLostReasonDto(LostReason entity) {
+        return new LostReasonDto(
+            entity.getId(),
+            entity.getName(),
+            entity.getDescription(),
+            entity.isActive(),
+            entity.getCreatedAt(),
+            entity.getUpdatedAt()
+        );
+    }
     private Long tenant(Long requestedOrganisationId) {
         if (security.isPlatformUser()) {
             if (requestedOrganisationId == null) throw badRequest("An organisation is required.");

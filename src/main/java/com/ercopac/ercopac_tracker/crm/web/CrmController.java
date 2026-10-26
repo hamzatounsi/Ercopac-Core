@@ -126,6 +126,26 @@ public class CrmController {
     public CrmActivityDto addLeadActivity(@PathVariable Long orgId, @PathVariable Long id, @RequestBody Map<String, String> body) {
         return service.addLeadActivity(orgId, id, body.get("description"));
     }
+ // Lost Reasons endpoints
+    @GetMapping("/lost-reasons") @PreAuthorize(CRM_READ)
+    public List<LostReasonDto> lostReasons(@PathVariable Long orgId) { 
+        return service.getLostReasons(orgId); 
+    }
+
+    @PostMapping("/lost-reasons") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.CREATED)
+    public LostReasonDto createLostReason(@PathVariable Long orgId, @RequestBody LostReasonDto dto) { 
+        return service.createLostReason(orgId, dto); 
+    }
+
+    @PutMapping("/lost-reasons/{id}") @PreAuthorize(CRM_WRITE)
+    public LostReasonDto updateLostReason(@PathVariable Long orgId, @PathVariable Long id, @RequestBody LostReasonDto dto) { 
+        return service.updateLostReason(orgId, id, dto); 
+    }
+
+    @DeleteMapping("/lost-reasons/{id}") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteLostReason(@PathVariable Long orgId, @PathVariable Long id) { 
+        service.deleteLostReason(orgId, id); 
+    }
     @PostMapping("/leads") @PreAuthorize(CRM_WRITE) @ResponseStatus(HttpStatus.CREATED)
     public CrmLeadDto createLead(@PathVariable Long orgId, @RequestBody CrmLeadDto dto) { return service.createLead(orgId, dto); }
     @PutMapping("/leads/{id}") @PreAuthorize(CRM_WRITE)

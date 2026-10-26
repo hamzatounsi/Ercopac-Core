@@ -143,7 +143,18 @@ public class CrmOpportunity {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt = LocalDateTime.now();
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lost_reason_id")
+    private LostReason lostReason;
 
+    @Column(name = "lost_reason_other", length = 500)
+    private String lostReasonOther;
+
+    // Add getters and setters
+    public LostReason getLostReason() { return lostReason; }
+    public void setLostReason(LostReason value) { lostReason = value; }
+    public String getLostReasonOther() { return lostReasonOther; }
+    public void setLostReasonOther(String value) { lostReasonOther = value; }
     @PreUpdate
     public void preUpdate() { this.updatedAt = LocalDateTime.now(); }
 
