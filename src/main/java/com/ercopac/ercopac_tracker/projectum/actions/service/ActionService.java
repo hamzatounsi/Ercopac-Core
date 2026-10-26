@@ -176,16 +176,36 @@ public class ActionService {
 
         Project project = getAccessibleProject(projectId);
 
-        ActionItem item = securityUtils.isPlatformUser()
-                ? actionItemRepository.findById(actionId).orElseThrow(() -> new IllegalArgumentException("Action not found"))
-                : actionItemRepository.findByIdAndProjectIdAndOrganisationId(
-                    actionId, projectId, project.getOrganisation().getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Action not found"));
+        ActionItem item = actionItemRepository.findByIdAndProjectIdAndOrganisationId(
+                actionId, projectId, project.getOrganisation().getId())
+                .orElseThrow(() -> new IllegalArgumentException("Action not found"));
+
+        return saveComment(item, text);
+    }
+
+    public ActionCommentDto addMyActionComment(Long actionId, String text) {
+        Long organisationId = securityUtils.getCurrentOrganisationId();
+        Long userId = securityUtils.getCurrentUserId();
+        String fullName = userRepository.findByIdAndOrganisation_Id(userId, organisationId)
+                .map(user -> user.getFullName()).orElse("");
+        ActionItem item = actionItemRepository.findAssignedToUser(actionId, userId, fullName, organisationId)
+                .orElseThrow(() -> new IllegalArgumentException("Action not assigned to current employee"));
+        return saveComment(item, text);
+    }
+
+    private ActionCommentDto saveComment(ActionItem item, String text) {
+        if (text == null || text.isBlank() || text.length() > 2000) {
+            throw new IllegalArgumentException("Comment must be between 1 and 2000 characters");
+        }
 
         ActionComment comment = new ActionComment();
         comment.setActionItem(item);
-        comment.setAuthor(currentActor());
-        comment.setText(text);
+        var author = userRepository.findByIdAndOrganisation_Id(securityUtils.getCurrentUserId(), item.getOrganisation().getId())
+                .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
+        comment.setAuthor(author.getFullName() == null || author.getFullName().isBlank()
+                ? currentActor() : author.getFullName());
+        comment.setAuthorUser(author);
+        comment.setText(text.trim());
         comment.setCreatedAt(LocalDateTime.now());
 
         item.getComments().add(comment);
@@ -242,6 +262,7 @@ public class ActionService {
         ActionCommentDto dto = new ActionCommentDto();
         dto.setId(comment.getId());
         dto.setAuthor(comment.getAuthor());
+        dto.setAuthorId(comment.getAuthorUser() == null ? null : comment.getAuthorUser().getId());
         dto.setText(comment.getText());
         dto.setCreatedAt(comment.getCreatedAt());
         return dto;

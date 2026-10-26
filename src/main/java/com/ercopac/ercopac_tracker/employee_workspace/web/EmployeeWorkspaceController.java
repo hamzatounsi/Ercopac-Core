@@ -5,7 +5,10 @@ import com.ercopac.ercopac_tracker.employee_workspace.dto.UpdateEmployeeActionSt
 import com.ercopac.ercopac_tracker.employee_workspace.service.EmployeeProjectService;
 import com.ercopac.ercopac_tracker.projectum.actions.dto.ActionAttachmentDto;
 import com.ercopac.ercopac_tracker.projectum.actions.dto.ActionItemDto;
+import com.ercopac.ercopac_tracker.projectum.actions.dto.ActionCommentDto;
 import com.ercopac.ercopac_tracker.projectum.actions.service.ActionService;
+import com.ercopac.ercopac_tracker.tasks.dto.ProjectTaskHistoryDto;
+import com.ercopac.ercopac_tracker.tasks.service.ProjectTaskHistoryService;
 import jakarta.validation.Valid;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/employee")
@@ -23,15 +27,35 @@ import java.util.List;
 public class EmployeeWorkspaceController {
     private final ActionService actionService;
     private final EmployeeProjectService employeeProjectService;
+    private final ProjectTaskHistoryService taskHistoryService;
 
-    public EmployeeWorkspaceController(ActionService actionService, EmployeeProjectService employeeProjectService) {
+    public EmployeeWorkspaceController(ActionService actionService, EmployeeProjectService employeeProjectService,
+                                       ProjectTaskHistoryService taskHistoryService) {
         this.actionService = actionService;
         this.employeeProjectService = employeeProjectService;
+        this.taskHistoryService = taskHistoryService;
     }
 
     @GetMapping("/actions")
     public List<ActionItemDto> getMyActions() {
         return actionService.getMyActions();
+    }
+
+    @PostMapping("/actions/{actionId}/comments")
+    public ActionCommentDto addMyActionComment(@PathVariable Long actionId,
+                                               @RequestBody Map<String, String> request) {
+        return actionService.addMyActionComment(actionId, request.get("text"));
+    }
+
+    @GetMapping("/projects/{projectId}/tasks/{taskId}/comments")
+    public List<ProjectTaskHistoryDto> getMyTaskComments(@PathVariable Long projectId, @PathVariable Long taskId) {
+        return taskHistoryService.getMyTaskComments(projectId, taskId);
+    }
+
+    @PostMapping("/projects/{projectId}/tasks/{taskId}/comments")
+    public ProjectTaskHistoryDto addMyTaskComment(@PathVariable Long projectId, @PathVariable Long taskId,
+                                                  @RequestBody Map<String, String> request) {
+        return taskHistoryService.addMyTaskComment(projectId, taskId, request.get("text"));
     }
 
     @PostMapping(value = "/actions/{actionId}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
