@@ -1128,6 +1128,24 @@ public class ProjectTaskService {
             if (hasText(req.getWbsCode())) importedByWbs.put(req.getWbsCode().trim(), saved);
         }
 
+        // Recreate imported dependencies (validated above), then cascade dates through the scheduler.
+        Set<Long> predecessorIds = new LinkedHashSet<>();
+        for (UpdateProjectTaskRequest req : importedTasks) {
+            for (String predecessorWbs : importedPredecessors(req)) {
+                TaskDependency dependency = new TaskDependency();
+                dependency.setProjectId(projectId);
+                dependency.setPredecessorTaskId(importedByWbs.get(predecessorWbs).getId());
+                dependency.setSuccessorTaskId(importedByWbs.get(req.getWbsCode().trim()).getId());
+                dependency.setDependencyType("FS");
+                dependency.setLagDays(0);
+                taskDependencyRepository.save(dependency);
+                predecessorIds.add(dependency.getPredecessorTaskId());
+            }
+        }
+        for (Long predecessorId : predecessorIds) {
+            taskSchedulingService.rescheduleFromTask(projectId, predecessorId);
+        }
+
         rebuildStructureFromParentId(projectId);
         rollupSummaries(projectId);
         projectProgressService.recalculate(projectId);
@@ -1206,6 +1224,55 @@ public class ProjectTaskService {
                 availableWbsCodes.add(wbs);
             }
         }
+        validateImportedPredecessors(importedTasks, wbsCodes);
+    }
+
+    private List<String> importedPredecessors(UpdateProjectTaskRequest req) {
+        if (!hasText(req.getPredecessors())) return List.of();
+        return Arrays.stream(req.getPredecessors().split("[,;]"))
+                .map(String::trim)
+                .filter(this::hasText)
+                .distinct()
+                .toList();
+    }
+
+    private void validateImportedPredecessors(List<UpdateProjectTaskRequest> importedTasks, Set<String> wbsCodes) {
+        Map<String, List<String>> predecessorsByWbs = new HashMap<>();
+        for (int i = 0; i < importedTasks.size(); i++) {
+            int row = i + 1;
+            UpdateProjectTaskRequest req = importedTasks.get(i);
+            List<String> predecessors = importedPredecessors(req);
+            if (predecessors.isEmpty()) continue;
+            if (!hasText(req.getWbsCode())) throw importError(row, "a task with predecessors needs a WBS");
+            String wbs = req.getWbsCode().trim();
+            for (String predecessor : predecessors) {
+                if (predecessor.equals(wbs)) throw importError(row, "a task cannot depend on itself");
+                if (!wbsCodes.contains(predecessor)) {
+                    throw importError(row, "predecessor WBS '" + predecessor + "' is not in the file");
+                }
+            }
+            predecessorsByWbs.put(wbs, predecessors);
+        }
+        Set<String> done = new HashSet<>();
+        for (int i = 0; i < importedTasks.size(); i++) {
+            UpdateProjectTaskRequest req = importedTasks.get(i);
+            if (hasText(req.getWbsCode())
+                    && hasPredecessorCycle(req.getWbsCode().trim(), predecessorsByWbs, new HashSet<>(), done)) {
+                throw importError(i + 1, "predecessors form a cycle");
+            }
+        }
+    }
+
+    private boolean hasPredecessorCycle(String wbs, Map<String, List<String>> predecessorsByWbs,
+                                        Set<String> path, Set<String> done) {
+        if (done.contains(wbs)) return false;
+        if (!path.add(wbs)) return true;
+        for (String predecessor : predecessorsByWbs.getOrDefault(wbs, List.of())) {
+            if (hasPredecessorCycle(predecessor, predecessorsByWbs, path, done)) return true;
+        }
+        path.remove(wbs);
+        done.add(wbs);
+        return false;
     }
 
     private IllegalArgumentException importError(int row, String reason) {
