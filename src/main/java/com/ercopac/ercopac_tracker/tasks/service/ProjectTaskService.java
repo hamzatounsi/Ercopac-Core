@@ -937,7 +937,8 @@ public class ProjectTaskService {
             task.setBaselineEnd(end);
             task.setPlannedStart(start);
             task.setPlannedEnd(end);
-            task.setDurationDays(workingDuration(task, start, end));
+            // An end without a start (e.g. an imported row) keeps its duration instead of failing.
+            if (start != null && end != null) task.setDurationDays(workingDuration(task, start, end));
             return;
         }
         if (actualStartChanged) {
@@ -946,7 +947,9 @@ public class ProjectTaskService {
             return;
         }
         if (actualEndChanged) {
-            task.setDurationDays(workingDuration(task, newActualStart, newActualEnd));
+            if (newActualStart != null && newActualEnd != null) {
+                task.setDurationDays(workingDuration(task, newActualStart, newActualEnd));
+            }
             return;
         }
 
