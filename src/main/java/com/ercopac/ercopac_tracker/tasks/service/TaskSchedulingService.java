@@ -83,6 +83,10 @@ public class TaskSchedulingService {
 
                 // Skip manually-scheduled tasks
                 if ("MANUAL".equalsIgnoreCase(successor.getScheduleMode())) continue;
+                // Tasks without any dates (e.g. imported without dates) are not scheduled
+                if (successor.getBaselineStart() == null && successor.getBaselineEnd() == null
+                        && successor.getPlannedStart() == null && successor.getPlannedEnd() == null
+                        && successor.getActualStart() == null && successor.getActualEnd() == null) continue;
 
                 ProjectTask predecessor = allTasks.stream()
                         .filter(t -> t.getId().equals(currentId))
@@ -121,6 +125,7 @@ public class TaskSchedulingService {
         LocalDate predEndRaw = pred.getBaselineEnd() != null ? pred.getBaselineEnd() : pred.getPlannedEnd();
         if (predStart == null && predEndRaw == null) return false;
         LocalDate predEnd = predEndRaw != null ? predEndRaw : predStart;
+        if (predStart == null) predStart = predEnd;
 
         String type = dep.getDependencyType() == null ? "FS" : dep.getDependencyType().toUpperCase();
         int lag = dep.getLagDays() == null ? 0 : dep.getLagDays();

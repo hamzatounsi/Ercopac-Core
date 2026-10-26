@@ -24,6 +24,12 @@ public class FinanceEntry {
     @Column(name = "wbs_code", nullable = false, length = 100)
     private String wbsCode;
 
+    @Column(name = "parent_id")
+    private Long parentId;
+
+    @Column(name = "template_row_id")
+    private Long templateRowId;
+
     @Column(name = "resource_type_code", length = 40)
     private String resourceTypeCode;
 
@@ -85,6 +91,10 @@ public class FinanceEntry {
 
     public String getWbsCode() { return wbsCode; }
     public void setWbsCode(String wbsCode) { this.wbsCode = wbsCode; }
+    public Long getParentId() { return parentId; }
+    public void setParentId(Long parentId) { this.parentId = parentId; }
+    public Long getTemplateRowId() { return templateRowId; }
+    public void setTemplateRowId(Long templateRowId) { this.templateRowId = templateRowId; }
 
     public String getResourceTypeCode() { return resourceTypeCode; }
     public void setResourceTypeCode(String resourceTypeCode) { this.resourceTypeCode = resourceTypeCode; }

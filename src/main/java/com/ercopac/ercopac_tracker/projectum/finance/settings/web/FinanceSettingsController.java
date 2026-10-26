@@ -11,11 +11,17 @@ import com.ercopac.ercopac_tracker.projectum.finance.settings.dto.SavePaymentSch
 import com.ercopac.ercopac_tracker.projectum.finance.settings.service.FinanceSettingsService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/finance/settings")
 public class FinanceSettingsController {
+
+    private static final String FINANCE_READ =
+            "@permissionChecker.canRead(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FINANCE)";
+    private static final String FINANCE_WRITE =
+            "@permissionChecker.canWrite(authentication, T(com.ercopac.ercopac_tracker.platform_permissions.domain.PermissionModule).FINANCE)";
 
     private final FinanceSettingsService financeSettingsService;
 
@@ -24,11 +30,13 @@ public class FinanceSettingsController {
     }
 
     @GetMapping
+    @PreAuthorize(FINANCE_READ)
     public ResponseEntity<FinanceSettingsDto> getSettings(@RequestParam(required = false) Long projectId) {
         return ResponseEntity.ok(financeSettingsService.getSettings(projectId));
     }
 
     @PutMapping
+    @PreAuthorize(FINANCE_WRITE)
     public ResponseEntity<FinanceSettingsDto> saveSettings(
             @RequestParam(required = false) Long projectId,
             @Valid @RequestBody SaveFinanceSettingsRequest request
@@ -37,6 +45,7 @@ public class FinanceSettingsController {
     }
 
     @PostMapping("/apply-template")
+    @PreAuthorize(FINANCE_WRITE)
     public ResponseEntity<ApplyFinanceTemplateResultDto> applyTemplate(
             @RequestParam Long projectId,
             @RequestBody ApplyFinanceTemplateRequest request
@@ -45,6 +54,7 @@ public class FinanceSettingsController {
     }
 
     @PostMapping("/import-wbs")
+    @PreAuthorize(FINANCE_WRITE)
     public ResponseEntity<FinanceSettingsDto> importWbsTemplate(
             @RequestParam(required = false) Long projectId,
             @Valid @RequestBody ImportFinanceWbsTemplateRequest request
@@ -57,11 +67,13 @@ public class FinanceSettingsController {
     // ==========================================
 
     @GetMapping("/payments")
+    @PreAuthorize(FINANCE_READ)
     public ResponseEntity<PaymentScheduleDto> getPaymentSchedule(@RequestParam Long projectId) {
         return ResponseEntity.ok(financeSettingsService.getPaymentSchedule(projectId));
     }
 
     @PutMapping("/payments")
+    @PreAuthorize(FINANCE_WRITE)
     public ResponseEntity<PaymentScheduleDto> savePaymentSchedule(
             @RequestParam Long projectId,
             @Valid @RequestBody SavePaymentScheduleRequest request
@@ -69,16 +81,19 @@ public class FinanceSettingsController {
         return ResponseEntity.ok(financeSettingsService.savePaymentSchedule(projectId, request));
     }
     @GetMapping("/forecast-baseline")
+    @PreAuthorize(FINANCE_READ)
     public ResponseEntity<ForecastBaselineDto> getForecastBaseline(@RequestParam Long projectId) {
         return ResponseEntity.ok(financeSettingsService.getForecastBaseline(projectId));
     }
 
     @PostMapping("/forecast-baseline/set")
+    @PreAuthorize(FINANCE_WRITE)
     public ResponseEntity<ForecastBaselineDto> setForecastBaseline(@RequestParam Long projectId) {
         return ResponseEntity.ok(financeSettingsService.setForecastBaseline(projectId));
     }
 
     @PostMapping("/forecast-baseline/reset")
+    @PreAuthorize(FINANCE_WRITE)
     public ResponseEntity<ForecastBaselineDto> resetForecastBaseline(@RequestParam Long projectId) {
         return ResponseEntity.ok(financeSettingsService.resetForecastBaseline(projectId));
     }

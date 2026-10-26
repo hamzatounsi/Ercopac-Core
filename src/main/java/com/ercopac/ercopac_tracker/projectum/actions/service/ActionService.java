@@ -2,6 +2,7 @@ package com.ercopac.ercopac_tracker.projectum.actions.service;
 
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
+import com.ercopac.ercopac_tracker.projects.service.ProjectAccessService;
 import com.ercopac.ercopac_tracker.projectum.actions.domain.*;
 import com.ercopac.ercopac_tracker.projectum.actions.dto.*;
 import com.ercopac.ercopac_tracker.projectum.actions.repository.ActionItemRepository;
@@ -10,9 +11,11 @@ import com.ercopac.ercopac_tracker.user.UserRepository;
 
 import java.io.IOException;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,15 +29,18 @@ public class ActionService {
     private final ProjectRepository projectRepository;
     private final SecurityUtils securityUtils;
     private final UserRepository userRepository;
+    private final ProjectAccessService projectAccessService;
 
     public ActionService(ActionItemRepository actionItemRepository,
                          ProjectRepository projectRepository,
                          SecurityUtils securityUtils,
-                        UserRepository userRepository) {
+                        UserRepository userRepository,
+                         ProjectAccessService projectAccessService) {
         this.actionItemRepository = actionItemRepository;
         this.projectRepository = projectRepository;
         this.securityUtils = securityUtils;
         this.userRepository = userRepository;
+        this.projectAccessService = projectAccessService;
     }
 
     @Transactional(readOnly = true)
@@ -170,16 +176,36 @@ public class ActionService {
 
         Project project = getAccessibleProject(projectId);
 
-        ActionItem item = securityUtils.isPlatformUser()
-                ? actionItemRepository.findById(actionId).orElseThrow(() -> new IllegalArgumentException("Action not found"))
-                : actionItemRepository.findByIdAndProjectIdAndOrganisationId(
-                    actionId, projectId, project.getOrganisation().getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Action not found"));
+        ActionItem item = actionItemRepository.findByIdAndProjectIdAndOrganisationId(
+                actionId, projectId, project.getOrganisation().getId())
+                .orElseThrow(() -> new IllegalArgumentException("Action not found"));
+
+        return saveComment(item, text);
+    }
+
+    public ActionCommentDto addMyActionComment(Long actionId, String text) {
+        Long organisationId = securityUtils.getCurrentOrganisationId();
+        Long userId = securityUtils.getCurrentUserId();
+        String fullName = userRepository.findByIdAndOrganisation_Id(userId, organisationId)
+                .map(user -> user.getFullName()).orElse("");
+        ActionItem item = actionItemRepository.findAssignedToUser(actionId, userId, fullName, organisationId)
+                .orElseThrow(() -> new IllegalArgumentException("Action not assigned to current employee"));
+        return saveComment(item, text);
+    }
+
+    private ActionCommentDto saveComment(ActionItem item, String text) {
+        if (text == null || text.isBlank() || text.length() > 2000) {
+            throw new IllegalArgumentException("Comment must be between 1 and 2000 characters");
+        }
 
         ActionComment comment = new ActionComment();
         comment.setActionItem(item);
-        comment.setAuthor(currentActor());
-        comment.setText(text);
+        var author = userRepository.findByIdAndOrganisation_Id(securityUtils.getCurrentUserId(), item.getOrganisation().getId())
+                .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
+        comment.setAuthor(author.getFullName() == null || author.getFullName().isBlank()
+                ? currentActor() : author.getFullName());
+        comment.setAuthorUser(author);
+        comment.setText(text.trim());
         comment.setCreatedAt(LocalDateTime.now());
 
         item.getComments().add(comment);
@@ -236,6 +262,7 @@ public class ActionService {
         ActionCommentDto dto = new ActionCommentDto();
         dto.setId(comment.getId());
         dto.setAuthor(comment.getAuthor());
+        dto.setAuthorId(comment.getAuthorUser() == null ? null : comment.getAuthorUser().getId());
         dto.setText(comment.getText());
         dto.setCreatedAt(comment.getCreatedAt());
         return dto;
@@ -247,6 +274,10 @@ public class ActionService {
         dto.setFileName(attachment.getFileName());
         dto.setContentType(attachment.getContentType());
         dto.setFileSize(attachment.getFileSize());
+        if (attachment.getUploadedBy() != null) {
+            dto.setUploadedById(attachment.getUploadedBy().getId());
+            dto.setUploadedBy(attachment.getUploadedBy().getFullName());
+        }
         return dto;
     }
 
@@ -306,11 +337,21 @@ public List<ActionAttachmentDto> uploadAttachments(
         Long actionId,
         List<MultipartFile> files
 ) {
+    return saveAttachments(getAccessibleAction(projectId, actionId), files);
+}
+
+/** Employee upload: same assignment check as employee comments. */
+public List<ActionAttachmentDto> uploadMyActionAttachments(Long actionId, List<MultipartFile> files) {
+    return saveAttachments(getMyAssignedAction(actionId), files);
+}
+
+private List<ActionAttachmentDto> saveAttachments(ActionItem item, List<MultipartFile> files) {
     if (files == null || files.isEmpty()) {
         throw new IllegalArgumentException("No files selected");
     }
 
-    ActionItem item = getAccessibleAction(projectId, actionId);
+    var uploader = userRepository.findByIdAndOrganisation_Id(
+            securityUtils.getCurrentUserId(), item.getOrganisation().getId()).orElse(null);
 
     for (MultipartFile file : files) {
         if (file.isEmpty()) continue;
@@ -322,6 +363,7 @@ public List<ActionAttachmentDto> uploadAttachments(
             attachment.setContentType(file.getContentType() == null ? "application/octet-stream" : file.getContentType());
             attachment.setFileSize(file.getSize());
             attachment.setData(file.getBytes());
+            attachment.setUploadedBy(uploader);
 
             item.getAttachments().add(attachment);
         } catch (IOException e) {
@@ -343,14 +385,44 @@ public DownloadedActionAttachment downloadAttachment(
         Long actionId,
         Long attachmentId
 ) {
-    ActionItem item = getAccessibleAction(projectId, actionId);
+    return toDownload(findAttachment(getAccessibleAction(projectId, actionId), attachmentId));
+}
 
-    ActionAttachment attachment = item.getAttachments()
+/** Employee download: repeats the assignment check used to list the employee's actions. */
+@Transactional(readOnly = true)
+public DownloadedActionAttachment downloadMyActionAttachment(Long actionId, Long attachmentId) {
+    return toDownload(findAttachment(getMyAssignedAction(actionId), attachmentId));
+}
+
+public void deleteAttachment(Long projectId, Long actionId, Long attachmentId) {
+    ActionItem item = getAccessibleAction(projectId, actionId);
+    ActionAttachment attachment = findAttachment(item, attachmentId);
+    if (!isUploader(attachment) && !securityUtils.hasAnyRole("PROJECT_MANAGER", "PROJECT_MANAGER_LEAD")) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the uploader or a project manager can delete this attachment");
+    }
+    item.getAttachments().remove(attachment);
+    actionItemRepository.save(item);
+}
+
+public void deleteMyActionAttachment(Long actionId, Long attachmentId) {
+    ActionItem item = getMyAssignedAction(actionId);
+    ActionAttachment attachment = findAttachment(item, attachmentId);
+    if (!isUploader(attachment)) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the uploader or a project manager can delete this attachment");
+    }
+    item.getAttachments().remove(attachment);
+    actionItemRepository.save(item);
+}
+
+private ActionAttachment findAttachment(ActionItem item, Long attachmentId) {
+    return item.getAttachments()
             .stream()
             .filter(a -> a.getId().equals(attachmentId))
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("Attachment not found"));
+}
 
+private DownloadedActionAttachment toDownload(ActionAttachment attachment) {
     return new DownloadedActionAttachment(
             attachment.getFileName(),
             attachment.getContentType() == null ? "application/octet-stream" : attachment.getContentType(),
@@ -358,21 +430,23 @@ public DownloadedActionAttachment downloadAttachment(
     );
 }
 
-public void deleteAttachment(Long projectId, Long actionId, Long attachmentId) {
-    ActionItem item = getAccessibleAction(projectId, actionId);
+private boolean isUploader(ActionAttachment attachment) {
+    return attachment.getUploadedBy() != null
+            && attachment.getUploadedBy().getId().equals(securityUtils.getCurrentUserId());
+}
 
-    boolean removed = item.getAttachments()
-            .removeIf(a -> a.getId().equals(attachmentId));
-
-    if (!removed) {
-        throw new IllegalArgumentException("Attachment not found");
-    }
-
-    actionItemRepository.save(item);
+private ActionItem getMyAssignedAction(Long actionId) {
+    Long organisationId = securityUtils.getCurrentOrganisationId();
+    Long userId = securityUtils.getCurrentUserId();
+    String fullName = userRepository.findByIdAndOrganisation_Id(userId, organisationId)
+            .map(user -> user.getFullName())
+            .orElse("");
+    return actionItemRepository.findAssignedToUser(actionId, userId, fullName, organisationId)
+            .orElseThrow(() -> new IllegalArgumentException("Action not assigned to current employee"));
 }
 
 private ActionItem getAccessibleAction(Long projectId, Long actionId) {
-    Project project = getAccessibleProject(projectId);
+    Project project = projectAccessService.getAccessibleProject(projectId);
 
     if (securityUtils.isPlatformUser()) {
         return actionItemRepository.findById(actionId)

@@ -7,6 +7,9 @@ import java.util.List;
 
 public interface ProjectTaskHistoryRepository extends JpaRepository<ProjectTaskHistory, Long> {
 
+    List<ProjectTaskHistory> findByOrganisationIdAndProjectIdAndTaskIdAndFieldNameOrderByChangedAtDesc(
+            Long organisationId, Long projectId, Long taskId, String fieldName);
+
     List<ProjectTaskHistory> findByOrganisationIdAndProjectIdOrderByChangedAtDesc(
             Long organisationId,
             Long projectId

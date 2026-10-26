@@ -1,21 +1,26 @@
 package com.ercopac.ercopac_tracker.projectum.finance.web;
 
 import java.util.List;
+import java.util.Map;
+import java.math.BigDecimal;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ercopac.ercopac_tracker.projectum.finance.dto.FinanceCostBreakdownDto;
 import com.ercopac.ercopac_tracker.projectum.finance.dto.FinanceEntryDetailDto;
 import com.ercopac.ercopac_tracker.projectum.finance.dto.FinanceEntryDto;
+import com.ercopac.ercopac_tracker.projectum.finance.dto.FinanceImportResultDto;
 import com.ercopac.ercopac_tracker.projectum.finance.dto.FinanceProjectChartDto;
 import com.ercopac.ercopac_tracker.projectum.finance.dto.FinanceSummaryDto;
 import com.ercopac.ercopac_tracker.projectum.finance.dto.UpsertFinanceEntryRequest;
@@ -71,6 +76,13 @@ public class FinanceController {
         return ResponseEntity.ok(financeService.updateEntry(projectId, entryId, request));
     }
 
+    @PatchMapping("/{entryId}/forecast")
+    @PreAuthorize(FINANCE_WRITE)
+    public ResponseEntity<FinanceEntryDto> updateForecastValue(@PathVariable Long projectId,
+            @PathVariable Long entryId, @RequestBody Map<String, BigDecimal> request) {
+        return ResponseEntity.ok(financeService.updateForecastValue(projectId, entryId, request.get("forecast")));
+    }
+
     @DeleteMapping("/{entryId}")
     @PreAuthorize(FINANCE_WRITE)
     public ResponseEntity<Void> deleteFinanceEntry(
@@ -83,22 +95,12 @@ public class FinanceController {
 
     @PostMapping("/import")
     @PreAuthorize(FINANCE_WRITE)
-    public ResponseEntity<Void> importFinance(
+    public ResponseEntity<FinanceImportResultDto> importFinance(
             @PathVariable Long projectId,
+            @RequestParam(defaultValue = "false") boolean overwrite,
             @RequestBody List<UpsertFinanceEntryRequest> rows
     ) {
-        System.out.println("✅ Backend received " + rows.size() + " rows for project " + projectId);
-        
-        // Print the first row to verify
-        if (!rows.isEmpty()) {
-            UpsertFinanceEntryRequest firstRow = rows.get(0);
-            System.out.println("✅ First row WBS: " + firstRow.getWbsCode());
-            System.out.println("✅ First row Budget: " + firstRow.getBudget());
-            System.out.println("✅ First row Actual: " + firstRow.getActualCost());
-        }
-
-        financeService.importEntries(projectId, rows);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(financeService.importEntries(projectId, rows, overwrite));
     }
 
     @GetMapping("/{entryId}/detail")

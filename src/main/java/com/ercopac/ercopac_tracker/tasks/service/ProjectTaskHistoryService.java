@@ -4,6 +4,9 @@ import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTaskHistory;
 import com.ercopac.ercopac_tracker.tasks.dto.ProjectTaskHistoryDto;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskHistoryRepository;
+import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
+import com.ercopac.ercopac_tracker.security.SecurityUtils;
+import com.ercopac.ercopac_tracker.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +18,38 @@ import java.util.Objects;
 public class ProjectTaskHistoryService {
 
     private final ProjectTaskHistoryRepository repository;
+    private final ProjectTaskRepository taskRepository;
+    private final SecurityUtils securityUtils;
+    private final UserRepository userRepository;
+
+    public ProjectTaskHistoryDto addMyTaskComment(Long projectId, Long taskId, String text) {
+        if (text == null || text.isBlank() || text.length() > 2000) {
+            throw new IllegalArgumentException("Comment must be between 1 and 2000 characters");
+        }
+        Long organisationId = securityUtils.getCurrentOrganisationId();
+        Long userId = securityUtils.getCurrentUserId();
+        ProjectTask task = taskRepository.findAssignedTask(taskId, projectId, organisationId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not assigned to current employee"));
+        ProjectTaskHistory comment = new ProjectTaskHistory();
+        comment.setOrganisationId(organisationId);
+        comment.setProjectId(projectId);
+        comment.setTaskId(taskId);
+        comment.setTaskName(task.getName());
+        comment.setFieldName("Comment");
+        comment.setNewValue(text.trim());
+        comment.setChangedByUserId(userId);
+        comment.setChangedByName(userRepository.findByIdAndOrganisation_Id(userId, organisationId)
+                .map(user -> user.getFullName()).orElse("Employee"));
+        return toDto(repository.save(comment));
+    }
+
+    public List<ProjectTaskHistoryDto> getMyTaskComments(Long projectId, Long taskId) {
+        Long organisationId = securityUtils.getCurrentOrganisationId();
+        taskRepository.findAssignedTask(taskId, projectId, organisationId, securityUtils.getCurrentUserId())
+                .orElseThrow(() -> new IllegalArgumentException("Task not assigned to current employee"));
+        return repository.findByOrganisationIdAndProjectIdAndTaskIdAndFieldNameOrderByChangedAtDesc(
+                organisationId, projectId, taskId, "Comment").stream().map(this::toDto).toList();
+    }
 
     public void logTaskUpdate(
             ProjectTask oldTask,
