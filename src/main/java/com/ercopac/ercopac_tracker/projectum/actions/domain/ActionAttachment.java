@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.projectum.actions.domain;
 
+import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
 
 @Entity
@@ -25,6 +26,10 @@ public class ActionAttachment {
     @Basic(fetch = FetchType.LAZY)
     @Column(nullable = false)
     private byte[] data;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "uploaded_by_user_id")
+    private AppUser uploadedBy;
 
     public Long getId() {
         return id;
@@ -73,6 +78,9 @@ public class ActionAttachment {
     public void setData(byte[] data) {
         this.data = data;
     }
+
+    public AppUser getUploadedBy() { return uploadedBy; }
+    public void setUploadedBy(AppUser uploadedBy) { this.uploadedBy = uploadedBy; }
 
     // getters/setters
 

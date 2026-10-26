@@ -5,6 +5,8 @@ public class ActionAttachmentDto {
     private String fileName;
     private String contentType;
     private Long fileSize;
+    private Long uploadedById;
+    private String uploadedBy;
 
     public ActionAttachmentDto() {}
 
@@ -19,4 +21,10 @@ public class ActionAttachmentDto {
 
     public Long getFileSize() { return fileSize; }
     public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
+
+    public Long getUploadedById() { return uploadedById; }
+    public void setUploadedById(Long uploadedById) { this.uploadedById = uploadedById; }
+
+    public String getUploadedBy() { return uploadedBy; }
+    public void setUploadedBy(String uploadedBy) { this.uploadedBy = uploadedBy; }
 }
