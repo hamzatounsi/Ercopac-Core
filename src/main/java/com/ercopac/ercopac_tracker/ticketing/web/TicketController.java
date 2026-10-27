@@ -33,18 +33,15 @@ public class TicketController {
     
     // 1. Accès standard : Lecture, création, messages
     private static final String STANDARD_ACCESS = 
-        "hasAnyRole('H24', 'H24_LEAD', 'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', " +
-        "'PROJECT_MANAGER_LEAD', 'MANAGER', 'DEPARTMENT_MANAGER', 'EMPLOYEE', 'CLIENT')";
+        "hasAnyRole('SALES_MANAGER_LEAD', 'H24', 'H24_LEAD', 'CLIENT')";
     
     // 2. Accès avancé : Modification, clôture, réouverture, assignation
     private static final String ADVANCED_ACCESS = 
-        "hasAnyRole('H24', 'H24_LEAD', 'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', " +
-        "'PROJECT_MANAGER_LEAD', 'MANAGER', 'DEPARTMENT_MANAGER')";
+        "hasAnyRole('SALES_MANAGER_LEAD', 'H24', 'H24_LEAD')";
 
     // 3. Accès critique : Escalade, suppression (Réservé aux Leads et Admins)
     private static final String CRITICAL_ACCESS = 
-        "hasAnyRole('H24_LEAD', 'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER_LEAD', " +
-        "'MANAGER', 'DEPARTMENT_MANAGER')";
+        "hasAnyRole('SALES_MANAGER_LEAD', 'H24_LEAD')";
 
     @GetMapping
     @PreAuthorize(STANDARD_ACCESS)
@@ -71,6 +68,12 @@ public class TicketController {
                         Sort.by(s.length > 1 && "asc".equalsIgnoreCase(s[1]) ? Sort.Direction.ASC : Sort.Direction.DESC, s[0])
                 )
         );
+    }
+
+    @GetMapping("/agents")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public List<UserSummary> agents() {
+        return service.agents();
     }
 
     @GetMapping("/statistics")

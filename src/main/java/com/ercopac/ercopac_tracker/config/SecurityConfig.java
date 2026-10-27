@@ -62,17 +62,12 @@ public class SecurityConfig {
     };
 
     // 👈 NOUVEAU : Tableau des rôles autorisés pour le module Ticketing
+    // Support staff (SALES_MANAGER_LEAD, H24, H24_LEAD) and CLIENT for the client portal
     private static final String[] TICKET_ROLES = {
-            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
-            "ORG_ADMIN", "ROLE_ORG_ADMIN",
-            "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
-            "PROJECT_MANAGER_LEAD", "ROLE_PROJECT_MANAGER_LEAD",
-            "MANAGER", "ROLE_MANAGER",
-            "DEPARTMENT_MANAGER", "ROLE_DEPARTMENT_MANAGER",
-            "EMPLOYEE", "ROLE_EMPLOYEE",
-            "CLIENT", "ROLE_CLIENT",
-            "H24", "ROLE_H24",          // 👈 AJOUT
-            "H24_LEAD", "ROLE_H24_LEAD" // 👈 AJOUT
+            "SALES_MANAGER_LEAD", "ROLE_SALES_MANAGER_LEAD",
+            "H24", "ROLE_H24",
+            "H24_LEAD", "ROLE_H24_LEAD",
+            "CLIENT", "ROLE_CLIENT"
     };
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter, CorsConfigurationSource corsConfigurationSource) {

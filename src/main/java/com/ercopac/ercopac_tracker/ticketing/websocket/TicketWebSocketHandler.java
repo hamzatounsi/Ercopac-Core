@@ -77,8 +77,11 @@ public class TicketWebSocketHandler extends TextWebSocketHandler {
     private void broadcast(Long ticketId, TicketMessageDto message) {
         for (WebSocketSession session : subscribers.getOrDefault(ticketId, Set.of())) {
             try {
-                String role = (String) session.getAttributes().get("role");
-                if (message.internalNote() && Role.CLIENT.name().equals(role)) {
+                // Internal notes only go to support staff (the handshake stores the list of roles)
+                Object roles = session.getAttributes().get("roles");
+                boolean staff = roles instanceof java.util.List<?> list
+                        && (list.contains(Role.SALES_MANAGER_LEAD.name()) || list.contains(Role.H24.name()) || list.contains(Role.H24_LEAD.name()));
+                if (message.internalNote() && !staff) {
                     continue;
                 }
                 send(session, Map.of("type", "message", "ticketId", ticketId, "message", message));
