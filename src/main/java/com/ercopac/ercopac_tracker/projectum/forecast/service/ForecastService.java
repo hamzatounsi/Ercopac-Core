@@ -20,7 +20,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.temporal.ChronoUnit;
 import java.time.temporal.WeekFields;
 import java.util.*;
 import java.util.function.Function;
@@ -141,56 +140,33 @@ public class ForecastService {
         }
 
         BigDecimal totalRemaining = BigDecimal.ZERO;
-        LocalDate today = LocalDate.now();
 
         for (ProjectTask t : tasksToProcess) {
             if (allTasks.stream().anyMatch(child -> t.getId().equals(child.getParentId()))) continue;
+            BigDecimal taskHours = taskHours(t);
             if (t.getPlannedHours() != null && t.getActualHours() != null) {
                 totalRemaining = totalRemaining.add(t.getPlannedHours().subtract(t.getActualHours()).max(BigDecimal.ZERO));
                 continue;
             }
-            if (t.getPlannedHours() != null && t.getPercentComplete() != null) {
+            if (t.getPercentComplete() != null) {
                 int remainingPercent = 100 - Math.max(0, Math.min(100, t.getPercentComplete()));
-                totalRemaining = totalRemaining.add(t.getPlannedHours()
+                totalRemaining = totalRemaining.add(taskHours
                         .multiply(BigDecimal.valueOf(remainingPercent)).divide(BigDecimal.valueOf(100)));
                 continue;
             }
-            if (t.getPlannedHours() != null) {
-                if (!"COMPLETED".equalsIgnoreCase(t.getStatus()) && !"DONE".equalsIgnoreCase(t.getStatus()))
-                    totalRemaining = totalRemaining.add(t.getPlannedHours());
-                continue;
-            }
-            BigDecimal remainingForTask = BigDecimal.ZERO;
-
-            if (t.getPlannedStart() != null && t.getPlannedEnd() != null && t.getPlannedEnd().isAfter(today)) {
-                long totalDays = ChronoUnit.DAYS.between(t.getPlannedStart(), t.getPlannedEnd());
-                long remainingDays = ChronoUnit.DAYS.between(today, t.getPlannedEnd());
-
-                if (totalDays > 0) {
-                    double ratio = (double) Math.max(0, remainingDays) / totalDays;
-                    ratio = Math.min(1.0, ratio);
-
-                    BigDecimal planned = t.getPlannedHours();
-                    if (planned == null && t.getDurationDays() != null) {
-                        int days = t.getDurationDays();
-                        int allocation = t.getAllocationPercent() != null ? t.getAllocationPercent() : 100;
-                        planned = BigDecimal.valueOf((days * 8.0 * allocation) / 100.0);
-                    }
-                    if (planned == null) planned = BigDecimal.ZERO;
-
-                    remainingForTask = planned.multiply(BigDecimal.valueOf(ratio));
-                }
-            } else if (t.getPlannedEnd() != null && !t.getPlannedEnd().isAfter(today)) {
-                remainingForTask = BigDecimal.ZERO;
-            } else {
-                remainingForTask = t.getPlannedHours() != null ? t.getPlannedHours() : BigDecimal.ZERO;
-            }
-
-            // ✅ PAS DE × 8 : on additionne directement les heures restantes
-            totalRemaining = totalRemaining.add(remainingForTask);
+            if (!"COMPLETED".equalsIgnoreCase(t.getStatus()) && !"DONE".equalsIgnoreCase(t.getStatus()))
+                totalRemaining = totalRemaining.add(taskHours);
         }
 
         return totalRemaining;
+    }
+
+    /** Hours of a schedule task: its planned hours, or its duration × 8h × allocation when no hours are entered. */
+    private BigDecimal taskHours(ProjectTask task) {
+        if (task.getPlannedHours() != null) return task.getPlannedHours();
+        if (task.getDurationDays() == null || "MILESTONE".equalsIgnoreCase(task.getTaskType())) return BigDecimal.ZERO;
+        int allocation = task.getAllocationPercent() != null ? task.getAllocationPercent() : 100;
+        return BigDecimal.valueOf(task.getDurationDays() * 8L * allocation).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     }
 
     private List<ProjectTask> getAllDescendants(Long parentId, List<ProjectTask> allTasks) {
