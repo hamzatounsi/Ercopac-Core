@@ -1,6 +1,8 @@
 package com.ercopac.ercopac_tracker.ticketing.domain;
 
+import com.ercopac.ercopac_tracker.admin.domain.Customer;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -25,6 +27,15 @@ public class Ticket {
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private TicketStatus status = TicketStatus.OPEN;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private TicketOrigin origin = TicketOrigin.WEB;
     @Column(length = 160) private String site;
+    // Customer company, project and equipment the ticket is about (Customers settings), plus the L2 technician handling an escalation
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "customer_id") private Customer customer;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "project_id") private Project project;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "equipment_id") private TicketCustomerEquipment equipment;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "l2_technician_id") private AppUser l2Technician;
+    // Problem statement: observed problem, root cause and solution
+    @Column(name = "rca_problem", length = 4000) private String rcaProblem;
+    @Column(name = "rca_cause", length = 4000) private String rcaCause;
+    @Column(name = "rca_solution", length = 4000) private String rcaSolution;
     @Column(name = "escalation_level", nullable = false) private int escalationLevel;
     @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
     @Column(name = "updated_at", nullable = false) private Instant updatedAt;
@@ -42,4 +53,7 @@ public class Ticket {
     public TicketStatus getStatus(){return status;} public void setStatus(TicketStatus v){status=v;} public TicketOrigin getOrigin(){return origin;} public void setOrigin(TicketOrigin v){origin=v;}
     public String getSite(){return site;} public void setSite(String v){site=v;} public int getEscalationLevel(){return escalationLevel;} public void setEscalationLevel(int v){escalationLevel=v;}
     public Instant getCreatedAt(){return createdAt;} public Instant getUpdatedAt(){return updatedAt;} public Instant getResolvedAt(){return resolvedAt;} public void setResolvedAt(Instant v){resolvedAt=v;} public Instant getClosedAt(){return closedAt;} public void setClosedAt(Instant v){closedAt=v;} public Instant getLastMessageAt(){return lastMessageAt;} public void setLastMessageAt(Instant v){lastMessageAt=v;} public Long getVersion(){return version;}
+    public Customer getCustomer(){return customer;} public void setCustomer(Customer v){customer=v;} public Project getProject(){return project;} public void setProject(Project v){project=v;}
+    public TicketCustomerEquipment getEquipment(){return equipment;} public void setEquipment(TicketCustomerEquipment v){equipment=v;} public AppUser getL2Technician(){return l2Technician;} public void setL2Technician(AppUser v){l2Technician=v;}
+    public String getRcaProblem(){return rcaProblem;} public void setRcaProblem(String v){rcaProblem=v;} public String getRcaCause(){return rcaCause;} public void setRcaCause(String v){rcaCause=v;} public String getRcaSolution(){return rcaSolution;} public void setRcaSolution(String v){rcaSolution=v;}
 }

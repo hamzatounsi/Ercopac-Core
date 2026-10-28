@@ -33,18 +33,15 @@ public class TicketController {
     
     // 1. Accès standard : Lecture, création, messages
     private static final String STANDARD_ACCESS = 
-        "hasAnyRole('H24', 'H24_LEAD', 'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', " +
-        "'PROJECT_MANAGER_LEAD', 'MANAGER', 'DEPARTMENT_MANAGER', 'EMPLOYEE', 'CLIENT')";
+        "hasAnyRole('SALES_MANAGER_LEAD', 'H24', 'H24_LEAD', 'CLIENT')";
     
     // 2. Accès avancé : Modification, clôture, réouverture, assignation
     private static final String ADVANCED_ACCESS = 
-        "hasAnyRole('H24', 'H24_LEAD', 'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', " +
-        "'PROJECT_MANAGER_LEAD', 'MANAGER', 'DEPARTMENT_MANAGER')";
+        "hasAnyRole('SALES_MANAGER_LEAD', 'H24', 'H24_LEAD')";
 
     // 3. Accès critique : Escalade, suppression (Réservé aux Leads et Admins)
     private static final String CRITICAL_ACCESS = 
-        "hasAnyRole('H24_LEAD', 'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER_LEAD', " +
-        "'MANAGER', 'DEPARTMENT_MANAGER')";
+        "hasAnyRole('SALES_MANAGER_LEAD', 'H24_LEAD')";
 
     @GetMapping
     @PreAuthorize(STANDARD_ACCESS)
@@ -56,6 +53,7 @@ public class TicketController {
             @RequestParam(required = false) Long organisationId,
             @RequestParam(required = false) Long assigneeId,
             @RequestParam(required = false) Long creatorId,
+            @RequestParam(required = false) Long customerId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @RequestParam(defaultValue = "0") int page,
@@ -64,13 +62,19 @@ public class TicketController {
         
         String[] s = sort.split(",");
         return service.list(
-                search, status, priority, category, organisationId, assigneeId, creatorId, from, to,
+                search, status, priority, category, organisationId, assigneeId, creatorId, customerId, from, to,
                 PageRequest.of(
                         Math.max(0, page),
                         Math.min(Math.max(1, size), 100),
                         Sort.by(s.length > 1 && "asc".equalsIgnoreCase(s[1]) ? Sort.Direction.ASC : Sort.Direction.DESC, s[0])
                 )
         );
+    }
+
+    @GetMapping("/agents")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public List<UserSummary> agents() {
+        return service.agents();
     }
 
     @GetMapping("/statistics")
@@ -113,6 +117,24 @@ public class TicketController {
     @PreAuthorize(ADVANCED_ACCESS)
     public TicketDetails assign(@PathVariable Long id, @Valid @RequestBody AssignmentRequest r) {
         return service.assign(id, r);
+    }
+
+    @PatchMapping("/{id}/l2-technician")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public TicketDetails assignL2(@PathVariable Long id, @Valid @RequestBody AssignmentRequest r) {
+        return service.assignL2(id, r);
+    }
+
+    @PatchMapping("/{id}/context")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public TicketDetails context(@PathVariable Long id, @Valid @RequestBody TicketContextRequest r) {
+        return service.updateContext(id, r);
+    }
+
+    @PatchMapping("/{id}/problem-statement")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public TicketDetails problemStatement(@PathVariable Long id, @Valid @RequestBody ProblemStatementRequest r) {
+        return service.updateProblemStatement(id, r);
     }
 
     @PostMapping("/{id}/escalate")
