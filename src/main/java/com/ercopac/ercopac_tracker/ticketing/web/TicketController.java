@@ -53,6 +53,7 @@ public class TicketController {
             @RequestParam(required = false) Long organisationId,
             @RequestParam(required = false) Long assigneeId,
             @RequestParam(required = false) Long creatorId,
+            @RequestParam(required = false) Long customerId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @RequestParam(defaultValue = "0") int page,
@@ -61,7 +62,7 @@ public class TicketController {
         
         String[] s = sort.split(",");
         return service.list(
-                search, status, priority, category, organisationId, assigneeId, creatorId, from, to,
+                search, status, priority, category, organisationId, assigneeId, creatorId, customerId, from, to,
                 PageRequest.of(
                         Math.max(0, page),
                         Math.min(Math.max(1, size), 100),
@@ -116,6 +117,24 @@ public class TicketController {
     @PreAuthorize(ADVANCED_ACCESS)
     public TicketDetails assign(@PathVariable Long id, @Valid @RequestBody AssignmentRequest r) {
         return service.assign(id, r);
+    }
+
+    @PatchMapping("/{id}/l2-technician")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public TicketDetails assignL2(@PathVariable Long id, @Valid @RequestBody AssignmentRequest r) {
+        return service.assignL2(id, r);
+    }
+
+    @PatchMapping("/{id}/context")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public TicketDetails context(@PathVariable Long id, @Valid @RequestBody TicketContextRequest r) {
+        return service.updateContext(id, r);
+    }
+
+    @PatchMapping("/{id}/problem-statement")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public TicketDetails problemStatement(@PathVariable Long id, @Valid @RequestBody ProblemStatementRequest r) {
+        return service.updateProblemStatement(id, r);
     }
 
     @PostMapping("/{id}/escalate")

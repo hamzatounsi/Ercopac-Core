@@ -17,6 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfigurationSource;
 
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.DispatcherType;
 import java.io.IOException;
 import java.time.Instant;
 
@@ -47,7 +48,7 @@ public class SecurityConfig {
     };
 
     private static final String[] EMPLOYEE_ROLES = { "EMPLOYEE", "ROLE_EMPLOYEE" };
-    
+
     private static final String[] COMPANY_DASHBOARD_ROLES = { "MANAGER", "ROLE_MANAGER" };
 
     private static final String[] CRM_ROLES = {
@@ -89,6 +90,7 @@ public class SecurityConfig {
                                 HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have permission to access this resource.")))
                 .authorizeHttpRequests(auth -> auth
 
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         .requestMatchers(
