@@ -143,6 +143,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/employee/**")
                         .hasAnyAuthority(EMPLOYEE_ROLES)
 
+                        // Own account settings (language, theme): any signed-in user, scoped to the token's user id
+                        .requestMatchers("/api/users/me/**")
+                        .authenticated()
+
                         .anyRequest().authenticated());
 
         http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
@@ -170,6 +174,7 @@ public class SecurityConfig {
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write(
                 "{\"timestamp\":\"" + Instant.now() + "\",\"status\":" + status
-                        + ",\"error\":\"" + error + "\",\"message\":\"" + message + "\"}");
+                        + ",\"error\":\"" + error + "\",\"code\":\"" + (status == HttpServletResponse.SC_UNAUTHORIZED ? "UNAUTHORIZED" : "FORBIDDEN")
+                        + "\",\"message\":\"" + message + "\"}");
     }
 }
