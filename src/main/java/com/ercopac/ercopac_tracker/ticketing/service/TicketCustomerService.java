@@ -17,14 +17,15 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.*;
 
 // Customer companies of the organisation (the shared `customers` table, also used by Projectum projects)
-// with the sites, contacts and installed equipment the support team needs on tickets.
+// with the sites, contacts, installed equipment and projects the support team needs on tickets.
+// Projects are read from Projectum; only projects missing from Projectum are entered by hand (TicketCustomerProject).
 // Support staff read everything; leads create and change customers and their records.
 @Service @Transactional
 public class TicketCustomerService {
  private final CustomerRepository customers; private final TicketCustomerSiteRepository sites; private final TicketCustomerContactRepository contacts; private final TicketCustomerEquipmentRepository equipment;
- private final CrmEquipmentTypeRepository equipmentTypes; private final ProjectRepository projects; private final TicketRepository tickets; private final UserRepository users; private final TicketSettingsService settings;
- public TicketCustomerService(CustomerRepository customers, TicketCustomerSiteRepository sites, TicketCustomerContactRepository contacts, TicketCustomerEquipmentRepository equipment, CrmEquipmentTypeRepository equipmentTypes, ProjectRepository projects, TicketRepository tickets, UserRepository users, TicketSettingsService settings) {
-  this.customers = customers; this.sites = sites; this.contacts = contacts; this.equipment = equipment; this.equipmentTypes = equipmentTypes; this.projects = projects; this.tickets = tickets; this.users = users; this.settings = settings;
+ private final CrmEquipmentTypeRepository equipmentTypes; private final ProjectRepository projects; private final TicketRepository tickets; private final UserRepository users; private final TicketSettingsService settings; private final TicketCustomerProjectRepository manualProjects;
+ public TicketCustomerService(CustomerRepository customers, TicketCustomerSiteRepository sites, TicketCustomerContactRepository contacts, TicketCustomerEquipmentRepository equipment, CrmEquipmentTypeRepository equipmentTypes, ProjectRepository projects, TicketRepository tickets, UserRepository users, TicketSettingsService settings, TicketCustomerProjectRepository manualProjects) {
+  this.customers = customers; this.sites = sites; this.contacts = contacts; this.equipment = equipment; this.equipmentTypes = equipmentTypes; this.projects = projects; this.tickets = tickets; this.users = users; this.settings = settings; this.manualProjects = manualProjects;
  }
 
  // ---------- customers ----------
@@ -81,7 +82,26 @@ public class TicketCustomerService {
  public List<Ref> equipmentTypes() { Long org = staffOrg(); return equipmentTypes.findByOrganisation_IdAndActiveTrueOrderByNameAsc(org).stream().map(t -> new Ref(t.getId(), t.getName())).toList(); }
 
  // ---------- projects ----------
- public List<ProjectDto> projects(Long customerId) { Long org = staffOrg(); customer(customerId, org); return projectsOf(org, customerId); }
+ /** Projects tab: the customer's Projectum projects followed by the ones entered by hand. */
+ public List<ProjectDto> projects(Long customerId) {
+  Long org = staffOrg(); customer(customerId, org);
+  List<ProjectDto> result = new ArrayList<>(projectsOf(org, customerId));
+  manualProjects.findByOrganisation_IdAndCustomer_IdOrderByNameAsc(org, customerId).stream().map(TicketCustomerService::project).forEach(result::add);
+  return result;
+ }
+ public ProjectDto createManualProject(Long customerId, ManualProjectRequest r) {
+  Long org = leadOrg(); Customer c = customer(customerId, org);
+  TicketCustomerProject p = new TicketCustomerProject(); p.setOrganisation(c.getOrganisation()); p.setCustomer(c); apply(p, r);
+  return project(manualProjects.save(p));
+ }
+ public ProjectDto updateManualProject(Long customerId, Long projectId, ManualProjectRequest r) { TicketCustomerProject p = manualProject(customerId, projectId, leadOrg()); apply(p, r); return project(manualProjects.save(p)); }
+ public void deleteManualProject(Long customerId, Long projectId) {
+  TicketCustomerProject p = manualProject(customerId, projectId, leadOrg());
+  if (equipment.existsByCustomerProject_Id(projectId)) throw conflict("Equipment is linked to this project; change it first.");
+  manualProjects.delete(p);
+ }
+ /** Year shown for a Projectum project: the year of its planned start (Projectum has no separate year field). */
+ public static Integer projectYear(Project p) { return p == null || p.getPlannedStart() == null ? null : p.getPlannedStart().getYear(); }
 
  /** Choices for the ticket form. A client only gets the customer their account is linked to. */
  public FormOptions formOptions(Long customerId) {
@@ -96,7 +116,11 @@ public class TicketCustomerService {
    customerId = own == null ? null : own.getId();
   }
   Long chosen = customerId;
-  if (chosen == null || choices.stream().noneMatch(c -> c.id().equals(chosen))) return new FormOptions(choices, null, List.of(), List.of(), List.of());
+  if (chosen == null || choices.stream().noneMatch(c -> c.id().equals(chosen))) {
+   // Without a registered customer (none or a manual one) staff may still link any Projectum project of the organisation
+   List<ProjectDto> any = me.hasAnyRole(TicketSettingsService.SUPPORT_ROLES) ? projectsOf(org, null) : List.of();
+   return new FormOptions(choices, null, List.of(), List.of(), any);
+  }
   return new FormOptions(choices, chosen, sitesOf(org, chosen), equipmentOf(org, chosen), projectsOf(org, chosen));
  }
 
@@ -115,13 +139,15 @@ public class TicketCustomerService {
   return e;
  }
  public EquipmentDto equipment(TicketCustomerEquipment e) {
-  CrmEquipmentType t = e.getEquipmentType();
-  return new EquipmentDto(e.getId(), t == null ? null : t.getId(), t == null ? null : t.getName(), e.getName(), e.getSerialNumber(), e.getNote(), e.getSite() == null ? null : e.getSite().getId(), e.getSite() == null ? null : e.getSite().getName());
+  CrmEquipmentType t = e.getEquipmentType(); Project p = e.getProject(); TicketCustomerProject m = e.getCustomerProject();
+  String projectName = p != null ? p.getName() : m != null ? m.getName() : null;
+  return new EquipmentDto(e.getId(), t == null ? null : t.getId(), t == null ? null : t.getName(), e.getName(), e.getSerialNumber(), e.getNote(), e.getSite() == null ? null : e.getSite().getId(), e.getSite() == null ? null : e.getSite().getName(),
+    p == null ? null : p.getId(), m == null ? null : m.getId(), projectName);
  }
 
  // ---------- helpers ----------
  private CustomerDto customer(Customer c, List<Project> orgProjects) {
-  long projectCount = orgProjects.stream().filter(p -> p.getCustomerEntity() != null && p.getCustomerEntity().getId().equals(c.getId())).count();
+  long projectCount = orgProjects.stream().filter(p -> p.getCustomerEntity() != null && p.getCustomerEntity().getId().equals(c.getId())).count() + manualProjects.countByCustomer_Id(c.getId());
   return new CustomerDto(c.getId(), c.getCustomerCode(), c.getName(), c.getCountry(), c.getTown(), c.getAddress(), c.getEmail(), c.getPhone(), c.getContactPerson(), c.isActive(),
     sites.countByCustomer_Id(c.getId()), contacts.countByCustomer_Id(c.getId()), equipment.countByCustomer_Id(c.getId()), projectCount, tickets.countByCustomer_IdAndStatusNotIn(c.getId(), TicketSettingsService.DONE));
  }
@@ -142,23 +168,31 @@ public class TicketCustomerService {
   e.setName(r.name().trim()); e.setSerialNumber(trim(r.serialNumber())); e.setNote(trim(r.note()));
   e.setEquipmentType(r.typeId() == null ? null : equipmentTypes.findByIdAndOrganisation_Id(r.typeId(), org).orElseThrow(() -> bad("Equipment type not found.")));
   e.setSite(r.siteId() == null ? null : site(customerId, r.siteId(), org));
+  // A project of the customer's Projects tab: Projectum (projectId) or manually added (customerProjectId)
+  if (r.projectId() != null && r.customerProjectId() != null) throw bad("Choose one project for the equipment.");
+  e.setProject(r.projectId() == null ? null : requireProject(r.projectId(), e.getCustomer(), org));
+  e.setCustomerProject(r.customerProjectId() == null ? null : manualProject(customerId, r.customerProjectId(), org));
  }
+ private void apply(TicketCustomerProject p, ManualProjectRequest r) { p.setName(r.name().trim()); p.setProjectNumber(trim(r.projectNumber())); p.setProjectYear(r.year()); }
  private List<SiteDto> sitesOf(Long org, Long customerId) {
   List<TicketCustomerEquipment> items = equipment.findByOrganisation_IdAndCustomer_IdOrderByNameAsc(org, customerId);
   return sites.findByOrganisation_IdAndCustomer_IdOrderByNameAsc(org, customerId).stream()
     .map(s -> new SiteDto(s.getId(), s.getName(), s.getAddress(), items.stream().filter(e -> e.getSite() != null && e.getSite().getId().equals(s.getId())).count())).toList();
  }
  private List<EquipmentDto> equipmentOf(Long org, Long customerId) { return equipment.findByOrganisation_IdAndCustomer_IdOrderByNameAsc(org, customerId).stream().map(this::equipment).toList(); }
+ /** Projectum projects of a customer, or of the whole organisation when customerId is null. */
  private List<ProjectDto> projectsOf(Long org, Long customerId) {
-  return projects.findAllByOrganisationId(org).stream().filter(p -> p.getCustomerEntity() != null && p.getCustomerEntity().getId().equals(customerId))
-    .sorted(Comparator.comparing(p -> Objects.toString(p.getName(), ""))).map(p -> new ProjectDto(p.getId(), p.getCode(), p.getName(), p.getProjectPhase())).toList();
+  return projects.findAllByOrganisationId(org).stream().filter(p -> customerId == null || (p.getCustomerEntity() != null && p.getCustomerEntity().getId().equals(customerId)))
+    .sorted(Comparator.comparing(p -> Objects.toString(p.getName(), ""))).map(p -> new ProjectDto(p.getId(), p.getCode(), p.getName(), p.getProjectPhase(), projectYear(p), false)).toList();
  }
+ private static ProjectDto project(TicketCustomerProject p) { return new ProjectDto(p.getId(), p.getProjectNumber(), p.getName(), null, p.getProjectYear(), true); }
  private SiteDto site(TicketCustomerSite s) { return new SiteDto(s.getId(), s.getName(), s.getAddress(), equipment.countBySite_Id(s.getId())); }
  private ContactDto contact(TicketCustomerContact x) { return new ContactDto(x.getId(), x.getFullName(), x.getJobTitle(), x.getEmail(), x.getPhone(), x.getLanguage(), user(x.getPortalUser())); }
  private UserSummary user(AppUser u) { return u == null ? null : new UserSummary(u.getId(), u.getFullName(), u.getEmail(), u.getPrimaryRole().name()); }
  private Customer customer(Long id, Long org) { return customers.findByIdAndOrganisation_Id(id, org).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found.")); }
  private TicketCustomerSite site(Long customerId, Long id, Long org) { return sites.findByIdAndOrganisation_Id(id, org).filter(s -> s.getCustomer().getId().equals(customerId)).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Site not found.")); }
  private TicketCustomerContact contact(Long customerId, Long id, Long org) { return contacts.findByIdAndOrganisation_Id(id, org).filter(s -> s.getCustomer().getId().equals(customerId)).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contact not found.")); }
+ private TicketCustomerProject manualProject(Long customerId, Long id, Long org) { return manualProjects.findByIdAndOrganisation_Id(id, org).filter(p -> p.getCustomer().getId().equals(customerId)).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found.")); }
  private TicketCustomerEquipment equipment(Long customerId, Long id, Long org) { return equipment.findByIdAndOrganisation_Id(id, org).filter(s -> s.getCustomer().getId().equals(customerId)).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Equipment not found.")); }
  private Long staffOrg() { return settings.requireStaff().getOrganisation().getId(); }
  private Long leadOrg() { return settings.requireLead().getOrganisation().getId(); }

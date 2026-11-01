@@ -49,10 +49,24 @@ public class TicketSettingsController {
         return settings.savePriorities(request);
     }
 
+    /** group=H24 lists the H24 team (H24 / H24_LEAD role or H24 resource type); without it, the support team and L2 technicians. */
     @GetMapping("/settings/agents")
     @PreAuthorize(STAFF_ACCESS)
-    public List<AgentDto> agents() {
-        return settings.agents();
+    public List<AgentDto> agents(@RequestParam(required = false) String group) {
+        return settings.agents(group);
+    }
+
+    @GetMapping("/resource-types")
+    @PreAuthorize(STAFF_ACCESS)
+    public List<ResourceTypeOption> resourceTypes() {
+        return settings.resourceTypes();
+    }
+
+    /** Employees of one resource type (cascading L2 choice); l2Only keeps those flagged as L2 technicians. */
+    @GetMapping("/employees")
+    @PreAuthorize(STAFF_ACCESS)
+    public List<EmployeeOption> employees(@RequestParam Long resourceTypeId, @RequestParam(defaultValue = "false") boolean l2Only) {
+        return settings.employees(resourceTypeId, l2Only);
     }
 
     @PutMapping("/settings/agents/{userId}")

@@ -20,6 +20,9 @@ import java.util.stream.Collectors;
 public class TicketSettingsService {
  public static final List<Role> SUPPORT_ROLES = List.of(Role.SALES_MANAGER_LEAD, Role.H24, Role.H24_LEAD);
  public static final List<Role> LEAD_ROLES = List.of(Role.SALES_MANAGER_LEAD, Role.H24_LEAD);
+ public static final List<Role> H24_ROLES = List.of(Role.H24, Role.H24_LEAD);
+ // Projectum resource type code of the H24 support team (Resources > Resource types)
+ public static final String H24_RESOURCE_TYPE = "H24";
  public static final Set<String> LANGUAGES = Set.of("en", "fr", "es", "it", "pt", "de", "ar");
  private static final Set<String> COLORS = Set.of("blue", "amber", "red", "green", "gray", "purple", "coral");
  static final List<TicketStatus> DONE = List.of(TicketStatus.RESOLVED, TicketStatus.CLOSED, TicketStatus.CANCELLED);
@@ -45,9 +48,9 @@ public class TicketSettingsService {
  }
 
  private final TicketStatusSettingRepository statusSettings; private final TicketPrioritySettingRepository prioritySettings; private final TicketAgentProfileRepository profiles;
- private final TicketCustomerContactRepository contacts; private final TicketRepository tickets; private final UserRepository users; private final OrganisationRepository organisations; private final SecurityUtils security;
- public TicketSettingsService(TicketStatusSettingRepository statusSettings, TicketPrioritySettingRepository prioritySettings, TicketAgentProfileRepository profiles, TicketCustomerContactRepository contacts, TicketRepository tickets, UserRepository users, OrganisationRepository organisations, SecurityUtils security) {
-  this.statusSettings = statusSettings; this.prioritySettings = prioritySettings; this.profiles = profiles; this.contacts = contacts; this.tickets = tickets; this.users = users; this.organisations = organisations; this.security = security;
+ private final TicketCustomerContactRepository contacts; private final TicketRepository tickets; private final UserRepository users; private final OrganisationRepository organisations; private final SecurityUtils security; private final ResourceTypeRepository resourceTypes;
+ public TicketSettingsService(TicketStatusSettingRepository statusSettings, TicketPrioritySettingRepository prioritySettings, TicketAgentProfileRepository profiles, TicketCustomerContactRepository contacts, TicketRepository tickets, UserRepository users, OrganisationRepository organisations, SecurityUtils security, ResourceTypeRepository resourceTypes) {
+  this.statusSettings = statusSettings; this.prioritySettings = prioritySettings; this.profiles = profiles; this.contacts = contacts; this.tickets = tickets; this.users = users; this.organisations = organisations; this.security = security; this.resourceTypes = resourceTypes;
  }
 
  public TicketSettingsDto settings() { Long org = organisationId(); return new TicketSettingsDto(statuses(org), new ArrayList<>(priorities(org).values())); }
@@ -92,33 +95,76 @@ public class TicketSettingsService {
   return new ArrayList<>(result.values());
  }
 
- /** Support staff of the organisation with their ticketing profile and current load. */
- public List<AgentDto> agents() {
+ /** Support staff of the organisation plus the employees flagged as L2 technicians, with their ticketing profile and current load. */
+ public List<AgentDto> agents() { return agents(null); }
+
+ /**
+  * group "H24": the H24 configuration list, i.e. active users holding the H24 / H24_LEAD role or the H24 resource type.
+  * Any other value: the support team plus the L2 technicians.
+  */
+ public List<AgentDto> agents(String group) {
   AppUser actor = requireStaff(); Long org = actor.getOrganisation().getId();
-  Map<Long, TicketAgentProfile> byUser = profiles.findByOrganisation_Id(org).stream().collect(Collectors.toMap(p -> p.getUser().getId(), Function.identity()));
+  Map<Long, TicketAgentProfile> byUser = profilesByUser(org);
+  List<AppUser> people;
+  if (H24_RESOURCE_TYPE.equalsIgnoreCase(group)) {
+   people = users.findActiveByRolesOrResourceTypeCode(org, H24_ROLES, H24_RESOURCE_TYPE);
+  } else {
+   Map<Long, AppUser> merged = new LinkedHashMap<>();
+   users.findByOrganisation_IdAndRoleInAndActiveTrueOrderByFullNameAsc(org, SUPPORT_ROLES).forEach(u -> merged.put(u.getId(), u));
+   byUser.values().stream().filter(TicketAgentProfile::isL2Technician).map(TicketAgentProfile::getUser).filter(AppUser::isActive).forEach(u -> merged.putIfAbsent(u.getId(), u));
+   people = merged.values().stream().sorted(Comparator.comparing(u -> Objects.toString(u.getFullName(), ""))).toList();
+  }
   List<Ticket> active = tickets.findActive(org, DONE);
-  Map<Long, Long> open = active.stream().filter(t -> t.getAssignedSalesManager() != null).collect(Collectors.groupingBy(t -> t.getAssignedSalesManager().getId(), Collectors.counting()));
-  Map<Long, Long> l2Open = active.stream().filter(t -> t.getL2Technician() != null).collect(Collectors.groupingBy(t -> t.getL2Technician().getId(), Collectors.counting()));
-  return users.findByOrganisation_IdAndRoleInAndActiveTrueOrderByFullNameAsc(org, SUPPORT_ROLES).stream().distinct().map(u -> {
-   TicketAgentProfile p = byUser.get(u.getId());
-   return new AgentDto(u.getId(), u.getFullName(), u.getEmail(), u.getRoles().stream().map(Enum::name).sorted().toList(), u.hasAnyRole(LEAD_ROLES),
-     p != null && p.isL2Technician(), p == null ? null : p.getSpecialization(), p == null ? null : p.getPreferredLanguage(),
-     open.getOrDefault(u.getId(), 0L), l2Open.getOrDefault(u.getId(), 0L), u.isActive());
-  }).toList();
+  return people.stream().distinct().map(u -> agent(u, byUser.get(u.getId()), active)).toList();
  }
 
  public AgentDto updateAgent(Long userId, AgentProfileRequest request) {
   AppUser lead = requireLead(); Long org = lead.getOrganisation().getId();
   AppUser user = users.findByIdAndOrganisation_Id(userId, org).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found."));
-  if (!user.hasAnyRole(SUPPORT_ROLES)) throw bad("Only support staff have a ticketing profile.");
+  if (!canHaveProfile(user)) throw bad("Only support staff and Projectum employees have a ticketing profile.");
   TicketAgentProfile p = profile(user);
   p.setL2Technician(request.l2Technician()); p.setSpecialization(trimToNull(request.specialization())); p.setPreferredLanguage(language(request.preferredLanguage()));
   profiles.save(p);
-  return agents().stream().filter(a -> a.id().equals(userId)).findFirst().orElseThrow();
+  return agent(user, p, tickets.findActive(org, DONE));
  }
 
- /** Users that can be set as L2 technician on a ticket. */
- public boolean isL2Technician(AppUser user) { return user.hasAnyRole(SUPPORT_ROLES) && profiles.findByUser_Id(user.getId()).map(TicketAgentProfile::isL2Technician).orElse(false); }
+ /** Users that can be set as L2 technician on a ticket: active support staff or employees flagged in Settings > L2 technicians. */
+ public boolean isL2Technician(AppUser user) { return user.isActive() && canHaveProfile(user) && profiles.findByUser_Id(user.getId()).map(TicketAgentProfile::isL2Technician).orElse(false); }
+
+ /** Active Projectum resource types of the organisation (first step of the L2 choice). */
+ public List<ResourceTypeOption> resourceTypes() {
+  Long org = requireStaff().getOrganisation().getId();
+  return resourceTypes.findByOrganisation_IdAndActiveTrue(org).stream().map(t -> new ResourceTypeOption(t.getId(), t.getCode(), label(t)))
+    .sorted(Comparator.comparing(t -> t.label().toLowerCase())).toList();
+ }
+
+ /** Active employees of one resource type, filtered in the database; l2Only keeps the L2 technicians. */
+ public List<EmployeeOption> employees(Long resourceTypeId, boolean l2Only) {
+  Long org = requireStaff().getOrganisation().getId();
+  if (resourceTypeId == null) throw bad("Choose a resource type first.");
+  resourceTypes.findByIdAndOrganisation_Id(resourceTypeId, org).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Resource type not found."));
+  Map<Long, TicketAgentProfile> byUser = profilesByUser(org);
+  return users.findByOrganisation_IdAndResourceType_IdAndActiveTrue(org, resourceTypeId).stream()
+    .filter(u -> !u.hasRole(Role.CLIENT))
+    .filter(u -> !l2Only || Optional.ofNullable(byUser.get(u.getId())).map(TicketAgentProfile::isL2Technician).orElse(false))
+    .sorted(Comparator.comparing(u -> Objects.toString(u.getFullName(), "")))
+    .map(u -> { TicketAgentProfile p = byUser.get(u.getId()); ResourceType t = u.getResourceType();
+     return new EmployeeOption(u.getId(), u.getFullName(), u.getEmail(), t == null ? null : t.getId(), t == null ? null : label(t), p != null && p.isL2Technician(), p == null ? null : p.getSpecialization()); })
+    .toList();
+ }
+
+ private AgentDto agent(AppUser u, TicketAgentProfile p, List<Ticket> active) {
+  long open = active.stream().filter(t -> t.getAssignedSalesManager() != null && t.getAssignedSalesManager().getId().equals(u.getId())).count();
+  long l2Open = active.stream().filter(t -> t.getL2Technician() != null && t.getL2Technician().getId().equals(u.getId())).count();
+  ResourceType type = u.getResourceType();
+  boolean h24 = u.hasAnyRole(H24_ROLES) || (type != null && H24_RESOURCE_TYPE.equalsIgnoreCase(type.getCode()));
+  return new AgentDto(u.getId(), u.getFullName(), u.getEmail(), u.getRoles().stream().map(Enum::name).sorted().toList(), u.hasAnyRole(LEAD_ROLES),
+    p != null && p.isL2Technician(), p == null ? null : p.getSpecialization(), p == null ? null : p.getPreferredLanguage(),
+    open, l2Open, u.isActive(), type == null ? null : type.getId(), type == null ? null : label(type), h24, u.hasAnyRole(SUPPORT_ROLES));
+ }
+ // Support staff, or internal employees with a Projectum resource type (L2 specialists); never client accounts
+ private static boolean canHaveProfile(AppUser user) { return user.hasAnyRole(SUPPORT_ROLES) || (!user.hasRole(Role.CLIENT) && user.getResourceType() != null); }
+ private static String label(ResourceType t) { return blank(t.getLabel()) ? t.getCode() : t.getLabel(); }
  public Map<Long, TicketAgentProfile> profilesByUser(Long org) { return profiles.findByOrganisation_Id(org).stream().collect(Collectors.toMap(p -> p.getUser().getId(), Function.identity())); }
 
  public MySettingsDto me() {

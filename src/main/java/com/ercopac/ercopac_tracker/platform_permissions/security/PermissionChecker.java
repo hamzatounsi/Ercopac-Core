@@ -34,6 +34,9 @@ public class PermissionChecker {
         if (module == PermissionModule.CRM && user.getRoles().stream().anyMatch(Role::isCrmRole)) {
             return true;
         }
+        if (module == PermissionModule.TICKETING && user.getRoles().stream().anyMatch(Role::isTicketingRole)) {
+            return true;
+        }
         // ✅ FIX: le rôle MANAGER (Command Center) doit pouvoir lire les
         // Tasks/Milestones sans dépendre d'une ligne role_permissions
         // configurée manuellement en base — cohérent avec son accès déjà
@@ -61,6 +64,9 @@ public class PermissionChecker {
             if (user.getRoles().stream().anyMatch(Role::isSalesManagerRole)) {
                 return true;
             }
+        }
+        if (module == PermissionModule.TICKETING && user.getRoles().stream().anyMatch(Role::isTicketingRole)) {
+            return true;
         }
         return user.getRoles().stream().map(this::effectiveRole).distinct().anyMatch(role ->
                 permissionRepository.findByOrganisation_IdAndRoleAndModule(

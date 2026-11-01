@@ -150,4 +150,25 @@ public class TicketCustomerController {
     public List<ProjectDto> projects(@PathVariable Long id) {
         return service.projects(id);
     }
+
+    // Manually added projects of the Projects tab (Projectum projects are managed in Projectum)
+    @PostMapping("/customers/{id}/projects")
+    @PreAuthorize(LEAD_ACCESS)
+    @ResponseStatus(HttpStatus.CREATED)
+    public ProjectDto createProject(@PathVariable Long id, @Valid @RequestBody ManualProjectRequest request) {
+        return service.createManualProject(id, request);
+    }
+
+    @PutMapping("/customers/{id}/projects/{projectId}")
+    @PreAuthorize(LEAD_ACCESS)
+    public ProjectDto updateProject(@PathVariable Long id, @PathVariable Long projectId, @Valid @RequestBody ManualProjectRequest request) {
+        return service.updateManualProject(id, projectId, request);
+    }
+
+    @DeleteMapping("/customers/{id}/projects/{projectId}")
+    @PreAuthorize(LEAD_ACCESS)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteProject(@PathVariable Long id, @PathVariable Long projectId) {
+        service.deleteManualProject(id, projectId);
+    }
 }

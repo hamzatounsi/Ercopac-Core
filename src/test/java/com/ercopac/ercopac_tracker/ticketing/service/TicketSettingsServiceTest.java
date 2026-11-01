@@ -7,6 +7,8 @@ import com.ercopac.ercopac_tracker.ticketing.domain.*;
 import com.ercopac.ercopac_tracker.ticketing.dto.TicketDtos.*;
 import com.ercopac.ercopac_tracker.ticketing.repository.*;
 import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.user.ResourceType;
+import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,13 +41,14 @@ class TicketSettingsServiceTest {
     @Mock UserRepository users;
     @Mock OrganisationRepository organisations;
     @Mock SecurityUtils security;
+    @Mock ResourceTypeRepository resourceTypes;
 
     private TicketSettingsService service;
     private Organisation organisation;
 
     @BeforeEach
     void setUp() {
-        service = new TicketSettingsService(statusSettings, prioritySettings, profiles, contacts, tickets, users, organisations, security);
+        service = new TicketSettingsService(statusSettings, prioritySettings, profiles, contacts, tickets, users, organisations, security, resourceTypes);
         organisation = new Organisation();
         organisation.setId(5L);
     }
@@ -143,6 +146,75 @@ class TicketSettingsServiceTest {
     }
 
     @Test
+    void h24ListQueriesByH24RoleOrH24ResourceType() {
+        signIn(user(1L, Role.H24_LEAD));
+        AppUser byRole = user(7L, Role.H24);
+        AppUser byType = user(8L, Role.EMPLOYEE);
+        byType.setResourceType(resourceType(30L, "H24", "H24 Support"));
+        when(users.findActiveByRolesOrResourceTypeCode(5L, TicketSettingsService.H24_ROLES, "H24")).thenReturn(List.of(byRole, byType));
+        when(profiles.findByOrganisation_Id(5L)).thenReturn(List.of());
+        when(tickets.findActive(any(), any())).thenReturn(List.of());
+
+        List<AgentDto> result = service.agents("H24");
+
+        assertThat(result).extracting(AgentDto::id).containsExactly(7L, 8L);
+        assertThat(result).allMatch(AgentDto::h24);
+        assertThat(result.get(1).ticketingAccess()).isFalse();
+        assertThat(result.get(1).resourceType()).isEqualTo("H24 Support");
+        verify(users, never()).findByOrganisation_IdAndRoleInAndActiveTrueOrderByFullNameAsc(any(), any());
+    }
+
+    @Test
+    void employeesAreFilteredByResourceTypeAndOptionallyByL2Flag() {
+        signIn(user(1L, Role.H24_LEAD));
+        ResourceType plc = resourceType(3L, "PLC", "PLC Engineer");
+        when(resourceTypes.findByIdAndOrganisation_Id(3L, 5L)).thenReturn(Optional.of(plc));
+        AppUser nora = user(20L, Role.EMPLOYEE); nora.setResourceType(plc); nora.setFullName("Nora");
+        AppUser adam = user(21L, Role.EMPLOYEE); adam.setResourceType(plc); adam.setFullName("Adam");
+        TicketAgentProfile noraL2 = new TicketAgentProfile();
+        noraL2.setUser(nora);
+        noraL2.setL2Technician(true);
+        when(profiles.findByOrganisation_Id(5L)).thenReturn(List.of(noraL2));
+        when(users.findByOrganisation_IdAndResourceType_IdAndActiveTrue(5L, 3L)).thenReturn(List.of(nora, adam));
+
+        assertThat(service.employees(3L, false)).extracting(EmployeeOption::fullName).containsExactly("Adam", "Nora");
+        assertThat(service.employees(3L, true)).extracting(EmployeeOption::id).containsExactly(20L);
+        assertThat(service.employees(3L, false).get(0).resourceTypeId()).isEqualTo(3L);
+    }
+
+    @Test
+    void resourceTypeOfAnotherOrganisationIsNotFound() {
+        signIn(user(1L, Role.H24_LEAD));
+        when(resourceTypes.findByIdAndOrganisation_Id(99L, 5L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.employees(99L, false))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Resource type not found");
+        verify(users, never()).findByOrganisation_IdAndResourceType_IdAndActiveTrue(any(), any());
+    }
+
+    @Test
+    void projectumEmployeeCanBeFlaggedAndAssignedAsL2() {
+        signIn(user(1L, Role.H24_LEAD));
+        AppUser engineer = user(20L, Role.EMPLOYEE);
+        engineer.setResourceType(resourceType(3L, "PLC", "PLC Engineer"));
+        when(users.findByIdAndOrganisation_Id(20L, 5L)).thenReturn(Optional.of(engineer));
+        when(profiles.findByUser_Id(20L)).thenReturn(Optional.empty());
+        when(tickets.findActive(any(), any())).thenReturn(List.of());
+        when(profiles.save(any())).thenAnswer(inv -> {
+            TicketAgentProfile p = inv.getArgument(0);
+            when(profiles.findByUser_Id(20L)).thenReturn(Optional.of(p));
+            return p;
+        });
+
+        AgentDto result = service.updateAgent(20L, new AgentProfileRequest(true, "Siemens PLC", null));
+
+        assertThat(result.l2Technician()).isTrue();
+        assertThat(result.resourceType()).isEqualTo("PLC Engineer");
+        assertThat(service.isL2Technician(engineer)).isTrue();
+    }
+
+    @Test
     void clientLanguageComesFromTheLinkedContact() {
         AppUser client = user(9L, Role.CLIENT);
         TicketCustomerContact contact = new TicketCustomerContact();
@@ -151,6 +223,12 @@ class TicketSettingsServiceTest {
 
         assertThat(service.languageOf(client)).isEqualTo("it");
         assertThat(service.languageOf(null)).isEqualTo("en");
+    }
+
+    private ResourceType resourceType(Long id, String code, String label) {
+        ResourceType t = new ResourceType(code, label, organisation);
+        ReflectionTestUtils.setField(t, "id", id);
+        return t;
     }
 
     private void signIn(AppUser user) {

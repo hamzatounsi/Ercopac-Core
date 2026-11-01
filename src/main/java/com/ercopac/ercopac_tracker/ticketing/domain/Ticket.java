@@ -32,6 +32,12 @@ public class Ticket {
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "project_id") private Project project;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "equipment_id") private TicketCustomerEquipment equipment;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "l2_technician_id") private AppUser l2Technician;
+    // Customer and project as saved on the ticket: copied from Projectum when linked (customer / project set),
+    // typed by hand for historical or external records (customer / project null). Keeps old tickets stable.
+    @Column(name = "customer_name", length = 180) private String customerName;
+    @Column(name = "project_name", length = 250) private String projectName;
+    @Column(name = "project_number", length = 60) private String projectNumber;
+    @Column(name = "project_year") private Integer projectYear;
     // Problem statement: observed problem, root cause and solution
     @Column(name = "rca_problem", length = 4000) private String rcaProblem;
     @Column(name = "rca_cause", length = 4000) private String rcaCause;
@@ -55,5 +61,7 @@ public class Ticket {
     public Instant getCreatedAt(){return createdAt;} public Instant getUpdatedAt(){return updatedAt;} public Instant getResolvedAt(){return resolvedAt;} public void setResolvedAt(Instant v){resolvedAt=v;} public Instant getClosedAt(){return closedAt;} public void setClosedAt(Instant v){closedAt=v;} public Instant getLastMessageAt(){return lastMessageAt;} public void setLastMessageAt(Instant v){lastMessageAt=v;} public Long getVersion(){return version;}
     public Customer getCustomer(){return customer;} public void setCustomer(Customer v){customer=v;} public Project getProject(){return project;} public void setProject(Project v){project=v;}
     public TicketCustomerEquipment getEquipment(){return equipment;} public void setEquipment(TicketCustomerEquipment v){equipment=v;} public AppUser getL2Technician(){return l2Technician;} public void setL2Technician(AppUser v){l2Technician=v;}
+    public String getCustomerName(){return customerName;} public void setCustomerName(String v){customerName=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;}
+    public String getProjectNumber(){return projectNumber;} public void setProjectNumber(String v){projectNumber=v;} public Integer getProjectYear(){return projectYear;} public void setProjectYear(Integer v){projectYear=v;}
     public String getRcaProblem(){return rcaProblem;} public void setRcaProblem(String v){rcaProblem=v;} public String getRcaCause(){return rcaCause;} public void setRcaCause(String v){rcaCause=v;} public String getRcaSolution(){return rcaSolution;} public void setRcaSolution(String v){rcaSolution=v;}
 }
