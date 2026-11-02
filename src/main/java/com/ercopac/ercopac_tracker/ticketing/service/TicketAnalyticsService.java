@@ -44,7 +44,10 @@ public class TicketAnalyticsService {
 
   Map<Long, List<Measure>> perCustomer = measures.stream().filter(m -> m.ticket.getCustomer() != null).collect(Collectors.groupingBy(m -> m.ticket.getCustomer().getId(), LinkedHashMap::new, Collectors.toList()));
   List<CustomerStat> byCustomer = new ArrayList<>(perCustomer.values().stream().map(ms -> new CustomerStat(ms.get(0).ticket.getCustomer().getId(), ms.get(0).ticket.getCustomer().getName(), ms.size(), ms.stream().filter(m -> !m.done).count(), compliance(ms))).toList());
-  List<Measure> noCustomer = measures.stream().filter(m -> m.ticket.getCustomer() == null).toList();
+  measures.stream().filter(m -> m.ticket.getCustomer() == null && m.ticket.getCustomerName() != null)
+    .collect(Collectors.groupingBy(m -> m.ticket.getCustomerName(), LinkedHashMap::new, Collectors.toList()))
+    .forEach((name, ms) -> byCustomer.add(new CustomerStat(null, name, ms.size(), ms.stream().filter(m -> !m.done).count(), compliance(ms))));
+  List<Measure> noCustomer = measures.stream().filter(m -> m.ticket.getCustomer() == null && m.ticket.getCustomerName() == null).toList();
   if (!noCustomer.isEmpty()) byCustomer.add(new CustomerStat(null, "No customer", noCustomer.size(), noCustomer.stream().filter(m -> !m.done).count(), compliance(noCustomer)));
   byCustomer.sort(Comparator.comparingLong(CustomerStat::total).reversed());
 
@@ -71,7 +74,7 @@ public class TicketAnalyticsService {
     measures.stream().filter(m -> m.escalated).count(), measures.stream().filter(m -> m.overdue).count(),
     average(measures.stream().map(m -> m.responseHours)), average(measures.stream().map(m -> m.resolutionHours)), compliance(measures));
   List<EquipmentTicket> equipmentTickets = !equipmentFilter ? List.of() : list.stream().sorted(Comparator.comparing(Ticket::getCreatedAt).reversed()).map(t -> new EquipmentTicket(t.getId(), t.getTicketNumber(), t.getSubject(),
-    t.getCustomer() == null ? null : t.getCustomer().getName(), t.getSite(), t.getEquipment().getName(), t.getEquipment().getSerialNumber(), t.getStatus())).toList();
+    t.getCustomer() == null ? t.getCustomerName() : t.getCustomer().getName(), t.getSite(), t.getEquipment().getName(), t.getEquipment().getSerialNumber(), t.getStatus())).toList();
   return new TicketAnalytics(start, end, daily ? "day" : "month", totals, byStatus, byPriority, byCustomer, timeline, agents, equipmentTickets);
  }
 

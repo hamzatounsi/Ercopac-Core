@@ -42,4 +42,9 @@ public enum Role {
     public boolean isH24Role() {
         return this == H24 || this == H24_LEAD;
     }
+
+    // Roles that open the Ticketing app: support staff and the client portal (SecurityConfig.TICKET_ROLES)
+    public boolean isTicketingRole() {
+        return this == SALES_MANAGER_LEAD || this == H24 || this == H24_LEAD || this == CLIENT;
+    }
 }

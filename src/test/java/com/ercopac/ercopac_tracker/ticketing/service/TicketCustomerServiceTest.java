@@ -42,6 +42,7 @@ class TicketCustomerServiceTest {
     @Mock TicketRepository tickets;
     @Mock UserRepository users;
     @Mock TicketSettingsService settings;
+    @Mock TicketCustomerProjectRepository manualProjects;
 
     private TicketCustomerService service;
     private Organisation organisation;
@@ -51,7 +52,7 @@ class TicketCustomerServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TicketCustomerService(customers, sites, contacts, equipment, equipmentTypes, projects, tickets, users, settings);
+        service = new TicketCustomerService(customers, sites, contacts, equipment, equipmentTypes, projects, tickets, users, settings, manualProjects);
         organisation = new Organisation();
         organisation.setId(5L);
         acme = customer(7L, "Acme");
@@ -143,6 +144,77 @@ class TicketCustomerServiceTest {
     }
 
     @Test
+    void equipmentIsLinkedToAProjectumProjectOfTheCustomer() {
+        Project line = new Project();
+        ReflectionTestUtils.setField(line, "id", 40L);
+        line.setName("Line 3 retrofit");
+        line.setCustomerEntity(acme);
+        when(projects.findByIdAndOrganisationId(40L, 5L)).thenReturn(Optional.of(line));
+        when(equipment.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        EquipmentDto saved = service.createEquipment(7L, new EquipmentRequest(null, "PLC cabinet", "SN-1", null, null, 40L, null));
+
+        assertThat(saved.projectId()).isEqualTo(40L);
+        assertThat(saved.customerProjectId()).isNull();
+        assertThat(saved.projectName()).isEqualTo("Line 3 retrofit");
+    }
+
+    @Test
+    void equipmentIsLinkedToAManualProjectOfTheProjectsTab() {
+        TicketCustomerProject legacy = manualProject(60L, acme, "Packing line 2009");
+        when(manualProjects.findByIdAndOrganisation_Id(60L, 5L)).thenReturn(Optional.of(legacy));
+        when(equipment.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        EquipmentDto saved = service.createEquipment(7L, new EquipmentRequest(null, "Conveyor", null, null, null, null, 60L));
+
+        assertThat(saved.projectId()).isNull();
+        assertThat(saved.customerProjectId()).isEqualTo(60L);
+        assertThat(saved.projectName()).isEqualTo("Packing line 2009");
+    }
+
+    @Test
+    void equipmentCannotUseAProjectOfAnotherCustomerOrTwoProjects() {
+        when(manualProjects.findByIdAndOrganisation_Id(61L, 5L)).thenReturn(Optional.of(manualProject(61L, stark, "Stark plant")));
+
+        assertThatThrownBy(() -> service.createEquipment(7L, new EquipmentRequest(null, "Conveyor", null, null, null, null, 61L)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Project not found");
+        assertThatThrownBy(() -> service.createEquipment(7L, new EquipmentRequest(null, "Conveyor", null, null, null, 40L, 60L)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("one project");
+        verify(equipment, never()).save(any());
+    }
+
+    @Test
+    void projectsTabListsProjectumAndManualProjects() {
+        Project line = new Project();
+        ReflectionTestUtils.setField(line, "id", 40L);
+        line.setName("Line 3 retrofit");
+        line.setCode("PRJ-2024-007");
+        line.setPlannedStart(java.time.LocalDate.of(2024, 3, 1));
+        line.setCustomerEntity(acme);
+        when(projects.findAllByOrganisationId(5L)).thenReturn(List.of(line));
+        when(manualProjects.findByOrganisation_IdAndCustomer_IdOrderByNameAsc(5L, 7L)).thenReturn(List.of(manualProject(60L, acme, "Packing line 2009")));
+
+        List<ProjectDto> result = service.projects(7L);
+
+        assertThat(result).extracting(ProjectDto::name).containsExactly("Line 3 retrofit", "Packing line 2009");
+        assertThat(result).extracting(ProjectDto::manual).containsExactly(false, true);
+        assertThat(result.get(0).year()).isEqualTo(2024);
+    }
+
+    @Test
+    void manualProjectUsedByEquipmentCannotBeDeleted() {
+        when(manualProjects.findByIdAndOrganisation_Id(60L, 5L)).thenReturn(Optional.of(manualProject(60L, acme, "Packing line 2009")));
+        when(equipment.existsByCustomerProject_Id(60L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.deleteManualProject(7L, 60L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Equipment is linked");
+        verify(manualProjects, never()).delete(any());
+    }
+
+    @Test
     void clientOnlySeesTheCustomerTheirAccountBelongsTo() {
         AppUser client = user(9L, Role.CLIENT);
         TicketCustomerContact link = new TicketCustomerContact();
@@ -155,6 +227,14 @@ class TicketCustomerServiceTest {
 
         assertThat(options.customers()).extracting(Ref::name).containsExactly("Acme");
         assertThat(options.customerId()).isEqualTo(7L);
+    }
+
+    private TicketCustomerProject manualProject(Long id, Customer customer, String name) {
+        TicketCustomerProject p = new TicketCustomerProject();
+        ReflectionTestUtils.setField(p, "id", id);
+        p.setCustomer(customer);
+        p.setName(name);
+        return p;
     }
 
     private Customer customer(Long id, String name) {

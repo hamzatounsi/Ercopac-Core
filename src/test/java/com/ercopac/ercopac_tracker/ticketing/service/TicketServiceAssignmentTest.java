@@ -145,6 +145,68 @@ class TicketServiceAssignmentTest {
     }
 
     @Test
+    void linkedProjectumProjectIsCopiedOntoTheTicket() {
+        Customer acme = customer(7L, "Acme");
+        com.ercopac.ercopac_tracker.projects.domain.Project line = new com.ercopac.ercopac_tracker.projects.domain.Project();
+        ReflectionTestUtils.setField(line, "id", 40L);
+        line.setName("Line 3 retrofit");
+        line.setCode("PRJ-2024-007");
+        line.setPlannedStart(java.time.LocalDate.of(2024, 3, 1));
+        when(customers.requireCustomer(7L, 5L)).thenReturn(acme);
+        when(customers.requireProject(40L, acme, 5L)).thenReturn(line);
+
+        TicketDetails details = service.updateContext(100L, new TicketContextRequest(7L, null, 40L, null, 3L, "ignored", "ignored", "x", 1999));
+
+        assertThat(ticket.getCustomerName()).isEqualTo("Acme");
+        assertThat(ticket.getProject()).isSameAs(line);
+        assertThat(ticket.getProjectName()).isEqualTo("Line 3 retrofit");
+        assertThat(ticket.getProjectNumber()).isEqualTo("PRJ-2024-007");
+        assertThat(ticket.getProjectYear()).isEqualTo(2024);
+        assertThat(details.ticket().project().id()).isEqualTo(40L);
+        assertThat(details.ticket().projectYear()).isEqualTo(2024);
+
+        // Renaming the project in Projectum later does not change what the ticket saved
+        line.setName("Renamed in Projectum");
+        service.updateContext(100L, new TicketContextRequest(7L, null, 40L, null, 3L));
+        assertThat(ticket.getProjectName()).isEqualTo("Line 3 retrofit");
+    }
+
+    @Test
+    void manualCustomerAndProjectAreSavedWithoutProjectumReferences() {
+        TicketDetails details = service.updateContext(100L,
+                new TicketContextRequest(null, null, null, null, 3L, " Legacy Foods ", " Packing line 2009 ", "LF-09", 2009));
+
+        assertThat(ticket.getCustomer()).isNull();
+        assertThat(ticket.getCustomerName()).isEqualTo("Legacy Foods");
+        assertThat(ticket.getProject()).isNull();
+        assertThat(ticket.getProjectName()).isEqualTo("Packing line 2009");
+        assertThat(ticket.getProjectNumber()).isEqualTo("LF-09");
+        assertThat(ticket.getProjectYear()).isEqualTo(2009);
+        assertThat(details.ticket().customer().id()).isNull();
+        assertThat(details.ticket().customer().name()).isEqualTo("Legacy Foods");
+        verify(customers, never()).requireCustomer(any(), any());
+        verify(customers, never()).customerOfClient(any());
+    }
+
+    @Test
+    void manualProjectNeedsAName() {
+        assertThatThrownBy(() -> service.updateContext(100L, new TicketContextRequest(null, null, null, null, 3L, null, " ", "LF-09", 2009)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("needs a name");
+    }
+
+    @Test
+    void ticketsSavedBeforeTheSnapshotColumnsStillShowTheLinkedNames() {
+        Customer acme = customer(7L, "Acme");
+        ticket.setCustomer(acme);
+
+        TicketDetails details = service.get(100L);
+
+        assertThat(details.ticket().customer().id()).isEqualTo(7L);
+        assertThat(details.ticket().customer().name()).isEqualTo("Acme");
+    }
+
+    @Test
     void problemStatementIsStoredAndBlankFieldsCleared() {
         service.updateProblemStatement(100L, new ProblemStatementRequest("PLC drops off the network", "  ", "Replaced the switch port", 3L));
 
@@ -159,6 +221,13 @@ class TicketServiceAssignmentTest {
 
         assertThatThrownBy(() -> service.updateProblemStatement(100L, new ProblemStatementRequest("x", null, null, 3L)))
                 .isInstanceOf(TicketConflictException.class);
+    }
+
+    private Customer customer(Long id, String name) {
+        Customer c = new Customer();
+        ReflectionTestUtils.setField(c, "id", id);
+        c.setName(name);
+        return c;
     }
 
     private AppUser user(Long id, Role role) {

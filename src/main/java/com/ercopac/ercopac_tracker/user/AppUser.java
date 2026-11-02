@@ -99,6 +99,13 @@ public class AppUser {
 
     private Boolean emailNotificationsEnabled = true;
 
+    // UI preferences; null until the user chooses (the API then returns the defaults "en" / "light")
+    @Column(name = "preferred_language", length = 5)
+    private String preferredLanguage;
+
+    @Column(name = "preferred_theme", length = 10)
+    private String preferredTheme;
+
     public AppUser() {}
 
     public AppUser(String fullName, String email, String passwordHash, Role role) {
@@ -187,4 +194,8 @@ public class AppUser {
     public Boolean getEmailNotificationsEnabled() { return emailNotificationsEnabled; }
     public void setEmailNotificationsEnabled(Boolean v) { this.emailNotificationsEnabled = v; }
     public String getUsername() { return email; }
+    public String getPreferredLanguage() { return preferredLanguage; }
+    public void setPreferredLanguage(String preferredLanguage) { this.preferredLanguage = preferredLanguage; }
+    public String getPreferredTheme() { return preferredTheme; }
+    public void setPreferredTheme(String preferredTheme) { this.preferredTheme = preferredTheme; }
 }
