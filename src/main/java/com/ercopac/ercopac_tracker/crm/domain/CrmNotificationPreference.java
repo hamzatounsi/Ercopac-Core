@@ -13,6 +13,8 @@ public class CrmNotificationPreference {
     @Column(name = "email_notifications", nullable = false) private boolean emailNotifications = true;
     @Column(name = "stage_change_alerts", nullable = false) private boolean stageChangeAlerts = true;
     @Column(name = "closing_date_reminders", nullable = false) private boolean closingDateReminders = false;
+    // Alerts for new comments (notes) on CRM records the user owns or works on; null (rows created before the column) = ON
+    @Column(name = "comment_notifications", columnDefinition = "boolean default true") private Boolean commentNotifications = true;
     public Long getId() { return id; }
     public Organisation getOrganisation() { return organisation; }
     public void setOrganisation(Organisation value) { organisation = value; }
@@ -24,4 +26,6 @@ public class CrmNotificationPreference {
     public void setStageChangeAlerts(boolean value) { stageChangeAlerts = value; }
     public boolean isClosingDateReminders() { return closingDateReminders; }
     public void setClosingDateReminders(boolean value) { closingDateReminders = value; }
+    public boolean isCommentNotifications() { return !Boolean.FALSE.equals(commentNotifications); }
+    public void setCommentNotifications(boolean value) { commentNotifications = value; }
 }

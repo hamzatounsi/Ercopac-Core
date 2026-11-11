@@ -46,6 +46,7 @@ class TicketServiceAssignmentTest {
     @Mock TicketSettingsService settings;
     @Mock TicketAnalyticsService analytics;
     @Mock TicketNotifier notifier;
+    @Mock TicketConfigService config;
 
     private TicketService service;
     private Organisation organisation;
@@ -56,7 +57,7 @@ class TicketServiceAssignmentTest {
     @BeforeEach
     void setUp() {
         service = new TicketService(tickets, messages, activities, attachments, readStates, users, organisations, security,
-                new TicketStatusTransitionValidator(), customers, settings, analytics, notifier);
+                new TicketStatusTransitionValidator(), customers, settings, analytics, notifier, config);
         organisation = new Organisation();
         organisation.setId(5L);
         agent = user(1L, Role.H24);

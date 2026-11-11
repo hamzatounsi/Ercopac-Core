@@ -109,10 +109,11 @@ public class TaskResourceAssignmentService {
                 : userRepository.findByOrganisation_IdAndActiveTrueOrderByFullNameAsc(orgId);
 
         return users.stream()
+                .filter(ResourceClassification::isInternalEmployee)
                 .map(u -> new ResourceUserDto(
                         u.getId(),
                         u.getFullName(),
-                        u.getResourceType() != null ? u.getResourceType().getCode() : "",
+                        java.util.Objects.toString(ResourceClassification.resourceTypeCode(u), ""),
                         u.getDepartmentCode() != null ? u.getDepartmentCode() : "",
                         u.getColor() != null ? u.getColor() : "#3b82f6"))
                 .toList();
@@ -146,9 +147,14 @@ public class TaskResourceAssignmentService {
         entity.setCost(dto.getCost());
 
         if (dto.getAssignedUserId() != null) {
-        userRepository.findByIdAndOrganisation_Id(dto.getAssignedUserId(), project.getOrganisation().getId())
+        AppUser assigned = userRepository.findByIdAndOrganisation_Id(dto.getAssignedUserId(), project.getOrganisation().getId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Assigned user not found in project organisation: " + dto.getAssignedUserId()));
+        if (dto.getSupplierId() == null) {
+            // Keep the stored type in line with the resource's configured type (single source of truth)
+            String configured = ResourceClassification.resourceTypeCode(assigned);
+            if (configured != null) { dto.setResourceType(configured); entity.setResourceType(configured); }
+        }
 
         entity.setAssignedUserId(dto.getAssignedUserId());
         } else {
@@ -222,7 +228,9 @@ public class TaskResourceAssignmentService {
                 .setSupplierCode(entity.getSupplier() == null ? null
                         : (entity.getSupplier().getCode() == null ? entity.getSupplier().getShortCode() : entity.getSupplier().getCode()))
                 .setSupplierName(entity.getSupplier() == null ? null : entity.getSupplier().getName())
-                .setResourceType(entity.getResourceType())
+                // User rows show the resource's current configured type; supplier rows keep the type chosen at assignment
+                .setResourceType(entity.getSupplierId() == null && ResourceClassification.resourceTypeCode(entity.getAssignedUser()) != null
+                        ? ResourceClassification.resourceTypeCode(entity.getAssignedUser()) : entity.getResourceType())
                 .setAssignmentName(entity.getAssignmentName())
                 .setQuantity(entity.getQuantity())
                 .setUnitsPercent(entity.getUnitsPercent())

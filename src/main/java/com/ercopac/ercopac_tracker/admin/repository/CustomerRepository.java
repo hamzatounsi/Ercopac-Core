@@ -15,4 +15,6 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     Optional<Customer> findByOrganisation_IdAndCustomerCodeIgnoreCase(Long organisationId, String customerCode);
 
     boolean existsByOrganisation_IdAndCustomerCodeIgnoreCase(Long organisationId, String customerCode);
+
+    Optional<Customer> findFirstByOrganisation_IdAndNameIgnoreCase(Long organisationId, String name);
 }

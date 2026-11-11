@@ -22,11 +22,19 @@ public class Ticket {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "created_by_user_id", nullable = false) private AppUser createdByUser;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "client_user_id") private AppUser clientUser;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "assigned_sales_manager_id") private AppUser assignedSalesManager;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 32) private TicketCategory category;
+    // Category code: one of the system categories (TicketCategory names) or a custom category of Ticket settings
+    // (TicketCategorySetting.code). Same varchar column as before, existing values are kept.
+    @Column(nullable = false, length = 32) private String category;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private TicketPriority priority;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private TicketStatus status = TicketStatus.OPEN;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private TicketOrigin origin = TicketOrigin.WEB;
     @Column(length = 160) private String site;
+    // Optional organisation-defined status shown instead of the lifecycle status; status always holds its base lifecycle status
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "custom_status_id") private TicketCustomStatus customStatus;
+    // Contact person at the customer for this ticket
+    @Column(name = "contact_name", length = 150) private String contactName;
+    @Column(name = "contact_email", length = 180) private String contactEmail;
+    @Column(name = "contact_phone", length = 60) private String contactPhone;
     // Customer company, project and equipment the ticket is about (Customers settings), plus the L2 technician handling an escalation
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "customer_id") private Customer customer;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "project_id") private Project project;
@@ -55,8 +63,10 @@ public class Ticket {
     public String getSubject(){return subject;} public void setSubject(String v){subject=v;} public String getDescription(){return description;} public void setDescription(String v){description=v;}
     public Organisation getOrganisation(){return organisation;} public void setOrganisation(Organisation v){organisation=v;} public AppUser getCreatedByUser(){return createdByUser;} public void setCreatedByUser(AppUser v){createdByUser=v;}
     public AppUser getClientUser(){return clientUser;} public void setClientUser(AppUser v){clientUser=v;} public AppUser getAssignedSalesManager(){return assignedSalesManager;} public void setAssignedSalesManager(AppUser v){assignedSalesManager=v;}
-    public TicketCategory getCategory(){return category;} public void setCategory(TicketCategory v){category=v;} public TicketPriority getPriority(){return priority;} public void setPriority(TicketPriority v){priority=v;}
-    public TicketStatus getStatus(){return status;} public void setStatus(TicketStatus v){status=v;} public TicketOrigin getOrigin(){return origin;} public void setOrigin(TicketOrigin v){origin=v;}
+    public String getCategory(){return category;} public void setCategory(String v){category=v;} public void setCategory(TicketCategory v){category=v==null?null:v.name();}
+    public TicketCustomStatus getCustomStatus(){return customStatus;} public void setCustomStatus(TicketCustomStatus v){customStatus=v;}
+    public String getContactName(){return contactName;} public void setContactName(String v){contactName=v;} public String getContactEmail(){return contactEmail;} public void setContactEmail(String v){contactEmail=v;} public String getContactPhone(){return contactPhone;} public void setContactPhone(String v){contactPhone=v;} public TicketPriority getPriority(){return priority;} public void setPriority(TicketPriority v){priority=v;}
+    public TicketStatus getStatus(){return status;} public void setStatus(TicketStatus v){status=v;if(customStatus!=null&&customStatus.getBaseStatus()!=v)customStatus=null;} public TicketOrigin getOrigin(){return origin;} public void setOrigin(TicketOrigin v){origin=v;}
     public String getSite(){return site;} public void setSite(String v){site=v;} public int getEscalationLevel(){return escalationLevel;} public void setEscalationLevel(int v){escalationLevel=v;}
     public Instant getCreatedAt(){return createdAt;} public Instant getUpdatedAt(){return updatedAt;} public Instant getResolvedAt(){return resolvedAt;} public void setResolvedAt(Instant v){resolvedAt=v;} public Instant getClosedAt(){return closedAt;} public void setClosedAt(Instant v){closedAt=v;} public Instant getLastMessageAt(){return lastMessageAt;} public void setLastMessageAt(Instant v){lastMessageAt=v;} public Long getVersion(){return version;}
     public Customer getCustomer(){return customer;} public void setCustomer(Customer v){customer=v;} public Project getProject(){return project;} public void setProject(Project v){project=v;}

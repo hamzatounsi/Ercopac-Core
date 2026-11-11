@@ -35,3 +35,8 @@ build/
 # Staging runtime secrets and local overrides (the example stays tracked).
 /deploy/staging/.env
 /deploy/staging/secrets/
+
+# Local secrets (SMTP password etc.): never commit; see .env.example
+.env
+.env.*
+!.env.example

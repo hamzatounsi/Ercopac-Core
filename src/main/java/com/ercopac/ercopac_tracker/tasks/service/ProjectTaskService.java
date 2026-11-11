@@ -589,10 +589,12 @@ public class ProjectTaskService {
         if (orgId == null) return List.of();
         return userRepository.findByOrganisation_IdOrderByFullNameAsc(orgId)
                 .stream()
+                // Internal employees only: suppliers/external resources are offered separately (supplier options)
+                .filter(ResourceClassification::isInternalEmployee)
                 .map(u -> new ResourceUserDto(
                         u.getId(),
                         u.getFullName(),
-                        u.getResourceType() != null ? u.getResourceType().getCode() : "",
+                        Objects.toString(ResourceClassification.resourceTypeCode(u), ""),
                         u.getDepartmentCode() != null ? u.getDepartmentCode() : "",
                         u.getColor() != null ? u.getColor() : "#3b82f6"
                 ))
@@ -1007,11 +1009,11 @@ public class ProjectTaskService {
         List<TaskDependencyDto> depDtos = deps.stream()
                 .map(this::toDependencyDto).collect(Collectors.toList());
 
-        // FIX: use getResourceTypeCode() — returns String code from FK or fallback string
-        String resourceTypeCode = task.getResourceTypeCode() != null && !task.getResourceTypeCode().isBlank()
-                ? task.getResourceTypeCode()
-                : (task.getAssignedUser() != null && task.getAssignedUser().getResourceType() != null
-                    ? task.getAssignedUser().getResourceType().getCode() : null);
+        // Single source of truth: the assigned resource's configured resource type wins over the code stored on
+        // the task, so changing a resource's type is reflected immediately (no stale value).
+        String resourceTypeCode = ResourceClassification.resourceTypeCode(task.getAssignedUser()) != null
+                ? ResourceClassification.resourceTypeCode(task.getAssignedUser())
+                : (task.getResourceTypeCode() != null && !task.getResourceTypeCode().isBlank() ? task.getResourceTypeCode() : null);
 
         // FIX: use getDepartmentCode() — returns String code from FK or fallback string
         String departmentCode = task.getDepartmentCode() != null && !task.getDepartmentCode().isBlank()
