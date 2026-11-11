@@ -109,7 +109,8 @@ public class TicketCustomerService {
   if (org == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No organisation.");
   List<Ref> choices;
   if (me.hasAnyRole(TicketSettingsService.SUPPORT_ROLES)) {
-   choices = customers.findByOrganisation_IdOrderByNameAsc(org).stream().filter(Customer::isActive).map(c -> new Ref(c.getId(), c.getName())).toList();
+   // Every customer of the organisation (no active filter, no limit) so historical customers can be chosen too
+   choices = customers.findByOrganisation_IdOrderByNameAsc(org).stream().map(c -> new Ref(c.getId(), c.isActive() ? c.getName() : c.getName() + " (inactive)")).toList();
   } else {
    Customer own = customerOfClient(me);
    choices = own == null ? List.of() : List.of(new Ref(own.getId(), own.getName()));
@@ -122,6 +123,73 @@ public class TicketCustomerService {
    return new FormOptions(choices, null, List.of(), List.of(), any);
   }
   return new FormOptions(choices, chosen, sitesOf(org, chosen), equipmentOf(org, chosen), projectsOf(org, chosen));
+ }
+
+ // ---------- manual customers and import ----------
+ /**
+  * A customer typed by hand on a ticket is saved as a customer of the organisation (reused when one with the same name
+  * exists), so it is stored once and offered in the customer lists afterwards.
+  * TODO(confirm with Anis): manual customers previously stayed a name on the ticket only; confirm they should become customer records.
+  */
+ public Customer findOrCreateManualCustomer(String name, Long org) {
+  String n = trim(name); if (n == null) return null;
+  return customers.findFirstByOrganisation_IdAndNameIgnoreCase(org, n).orElseGet(() -> {
+   Customer c = new Customer(); c.setOrganisation(settings.current().getOrganisation()); c.setName(n); c.setCustomerCode(uniqueCode(org, n)); c.setActive(true);
+   return customers.save(c);
+  });
+ }
+
+ /**
+  * Import of historical customers and their orders (one row per customer, or per customer + order). Customers are matched
+  * by code, then by name (case-insensitive); orders by number, then by name + year, within the customer. Only orders of
+  * 2023 to 2026 are accepted. dryRun reports what would happen without saving.
+  */
+ public ImportResult importCustomers(ImportRequest request) {
+  Long org = leadOrg(); var organisation = settings.current().getOrganisation();
+  int customersCreated = 0, customersExisting = 0, ordersCreated = 0, ordersDuplicate = 0, skipped = 0; List<String> errors = new ArrayList<>();
+  Map<String, Customer> created = new HashMap<>(); Set<String> seenOrders = new HashSet<>();
+  int line = 1;
+  for (ImportRow r : request.rows()) {
+   line++;
+   String name = trim(r.customerName()), code = trim(r.customerCode());
+   if (name == null && code == null) { skipped++; errors.add("Row " + line + ": customer name or code is required."); continue; }
+   Customer c = code != null ? customers.findByOrganisation_IdAndCustomerCodeIgnoreCase(org, code).orElse(null) : null;
+   if (c == null && name != null) c = customers.findFirstByOrganisation_IdAndNameIgnoreCase(org, name).orElse(null);
+   String key = (code != null ? "C:" + code : "N:" + name).toLowerCase(Locale.ROOT);
+   if (c == null) c = created.get(key);
+   if (c == null && name == null) { skipped++; errors.add("Row " + line + ": unknown customer code " + code + " and no name to create it."); continue; }
+   if (c == null) {
+    c = new Customer(); c.setOrganisation(organisation); c.setName(name); c.setCustomerCode(code != null ? code : uniqueCode(org, name)); c.setActive(true);
+    c.setCountry(trim(r.country())); c.setTown(trim(r.town())); c.setEmail(trim(r.email())); c.setPhone(trim(r.phone()));
+    if (!request.dryRun()) c = customers.save(c);
+    created.put(key, c); if (name != null) created.put(("N:" + name).toLowerCase(Locale.ROOT), c); customersCreated++;
+   } else if (!created.containsValue(c)) customersExisting++;
+   String number = trim(r.orderNumber()), orderName = trim(r.orderName());
+   if (number == null && orderName == null) continue;
+   if (r.year() == null || r.year() < 2023 || r.year() > 2026) { skipped++; errors.add("Row " + line + ": order year must be between 2023 and 2026."); continue; }
+   String customerKey = c.getId() == null ? key : String.valueOf(c.getId());
+   String orderKey = customerKey + "|" + (number != null ? "#" + number.toLowerCase(Locale.ROOT) : orderName.toLowerCase(Locale.ROOT) + "|" + r.year());
+   final Customer owner = c;
+   boolean exists = !seenOrders.add(orderKey) || (owner.getId() != null && manualProjects.findByOrganisation_IdAndCustomer_IdOrderByNameAsc(org, owner.getId()).stream().anyMatch(p -> number != null
+     ? number.equalsIgnoreCase(Objects.toString(p.getProjectNumber(), "")) : orderName.equalsIgnoreCase(p.getName()) && Objects.equals(p.getProjectYear(), r.year())))
+     || (owner.getId() != null && number != null && projectsOf(org, owner.getId()).stream().anyMatch(p -> number.equalsIgnoreCase(Objects.toString(p.code(), ""))));
+   if (exists) { ordersDuplicate++; continue; }
+   if (!request.dryRun()) {
+    TicketCustomerProject p = new TicketCustomerProject(); p.setOrganisation(organisation); p.setCustomer(owner);
+    p.setName(orderName != null ? orderName : number); p.setProjectNumber(number); p.setProjectYear(r.year()); manualProjects.save(p);
+   }
+   ordersCreated++;
+  }
+  return new ImportResult(request.rows().size(), customersCreated, customersExisting, ordersCreated, ordersDuplicate, skipped, errors.size() > 200 ? errors.subList(0, 200) : errors, request.dryRun());
+ }
+
+ /** Customer code derived from the name, unique in the organisation (codes are required on customers). */
+ private String uniqueCode(Long org, String name) {
+  String base = name.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "-").replaceAll("^-+|-+$", "");
+  if (base.isEmpty()) base = "CUST"; if (base.length() > 50) base = base.substring(0, 50);
+  String code = base; int i = 2;
+  while (customers.existsByOrganisation_IdAndCustomerCodeIgnoreCase(org, code)) code = base + "-" + i++;
+  return code;
  }
 
  // ---------- used by TicketService ----------

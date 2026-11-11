@@ -138,7 +138,7 @@ public class CrmService {
         AppUser user = currentUser();
         return notificationPreferenceRepo.findByOrganisation_IdAndUser_Id(organisationId, user.getId())
                 .map(this::toNotificationPreferenceDto)
-                .orElse(new CrmNotificationPreferenceDto(true, true, false));
+                .orElse(new CrmNotificationPreferenceDto(true, true, false, true));
     }
 
     public CrmNotificationPreferenceDto saveNotificationPreferences(Long requestedOrganisationId, CrmNotificationPreferenceDto dto) {
@@ -151,11 +151,12 @@ public class CrmService {
         entity.setEmailNotifications(dto.emailNotifications());
         entity.setStageChangeAlerts(dto.stageChangeAlerts());
         entity.setClosingDateReminders(dto.closingDateReminders());
+        if (dto.commentNotifications() != null) entity.setCommentNotifications(dto.commentNotifications());
         return toNotificationPreferenceDto(notificationPreferenceRepo.save(entity));
     }
 
     private CrmNotificationPreferenceDto toNotificationPreferenceDto(CrmNotificationPreference entity) {
-        return new CrmNotificationPreferenceDto(entity.isEmailNotifications(), entity.isStageChangeAlerts(), entity.isClosingDateReminders());
+        return new CrmNotificationPreferenceDto(entity.isEmailNotifications(), entity.isStageChangeAlerts(), entity.isClosingDateReminders(), entity.isCommentNotifications());
     }
 
     
@@ -912,7 +913,8 @@ public class CrmService {
                 "Note added to " + opportunity.getName(), null, opportunity);
         if (assignmentNotifier != null) {
             String message = actor.getFullName() + " added a note to " + opportunity.getName() + ": " + content.trim();
-            assignmentNotifier.notifyOpportunityUpdated(opportunity, actor, "New note on opportunity", message);
+            // Owner and team members (not the author), respecting their "Comment notifications" setting
+            assignmentNotifier.notifyNewComment(opportunity, actor, "New comment on " + opportunity.getName(), message);
         }
         return toNoteDto(note);
     }

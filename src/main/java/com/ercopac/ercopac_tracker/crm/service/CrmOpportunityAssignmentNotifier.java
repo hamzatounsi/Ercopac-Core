@@ -67,6 +67,33 @@ public class CrmOpportunityAssignmentNotifier {
         }
     }
 
+    /**
+     * New comment (note) on an opportunity: notifies its owner and team members, never the author, only within the
+     * opportunity's organisation, and only users whose "Comment notifications" preference is on (default ON).
+     */
+    @Transactional
+    public void notifyNewComment(CrmOpportunity opportunity, AppUser author, String subject, String message) {
+        Long organisationId = opportunity.getOrganisation().getId();
+        java.util.Map<Long, AppUser> recipients = new java.util.LinkedHashMap<>();
+        if (opportunity.getOwner() != null) recipients.put(opportunity.getOwner().getId(), opportunity.getOwner());
+        for (AppUser member : opportunity.getTeamMembers()) recipients.putIfAbsent(member.getId(), member);
+        for (AppUser user : recipients.values()) {
+            if (user == null || user.getId() == null || !user.isActive()
+                    || (author != null && Objects.equals(user.getId(), author.getId()))
+                    || user.getOrganisation() == null
+                    || !Objects.equals(user.getOrganisation().getId(), organisationId)) continue;
+            var preference = preferences.findByOrganisation_IdAndUser_Id(organisationId, user.getId());
+            if (!preference.map(value -> value.isCommentNotifications()).orElse(true)) continue;
+            boolean crmEmailEnabled = preference.map(value -> value.isEmailNotifications()).orElse(true);
+            boolean userEmailEnabled = !Boolean.FALSE.equals(user.getEmailNotificationsEnabled());
+            NotificationChannel channel = crmEmailEnabled && userEmailEnabled ? NotificationChannel.EMAIL : NotificationChannel.APP_ALERT;
+            Notification notification = notifications.create(new NotificationRequest(
+                    organisationId, null, null, user.getId(), user.getEmail(), channel, "INFO",
+                    subject, message, "<p>" + HtmlUtils.htmlEscape(message) + "</p>"));
+            notification.setLink("/crm/opportunities/" + opportunity.getId());
+        }
+    }
+
     @Transactional
     public void notifyOpportunityUpdated(CrmOpportunity opportunity, AppUser actor, String subject, String message) {
         System.out.println("🔥 DEBUG [Notifier]: notifyOpportunityUpdated appelé par : " + actor.getFullName());

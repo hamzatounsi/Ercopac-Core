@@ -32,13 +32,16 @@ public class ResourceService {
     private final DepartmentRepository departmentRepository;
     private final PasswordEncoder        passwordEncoder;
     private final SecurityUtils          securityUtils;
+    private final com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository taskResourceAssignmentRepository;
 
     public ResourceService(UserRepository userRepository,
                            OrganisationRepository organisationRepository,
                            ResourceTypeRepository resourceTypeRepository,
                            DepartmentRepository departmentRepository,
                            PasswordEncoder passwordEncoder,
-                           SecurityUtils securityUtils) {
+                           SecurityUtils securityUtils,
+                           com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository taskResourceAssignmentRepository) {
+        this.taskResourceAssignmentRepository = taskResourceAssignmentRepository;
         this.userRepository         = userRepository;
         this.organisationRepository = organisationRepository;
         this.resourceTypeRepository = resourceTypeRepository;
@@ -138,6 +141,9 @@ public class ResourceService {
         }
 
         assignResourceProfile(user, request.departmentCode(), request.resourceType(), organisationId);
+        // Propagate a resource type change to existing Gantt assignments (no stale type values)
+        taskResourceAssignmentRepository.syncResourceTypeForUser(user.getId(),
+                user.getResourceType() == null ? null : user.getResourceType().getCode());
         user.setJobTitle(normalize(request.jobTitle()));
         user.setSeniority(normalize(request.seniority()));
         user.setInternalUser(true);

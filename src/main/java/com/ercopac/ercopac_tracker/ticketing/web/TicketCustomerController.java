@@ -61,6 +61,13 @@ public class TicketCustomerController {
         return service.create(request);
     }
 
+    /** Import of historical customers and orders (2023-2026) parsed from CSV / Excel by the client; duplicates are skipped. */
+    @PostMapping("/customers/import")
+    @PreAuthorize(LEAD_ACCESS)
+    public ImportResult importCustomers(@Valid @RequestBody ImportRequest request) {
+        return service.importCustomers(request);
+    }
+
     @PutMapping("/customers/{id}")
     @PreAuthorize(LEAD_ACCESS)
     public CustomerDto updateCustomer(@PathVariable Long id, @Valid @RequestBody CustomerRequest request) {

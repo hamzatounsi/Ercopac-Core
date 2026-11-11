@@ -16,7 +16,8 @@ import java.sql.SQLException;
  * cannot do, idempotently and without touching existing values:
  * - copy the linked customer and project onto tickets created before the snapshot columns;
  * - drop the role_permissions module CHECK constraint generated before TICKETING existed;
- * - keep equipment linked to at most one project (Projectum or manual).
+ * - keep equipment linked to at most one project (Projectum or manual);
+ * - drop the tickets.category enum CHECK so custom categories can be stored (see V32 script).
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
@@ -35,6 +36,8 @@ public class TicketingSchemaCompatibilityMigration implements CommandLineRunner 
         if (!isPostgres()) return;
 
         jdbcTemplate.execute("alter table if exists public.role_permissions drop constraint if exists role_permissions_module_check");
+        // Ticket categories are configurable now (system + custom codes): drop the enum CHECK Hibernate generated on tickets.category
+        jdbcTemplate.execute("alter table if exists public.tickets drop constraint if exists tickets_category_check");
 
         if (columnExists("tickets", "customer_name")) {
             jdbcTemplate.update("""

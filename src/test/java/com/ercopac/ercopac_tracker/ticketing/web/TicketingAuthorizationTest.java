@@ -38,6 +38,8 @@ class TicketingAuthorizationTest {
     @MockitoBean TicketAnalyticsService analytics;
     @MockitoBean TicketTranslationService translation;
     @MockitoBean TicketCustomerService customers;
+    @MockitoBean com.ercopac.ercopac_tracker.ticketing.service.TicketConfigService config;
+    @MockitoBean com.ercopac.ercopac_tracker.ticketing.service.TicketAccountService accounts;
     @MockitoBean(name = "permissionChecker") PermissionChecker permissionChecker;
 
     @Test

@@ -13,14 +13,18 @@ public class ProjectumMailService {
     private static final Logger log = LoggerFactory.getLogger(ProjectumMailService.class);
     private final JavaMailSender mailSender;
     private final String from;
+    private final String fromName;
     private final boolean deliveryEnabled;
 
+    // Same sender as SmtpEmailProvider: app.mail.from (MAIL_FROM)
     public ProjectumMailService(
             JavaMailSender mailSender,
-            @Value("${spring.mail.username:}") String from,
+            @Value("${app.mail.from:info@projectumall.com}") String from,
+            @Value("${app.mail.from-name:Projectum}") String fromName,
             @Value("${app.mail.delivery-enabled:true}") boolean deliveryEnabled) {
         this.mailSender = mailSender;
         this.from = from;
+        this.fromName = fromName;
         this.deliveryEnabled = deliveryEnabled;
     }
 
@@ -32,7 +36,7 @@ public class ProjectumMailService {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
-            helper.setFrom(from, "Projectum");
+            helper.setFrom(from, fromName);
             helper.setTo(recipient);
             helper.setSubject(subject);
             helper.setText(body, false);

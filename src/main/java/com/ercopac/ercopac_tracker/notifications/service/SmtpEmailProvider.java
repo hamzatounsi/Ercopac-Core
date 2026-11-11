@@ -15,10 +15,10 @@ public class SmtpEmailProvider implements EmailProvider {
 
     private final JavaMailSender mailSender;
 
-    @Value("${app.mail.from:no-reply@projectum.local}")
+    @Value("${app.mail.from:info@projectumall.com}")
     private String fromEmail;
 
-    @Value("${app.mail.from-name:ERCOPAC Projectum}")
+    @Value("${app.mail.from-name:Projectum}")
     private String fromName;
 
     @Value("${app.mail.delivery-enabled:true}")
