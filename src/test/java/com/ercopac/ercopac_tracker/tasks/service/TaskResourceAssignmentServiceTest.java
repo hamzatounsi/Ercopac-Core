@@ -3,6 +3,7 @@ package com.ercopac.ercopac_tracker.tasks.service;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
+import com.ercopac.ercopac_tracker.security.DepartmentScope;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskResourceAssignment;
@@ -40,6 +41,7 @@ class TaskResourceAssignmentServiceTest {
     @Mock ResourceTypeRepository resourceTypeRepository;
     @Mock SupplierRepository supplierRepository;
     @Mock SecurityUtils securityUtils;
+    @Mock DepartmentScope departmentScope;
 
     private TaskResourceAssignmentService service;
     private Organisation organisation;
@@ -50,7 +52,8 @@ class TaskResourceAssignmentServiceTest {
     @BeforeEach
     void setUp() {
         service = new TaskResourceAssignmentService(assignmentRepository, userRepository, projectRepository,
-                taskRepository, resourceTypeRepository, supplierRepository, securityUtils);
+                taskRepository, resourceTypeRepository, supplierRepository, securityUtils, departmentScope);
+        lenient().when(departmentScope.current()).thenReturn(DepartmentScope.Scope.unrestricted());
         organisation = new Organisation();
         organisation.setId(10L);
         Project project = new Project();
@@ -106,6 +109,31 @@ class TaskResourceAssignmentServiceTest {
         assertThatThrownBy(() -> service.createTaskResource(100L, 200L, assignment(999L, "RES")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("project organisation");
+    }
+
+    @Test
+    void departmentManagerCannotAssignASupplierOutsideTheirResourceTypes() {
+        when(departmentScope.current()).thenReturn(new DepartmentScope.Scope(true, "SW", java.util.Set.of("PC")));
+        when(resourceTypeRepository.findByCodeAndOrganisation_Id("RES", 10L)).thenReturn(Optional.of(res));
+        when(supplierRepository.findByIdAndOrganisation_Id(300L, 10L)).thenReturn(Optional.of(supplierA));
+
+        assertThatThrownBy(() -> service.createTaskResource(100L, 200L, assignment(300L, "RES")))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((org.springframework.web.server.ResponseStatusException) ex)
+                        .getStatusCode().value()).isEqualTo(403));
+    }
+
+    @Test
+    void supplierPickerOnlyOffersSuppliersInTheDepartmentScope() {
+        when(supplierRepository.findByOrganisation_IdAndActiveTrueOrderByNameAsc(10L))
+                .thenReturn(java.util.List.of(supplierA));
+
+        when(departmentScope.current()).thenReturn(new DepartmentScope.Scope(true, "SW", java.util.Set.of("PC")));
+        assertThat(service.getActiveSuppliers(100L, 200L)).isEmpty();
+
+        when(departmentScope.current()).thenReturn(new DepartmentScope.Scope(true, "OPS", java.util.Set.of("RES")));
+        assertThat(service.getActiveSuppliers(100L, 200L)).singleElement()
+                .satisfies(option -> assertThat(option.resourceTypeCodes()).containsExactly("RES"));
     }
 
     private ResourceType resourceType(Long id, String code) {

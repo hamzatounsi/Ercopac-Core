@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.config;
 
+import com.ercopac.ercopac_tracker.customer.service.CustomerConflictException;
 import com.ercopac.ercopac_tracker.auth.LoginTemporarilyLockedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -78,6 +79,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TicketConflictException.class)
     public ResponseEntity<Map<String, Object>> handleTicketConflict(TicketConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorBody(HttpStatus.CONFLICT, ex.getMessage()));
+    }
+
+    @ExceptionHandler(CustomerConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleCustomerConflict(CustomerConflictException ex) {
+        Map<String, Object> body = errorBody(HttpStatus.CONFLICT, ex.getMessage());
+        body.put("code", ex.getCode());
+        if (ex.getReferences() != null) {
+            Map<String, Object> references = new HashMap<>();
+            references.put("projects", ex.getReferences().projects());
+            references.put("tickets", ex.getReferences().tickets());
+            references.put("ticketingRecords", ex.getReferences().ticketingRecords());
+            references.put("total", ex.getReferences().total());
+            body.put("references", references);
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
     @ExceptionHandler(AccessDeniedException.class)

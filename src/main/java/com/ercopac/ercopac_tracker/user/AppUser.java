@@ -9,6 +9,7 @@ import com.ercopac.ercopac_tracker.projectum.risks.domain.RiskItem;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskResourceAssignment;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.ercopac.ercopac_tracker.common.NameNormalizer;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -109,7 +110,7 @@ public class AppUser {
     public AppUser() {}
 
     public AppUser(String fullName, String email, String passwordHash, Role role) {
-        this.fullName = fullName;
+        this.fullName = NameNormalizer.upper(fullName);
         this.email = email;
         this.passwordHash = passwordHash;
         setRoles(Set.of(role));
@@ -121,8 +122,14 @@ public class AppUser {
     }
 
     public Long getId() { return id; }
+    @PrePersist
+    @PreUpdate
+    void normalizeFullName() {
+        fullName = NameNormalizer.upper(fullName);
+    }
+
     public String getFullName() { return fullName; }
-    public void setFullName(String fullName) { this.fullName = fullName; }
+    public void setFullName(String fullName) { this.fullName = NameNormalizer.upper(fullName); }
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
     public String getPasswordHash() { return passwordHash; }

@@ -177,7 +177,7 @@ class TicketSettingsServiceTest {
         when(profiles.findByOrganisation_Id(5L)).thenReturn(List.of(noraL2));
         when(users.findByOrganisation_IdAndResourceType_IdAndActiveTrue(5L, 3L)).thenReturn(List.of(nora, adam));
 
-        assertThat(service.employees(3L, false)).extracting(EmployeeOption::fullName).containsExactly("Adam", "Nora");
+        assertThat(service.employees(3L, false)).extracting(EmployeeOption::fullName).containsExactly("ADAM", "NORA");
         assertThat(service.employees(3L, true)).extracting(EmployeeOption::id).containsExactly(20L);
         assertThat(service.employees(3L, false).get(0).resourceTypeId()).isEqualTo(3L);
     }

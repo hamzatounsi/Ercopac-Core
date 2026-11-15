@@ -191,7 +191,7 @@ class StagingDemoDataSeederTest {
         seeder.run();
 
         Organisation demo = organisationsByCode.get(StagingDemoDataSeeder.DEMO_ORGANISATION_CODE);
-        assertThat(demo.getName()).isEqualTo(StagingDemoDataSeeder.DEMO_ORGANISATION_NAME);
+        assertThat(demo.getName()).isEqualToIgnoringCase(StagingDemoDataSeeder.DEMO_ORGANISATION_NAME).isUpperCase();
         assertThat(organisationsByCode).hasSize(2);
         assertThat(usersByEmail).hasSize(9);
         assertThat(projectsByCode).hasSize(2);

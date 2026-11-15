@@ -3,6 +3,9 @@ package com.ercopac.ercopac_tracker.admin.service;
 import com.ercopac.ercopac_tracker.admin.domain.*;
 import com.ercopac.ercopac_tracker.admin.dto.*;
 import com.ercopac.ercopac_tracker.admin.repository.*;
+import com.ercopac.ercopac_tracker.customer.dto.CustomerRequest;
+import com.ercopac.ercopac_tracker.customer.service.CustomerManagementService;
+import com.ercopac.ercopac_tracker.customer.service.CustomerUsageService;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
@@ -31,6 +34,8 @@ public class AdminService {
     private final ProjectCategoryRepository categoryRepository;
     private final ProjectTypeRepository typeRepository;
     private final CustomerRepository customerRepository;
+    private final CustomerManagementService customerManagementService;
+    private final CustomerUsageService customerUsageService;
 
     public AdminService(
             SecurityUtils securityUtils,
@@ -40,7 +45,9 @@ public class AdminService {
             AdminLicenceAssignmentRepository licenceRepository,
             ProjectCategoryRepository categoryRepository,
             ProjectTypeRepository typeRepository,
-            CustomerRepository customerRepository
+            CustomerRepository customerRepository,
+            CustomerManagementService customerManagementService,
+            CustomerUsageService customerUsageService
     ) {
         this.securityUtils = securityUtils;
         this.organisationRepository = organisationRepository;
@@ -50,6 +57,8 @@ public class AdminService {
         this.categoryRepository = categoryRepository;
         this.typeRepository = typeRepository;
         this.customerRepository = customerRepository;
+        this.customerManagementService = customerManagementService;
+        this.customerUsageService = customerUsageService;
     }
 
     // ================= LICENCES =================
@@ -297,50 +306,23 @@ public class AdminService {
                 .toList();
     }
 
+    // Create, update and delete go through CustomerManagementService so this older contract
+    // follows the same rules as Customer Management (unique name, delete only when unused).
+
     public CustomerDto createCustomer(SaveCustomerRequest request) {
-        Long organisationId = requireOrganisationId();
-
         validateCustomerRequest(request);
-
-        String code = normalizeUpper(request.customerCode());
-
-        if (customerRepository.existsByOrganisation_IdAndCustomerCodeIgnoreCase(organisationId, code)) {
-            throw conflict("Customer code already exists");
-        }
-
-        Customer customer = new Customer();
-        customer.setOrganisation(getOrganisation(organisationId));
-        applyCustomerRequest(customer, request);
-
-        return toCustomerDto(customerRepository.save(customer), organisationId);
+        Customer customer = customerManagementService.createCustomer(CustomerRequest.from(request));
+        return toCustomerDto(customer, customer.getOrganisation().getId());
     }
 
     public CustomerDto updateCustomer(Long id, SaveCustomerRequest request) {
-        Long organisationId = requireOrganisationId();
-
         validateCustomerRequest(request);
-
-        Customer customer = customerRepository.findByIdAndOrganisation_Id(id, organisationId)
-                .orElseThrow(() -> notFound("Customer not found"));
-
-        String newCode = normalizeUpper(request.customerCode());
-        if (!customer.getCustomerCode().equalsIgnoreCase(newCode)
-                && customerRepository.existsByOrganisation_IdAndCustomerCodeIgnoreCase(organisationId, newCode)) {
-            throw conflict("Customer code already exists");
-        }
-
-        applyCustomerRequest(customer, request);
-
-        return toCustomerDto(customerRepository.save(customer), organisationId);
+        Customer customer = customerManagementService.updateCustomer(id, CustomerRequest.from(request));
+        return toCustomerDto(customer, customer.getOrganisation().getId());
     }
 
     public void deleteCustomer(Long id) {
-        Long organisationId = requireOrganisationId();
-
-        Customer customer = customerRepository.findByIdAndOrganisation_Id(id, organisationId)
-                .orElseThrow(() -> notFound("Customer not found"));
-
-        customerRepository.delete(customer);
+        customerManagementService.delete(id);
     }
 
     // ================= HELPERS =================
@@ -475,10 +457,7 @@ public class AdminService {
     }
 
     private CustomerDto toCustomerDto(Customer customer, Long organisationId) {
-        long usage = projectRepository.countByOrganisationIdAndCustomer(
-                organisationId,
-                customer.getName()
-        );
+        long usage = customerUsageService.referencesOf(customer).projects();
 
         return new CustomerDto(
                 customer.getId(),
@@ -514,20 +493,6 @@ public class AdminService {
         type.setColor(normalizeOrDefault(request.color(), "#16a34a"));
         type.setBillable(Boolean.TRUE.equals(request.billable()));
         type.setActive(request.active() == null || request.active());
-    }
-
-    private void applyCustomerRequest(Customer customer, SaveCustomerRequest request) {
-        customer.setCustomerCode(normalizeUpper(request.customerCode()));
-        customer.setName(normalizeRequired(request.name(), "Customer name is required"));
-        customer.setCountry(normalize(request.country()));
-        customer.setTown(normalize(request.town()));
-        customer.setAddress(normalize(request.address()));
-        customer.setVatTaxId(normalize(request.vatTaxId()));
-        customer.setContactPerson(normalize(request.contactPerson()));
-        customer.setEmail(normalizeLower(request.email()));
-        customer.setPhone(normalize(request.phone()));
-        customer.setErpId(normalize(request.erpId()));
-        customer.setActive(request.active() == null || request.active());
     }
 
     private AdminLicenceType parseLicenceType(String value) {

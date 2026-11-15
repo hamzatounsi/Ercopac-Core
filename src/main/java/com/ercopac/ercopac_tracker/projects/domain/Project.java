@@ -13,6 +13,7 @@ import com.ercopac.ercopac_tracker.projectum.finance.domain.FinanceEntry;
 import com.ercopac.ercopac_tracker.projectum.forecast.domain.ForecastEntry;
 import com.ercopac.ercopac_tracker.projectum.risks.domain.RiskItem;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.ercopac.ercopac_tracker.common.NameNormalizer;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -73,6 +74,13 @@ public class Project {
     public void setApplicationType(ProjectApplicationType applicationType) {
         this.applicationType = applicationType;
     }
+    /** The denormalised customer label is a customer name, so it follows the same casing rule. */
+    @PrePersist
+    @PreUpdate
+    void normalizeCustomerName() {
+        customer = NameNormalizer.upper(customer);
+    }
+
     public String getCustomer() {
         return customer;
     }
@@ -92,7 +100,7 @@ public class Project {
     }
 
     public void setCustomer(String customer) {
-        this.customer = customer;
+        this.customer = NameNormalizer.upper(customer);
     }
 
     public Customer getCustomerEntity() { return customerEntity; }

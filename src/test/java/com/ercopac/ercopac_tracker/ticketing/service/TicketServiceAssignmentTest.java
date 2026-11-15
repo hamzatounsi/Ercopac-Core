@@ -141,7 +141,7 @@ class TicketServiceAssignmentTest {
         assertThat(ticket.getEquipment()).isSameAs(plc);
         assertThat(ticket.getProject()).isNull();
         assertThat(ticket.getSite()).isEqualTo("Plant North");
-        assertThat(details.ticket().customer().name()).isEqualTo("Acme");
+        assertThat(details.ticket().customer().name()).isEqualTo("ACME");
         verify(activities).save(argThat(a -> "context".equals(a.getField())));
     }
 
@@ -158,7 +158,7 @@ class TicketServiceAssignmentTest {
 
         TicketDetails details = service.updateContext(100L, new TicketContextRequest(7L, null, 40L, null, 3L, "ignored", "ignored", "x", 1999));
 
-        assertThat(ticket.getCustomerName()).isEqualTo("Acme");
+        assertThat(ticket.getCustomerName()).isEqualTo("ACME");
         assertThat(ticket.getProject()).isSameAs(line);
         assertThat(ticket.getProjectName()).isEqualTo("Line 3 retrofit");
         assertThat(ticket.getProjectNumber()).isEqualTo("PRJ-2024-007");
@@ -178,13 +178,13 @@ class TicketServiceAssignmentTest {
                 new TicketContextRequest(null, null, null, null, 3L, " Legacy Foods ", " Packing line 2009 ", "LF-09", 2009));
 
         assertThat(ticket.getCustomer()).isNull();
-        assertThat(ticket.getCustomerName()).isEqualTo("Legacy Foods");
+        assertThat(ticket.getCustomerName()).isEqualTo("LEGACY FOODS");
         assertThat(ticket.getProject()).isNull();
         assertThat(ticket.getProjectName()).isEqualTo("Packing line 2009");
         assertThat(ticket.getProjectNumber()).isEqualTo("LF-09");
         assertThat(ticket.getProjectYear()).isEqualTo(2009);
         assertThat(details.ticket().customer().id()).isNull();
-        assertThat(details.ticket().customer().name()).isEqualTo("Legacy Foods");
+        assertThat(details.ticket().customer().name()).isEqualTo("LEGACY FOODS");
         verify(customers, never()).requireCustomer(any(), any());
         verify(customers, never()).customerOfClient(any());
     }
@@ -204,7 +204,7 @@ class TicketServiceAssignmentTest {
         TicketDetails details = service.get(100L);
 
         assertThat(details.ticket().customer().id()).isEqualTo(7L);
-        assertThat(details.ticket().customer().name()).isEqualTo("Acme");
+        assertThat(details.ticket().customer().name()).isEqualTo("ACME");
     }
 
     @Test

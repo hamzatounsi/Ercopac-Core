@@ -1,5 +1,7 @@
 package com.ercopac.ercopac_tracker.ticketing.service;
 
+import com.ercopac.ercopac_tracker.common.NameNormalizer;
+import com.ercopac.ercopac_tracker.customer.service.CustomerConflictException;
 import com.ercopac.ercopac_tracker.admin.domain.Customer;
 import com.ercopac.ercopac_tracker.admin.repository.CustomerRepository;
 import com.ercopac.ercopac_tracker.crm.domain.CrmEquipmentType;
@@ -35,6 +37,7 @@ public class TicketCustomerService {
  public CustomerDto create(CustomerRequest r) {
   AppUser lead = settings.requireLead(); Long org = lead.getOrganisation().getId();
   if (customers.existsByOrganisation_IdAndCustomerCodeIgnoreCase(org, r.code().trim())) throw conflict("Customer code " + r.code().trim() + " is already used.");
+  assertCustomerNameAvailable(org, r.name(), null);
   Customer c = new Customer(); c.setOrganisation(lead.getOrganisation()); apply(c, r);
   return customer(customers.save(c), projects.findAllByOrganisationId(org));
  }
@@ -42,6 +45,7 @@ public class TicketCustomerService {
  public CustomerDto update(Long id, CustomerRequest r) {
   Long org = leadOrg(); Customer c = customer(id, org);
   customers.findByOrganisation_IdAndCustomerCodeIgnoreCase(org, r.code().trim()).filter(o -> !o.getId().equals(id)).ifPresent(o -> { throw conflict("Customer code " + r.code().trim() + " is already used."); });
+  assertCustomerNameAvailable(org, r.name(), id);
   apply(c, r);
   return customer(customers.save(c), projects.findAllByOrganisationId(org));
  }
@@ -132,7 +136,7 @@ public class TicketCustomerService {
   * TODO(confirm with Anis): manual customers previously stayed a name on the ticket only; confirm they should become customer records.
   */
  public Customer findOrCreateManualCustomer(String name, Long org) {
-  String n = trim(name); if (n == null) return null;
+  String n = NameNormalizer.upper(name); if (n == null) return null;
   return customers.findFirstByOrganisation_IdAndNameIgnoreCase(org, n).orElseGet(() -> {
    Customer c = new Customer(); c.setOrganisation(settings.current().getOrganisation()); c.setName(n); c.setCustomerCode(uniqueCode(org, n)); c.setActive(true);
    return customers.save(c);
@@ -154,7 +158,7 @@ public class TicketCustomerService {
    String name = trim(r.customerName()), code = trim(r.customerCode());
    if (name == null && code == null) { skipped++; errors.add("Row " + line + ": customer name or code is required."); continue; }
    Customer c = code != null ? customers.findByOrganisation_IdAndCustomerCodeIgnoreCase(org, code).orElse(null) : null;
-   if (c == null && name != null) c = customers.findFirstByOrganisation_IdAndNameIgnoreCase(org, name).orElse(null);
+   if (c == null && name != null) c = customers.findFirstByOrganisation_IdAndNameIgnoreCase(org, NameNormalizer.upper(name)).orElse(null);
    String key = (code != null ? "C:" + code : "N:" + name).toLowerCase(Locale.ROOT);
    if (c == null) c = created.get(key);
    if (c == null && name == null) { skipped++; errors.add("Row " + line + ": unknown customer code " + code + " and no name to create it."); continue; }
@@ -184,6 +188,13 @@ public class TicketCustomerService {
  }
 
  /** Customer code derived from the name, unique in the organisation (codes are required on customers). */
+ /** Same rule as Customer Management: one customer per name in an organisation, ignoring case and spacing. */
+ private void assertCustomerNameAvailable(Long org, String name, Long excludeId) {
+  String n = NameNormalizer.upper(name); if (n == null) return;
+  boolean exists = excludeId == null ? customers.existsByOrganisation_IdAndNameIgnoreCase(org, n) : customers.existsByOrganisation_IdAndNameIgnoreCaseAndIdNot(org, n, excludeId);
+  if (exists) throw CustomerConflictException.nameExists(n);
+ }
+
  private String uniqueCode(Long org, String name) {
   String base = name.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "-").replaceAll("^-+|-+$", "");
   if (base.isEmpty()) base = "CUST"; if (base.length() > 50) base = base.substring(0, 50);

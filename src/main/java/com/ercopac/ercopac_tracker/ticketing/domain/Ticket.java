@@ -4,6 +4,7 @@ import com.ercopac.ercopac_tracker.admin.domain.Customer;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.common.NameNormalizer;
 import jakarta.persistence.*;
 import java.time.Instant;
 
@@ -57,8 +58,8 @@ public class Ticket {
     @Column(name = "closed_at") private Instant closedAt;
     @Column(name = "last_message_at") private Instant lastMessageAt;
     @Version private Long version;
-    @PrePersist void createTimestamps() { Instant now = Instant.now(); createdAt = now; updatedAt = now; }
-    @PreUpdate void updateTimestamp() { updatedAt = Instant.now(); }
+    @PrePersist void createTimestamps() { customerName = NameNormalizer.upper(customerName); Instant now = Instant.now(); createdAt = now; updatedAt = now; }
+    @PreUpdate void updateTimestamp() { customerName = NameNormalizer.upper(customerName); updatedAt = Instant.now(); }
     public Long getId(){return id;} public String getTicketNumber(){return ticketNumber;} public void setTicketNumber(String v){ticketNumber=v;}
     public String getSubject(){return subject;} public void setSubject(String v){subject=v;} public String getDescription(){return description;} public void setDescription(String v){description=v;}
     public Organisation getOrganisation(){return organisation;} public void setOrganisation(Organisation v){organisation=v;} public AppUser getCreatedByUser(){return createdByUser;} public void setCreatedByUser(AppUser v){createdByUser=v;}
@@ -71,7 +72,7 @@ public class Ticket {
     public Instant getCreatedAt(){return createdAt;} public Instant getUpdatedAt(){return updatedAt;} public Instant getResolvedAt(){return resolvedAt;} public void setResolvedAt(Instant v){resolvedAt=v;} public Instant getClosedAt(){return closedAt;} public void setClosedAt(Instant v){closedAt=v;} public Instant getLastMessageAt(){return lastMessageAt;} public void setLastMessageAt(Instant v){lastMessageAt=v;} public Long getVersion(){return version;}
     public Customer getCustomer(){return customer;} public void setCustomer(Customer v){customer=v;} public Project getProject(){return project;} public void setProject(Project v){project=v;}
     public TicketCustomerEquipment getEquipment(){return equipment;} public void setEquipment(TicketCustomerEquipment v){equipment=v;} public AppUser getL2Technician(){return l2Technician;} public void setL2Technician(AppUser v){l2Technician=v;}
-    public String getCustomerName(){return customerName;} public void setCustomerName(String v){customerName=v;} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;}
+    public String getCustomerName(){return customerName;} public void setCustomerName(String v){customerName=NameNormalizer.upper(v);} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;}
     public String getProjectNumber(){return projectNumber;} public void setProjectNumber(String v){projectNumber=v;} public Integer getProjectYear(){return projectYear;} public void setProjectYear(Integer v){projectYear=v;}
     public String getRcaProblem(){return rcaProblem;} public void setRcaProblem(String v){rcaProblem=v;} public String getRcaCause(){return rcaCause;} public void setRcaCause(String v){rcaCause=v;} public String getRcaSolution(){return rcaSolution;} public void setRcaSolution(String v){rcaSolution=v;}
 }

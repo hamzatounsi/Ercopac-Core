@@ -49,6 +49,20 @@ public class SecurityConfig {
 
     private static final String[] EMPLOYEE_ROLES = { "EMPLOYEE", "ROLE_EMPLOYEE" };
 
+    /** Roles that pick a customer in a form (projects, tickets, CRM). Not CLIENT, EMPLOYEE or PLATFORM_OWNER. */
+    private static final String[] CUSTOMER_PICKER_ROLES = {
+            "ORG_ADMIN", "ROLE_ORG_ADMIN",
+            "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
+            "PROJECT_MANAGER_LEAD", "ROLE_PROJECT_MANAGER_LEAD",
+            "DEPARTMENT_MANAGER", "ROLE_DEPARTMENT_MANAGER",
+            "MANAGER", "ROLE_MANAGER",
+            "SALES_MANAGER_LEAD", "ROLE_SALES_MANAGER_LEAD",
+            "SALES_MANAGER", "ROLE_SALES_MANAGER",
+            "SYSTEM_ENGINEER", "ROLE_SYSTEM_ENGINEER",
+            "H24", "ROLE_H24",
+            "H24_LEAD", "ROLE_H24_LEAD"
+    };
+
     private static final String[] COMPANY_DASHBOARD_ROLES = { "MANAGER", "ROLE_MANAGER" };
 
     private static final String[] CRM_ROLES = {
@@ -118,6 +132,9 @@ public class SecurityConfig {
 
                         .requestMatchers("/api/admin/**")
                         .hasAnyAuthority(ORG_ADMIN_ROLES)
+
+                        .requestMatchers("/api/customers/**")
+                        .hasAnyAuthority(CUSTOMER_PICKER_ROLES)
 
                         .requestMatchers("/api/crm/**")
                         .hasAnyAuthority(CRM_ROLES)
