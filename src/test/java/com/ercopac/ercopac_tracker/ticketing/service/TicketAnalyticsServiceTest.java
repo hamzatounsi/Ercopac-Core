@@ -127,7 +127,7 @@ class TicketAnalyticsServiceTest {
         assertThat(result.totals().resolved()).isEqualTo(1);
         assertThat(result.totals().avgFirstResponseHours()).isEqualTo(0.3);
         assertThat(result.totals().slaCompliance()).isEqualTo(100.0);
-        assertThat(result.byCustomer()).extracting(CustomerStat::name).containsExactly("Acme", "No customer");
+        assertThat(result.byCustomer()).extracting(CustomerStat::name).containsExactly("ACME", "No customer");
         assertThat(result.agents()).singleElement().satisfies(a -> {
             assertThat(a.assigned()).isEqualTo(1);
             assertThat(a.resolved()).isEqualTo(1);

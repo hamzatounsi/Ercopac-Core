@@ -168,7 +168,7 @@ public class StagingDemoDataSeeder implements CommandLineRunner {
     private Organisation getOrCreateDemoOrganisation() {
         return organisationRepository.findByCode(DEMO_ORGANISATION_CODE)
                 .map(existing -> {
-                    if (!DEMO_ORGANISATION_NAME.equals(existing.getName())) {
+                    if (!DEMO_ORGANISATION_NAME.equalsIgnoreCase(existing.getName())) {
                         throw new IllegalStateException("Organisation code " + DEMO_ORGANISATION_CODE
                                 + " belongs to a different organisation; refusing to modify it.");
                     }

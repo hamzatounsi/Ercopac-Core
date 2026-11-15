@@ -1,12 +1,15 @@
 package com.ercopac.ercopac_tracker.department_dashboard.api;
 
 import com.ercopac.ercopac_tracker.department.service.DepartmentHolidayService;
+import com.ercopac.ercopac_tracker.department_dashboard.dto.DepartmentContextDto;
 import com.ercopac.ercopac_tracker.department_dashboard.dto.DepartmentHolidayDto;
 import com.ercopac.ercopac_tracker.department_dashboard.dto.DepartmentManagerDto;
+import com.ercopac.ercopac_tracker.department_dashboard.dto.DepartmentSupplierDto;
 import com.ercopac.ercopac_tracker.department_dashboard.dto.MyDepartmentResponseDto;
 import com.ercopac.ercopac_tracker.department_dashboard.request.CreateDepartmentHolidayRequest;
 import com.ercopac.ercopac_tracker.department_dashboard.request.DepartmentOverviewQuery;
 import com.ercopac.ercopac_tracker.department_dashboard.service.DepartmentDashboardService;
+import com.ercopac.ercopac_tracker.department_dashboard.service.DepartmentWorkspaceService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,13 +31,30 @@ public class DepartmentDashboardController {
 
     private final DepartmentDashboardService departmentDashboardService;
     private final DepartmentHolidayService departmentHolidayService;
+    private final DepartmentWorkspaceService departmentWorkspaceService;
 
     public DepartmentDashboardController(
             DepartmentDashboardService departmentDashboardService,
-            DepartmentHolidayService departmentHolidayService
+            DepartmentHolidayService departmentHolidayService,
+            DepartmentWorkspaceService departmentWorkspaceService
     ) {
         this.departmentDashboardService = departmentDashboardService;
         this.departmentHolidayService = departmentHolidayService;
+        this.departmentWorkspaceService = departmentWorkspaceService;
+    }
+
+    /** Department header (name, chief, resource types in scope) and what the current user may change. */
+    @GetMapping("/context")
+    @PreAuthorize(DEPARTMENT_READ)
+    public DepartmentContextDto getContext(@RequestParam(required = false) Long managerId) {
+        return departmentWorkspaceService.getContext(managerId);
+    }
+
+    /** Active suppliers linked to the department's resource types. */
+    @GetMapping("/suppliers")
+    @PreAuthorize(DEPARTMENT_READ)
+    public List<DepartmentSupplierDto> getSuppliers(@RequestParam(required = false) Long managerId) {
+        return departmentWorkspaceService.getSuppliers(managerId);
     }
 
     @GetMapping("/managers")

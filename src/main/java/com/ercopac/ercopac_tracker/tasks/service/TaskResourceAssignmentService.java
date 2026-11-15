@@ -14,6 +14,9 @@ import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
 import com.ercopac.ercopac_tracker.user.domain.Supplier;
+import com.ercopac.ercopac_tracker.security.DepartmentScope;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import com.ercopac.ercopac_tracker.user.repository.SupplierRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +34,7 @@ public class TaskResourceAssignmentService {
     private final ResourceTypeRepository           resourceTypeRepository;
     private final SupplierRepository               supplierRepository;
     private final SecurityUtils                    securityUtils;
+    private final DepartmentScope                  departmentScope;
 
     public TaskResourceAssignmentService(
             TaskResourceAssignmentRepository repository,
@@ -39,7 +43,8 @@ public class TaskResourceAssignmentService {
             ProjectTaskRepository projectTaskRepository,
             ResourceTypeRepository resourceTypeRepository,
             SupplierRepository supplierRepository,
-            SecurityUtils securityUtils
+            SecurityUtils securityUtils,
+            DepartmentScope departmentScope
     ) {
         this.repository        = repository;
         this.userRepository    = userRepository;
@@ -48,6 +53,7 @@ public class TaskResourceAssignmentService {
         this.resourceTypeRepository = resourceTypeRepository;
         this.supplierRepository = supplierRepository;
         this.securityUtils = securityUtils;
+        this.departmentScope = departmentScope;
     }
 
     public List<TaskResourceAssignmentDto> getTaskResources(Long projectId, Long taskId) {
@@ -122,13 +128,15 @@ public class TaskResourceAssignmentService {
     public List<SupplierOptionDto> getActiveSuppliers(Long projectId, Long taskId) {
         Project project = getAccessibleProject(projectId);
         validateTaskBelongsToProject(projectId, taskId, project);
+        DepartmentScope.Scope scope = departmentScope.current();
         return supplierRepository.findByOrganisation_IdAndActiveTrueOrderByNameAsc(project.getOrganisation().getId())
                 .stream()
+                .filter(scope::allowsSupplier)
                 .map(supplier -> new SupplierOptionDto(
                         supplier.getId(),
                         supplier.getCode() == null ? supplier.getShortCode() : supplier.getCode(),
                         supplier.getName(),
-                        supplier.getResourceTypes().stream().map(resourceType -> resourceType.getCode()).toList()))
+                        scope.visibleResourceTypes(supplier)))
                 .toList();
     }
 
@@ -140,6 +148,7 @@ public class TaskResourceAssignmentService {
         if (!"ACTIVITY".equalsIgnoreCase(task.getTaskType())) {
             throw new IllegalArgumentException("Resources can only be assigned to ACTIVITY tasks.");
         }
+        String previousResourceType = entity.getResourceType();
         entity.setResourceType(dto.getResourceType());
         entity.setAssignmentName(dto.getAssignmentName());
         entity.setQuantity(dto.getQuantity() == null ? 1 : dto.getQuantity());
@@ -179,6 +188,14 @@ public class TaskResourceAssignmentService {
             }
             if (supplier.getResourceTypes().stream().noneMatch(linked -> linked.getId().equals(resourceType.getId()))) {
                 throw new IllegalArgumentException("Supplier is not linked to the selected resource type.");
+            }
+            boolean changingType = !resourceType.getCode().equalsIgnoreCase(java.util.Objects.toString(previousResourceType, ""));
+            if (changingSupplier || changingType) {
+                DepartmentScope.Scope scope = departmentScope.current();
+                if (!scope.allowsSupplier(supplier) || !scope.allowsResourceType(resourceType.getCode())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                            "This supplier or resource type is outside the resource types of your department.");
+                }
             }
             entity.setSupplierId(supplier.getId());
             entity.setResourceType(resourceType.getCode());

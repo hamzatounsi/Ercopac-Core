@@ -225,7 +225,7 @@ class TicketCustomerServiceTest {
 
         FormOptions options = service.formOptions(8L);
 
-        assertThat(options.customers()).extracting(Ref::name).containsExactly("Acme");
+        assertThat(options.customers()).extracting(Ref::name).containsExactly("ACME");
         assertThat(options.customerId()).isEqualTo(7L);
     }
 

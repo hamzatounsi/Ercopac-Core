@@ -139,6 +139,11 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
           and (:role is null or :role member of u.roles)
           and (:active is null or u.active = :active)
           and (:internalUser is null or u.internalUser = :internalUser)
+          and (
+                :scoped = false or
+                upper(u.resourceType.code) in :scopeResourceTypes or
+                upper(coalesce(u.departmentCode, '')) = upper(:scopeDepartmentCode)
+              )
         order by u.fullName asc
     """)
     Page<AppUser> searchResources(
@@ -148,6 +153,9 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
             @Param("role") Role role,
             @Param("active") Boolean active,
             @Param("internalUser") Boolean internalUser,
+            @Param("scoped") boolean scoped,
+            @Param("scopeResourceTypes") java.util.Collection<String> scopeResourceTypes,
+            @Param("scopeDepartmentCode") String scopeDepartmentCode,
             Pageable pageable
     );
 

@@ -5,6 +5,10 @@ import com.ercopac.ercopac_tracker.admin.repository.AdminLicenceAssignmentReposi
 import com.ercopac.ercopac_tracker.admin.repository.CustomerRepository;
 import com.ercopac.ercopac_tracker.admin.repository.ProjectCategoryRepository;
 import com.ercopac.ercopac_tracker.admin.repository.ProjectTypeRepository;
+import com.ercopac.ercopac_tracker.customer.dto.CustomerReferences;
+import com.ercopac.ercopac_tracker.customer.service.CustomerConflictException;
+import com.ercopac.ercopac_tracker.customer.service.CustomerManagementService;
+import com.ercopac.ercopac_tracker.customer.service.CustomerUsageService;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.projects.repository.ProjectRepository;
@@ -22,6 +26,11 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,6 +44,8 @@ class AdminServiceTenantTest {
     @Mock private ProjectCategoryRepository categoryRepository;
     @Mock private ProjectTypeRepository typeRepository;
     @Mock private CustomerRepository customerRepository;
+    @Mock private CustomerManagementService customerManagementService;
+    @Mock private CustomerUsageService customerUsageService;
 
     private AdminService service;
 
@@ -48,9 +59,22 @@ class AdminServiceTenantTest {
                 licenceRepository,
                 categoryRepository,
                 typeRepository,
-                customerRepository
+                customerRepository,
+                customerManagementService,
+                customerUsageService
         );
-        when(securityUtils.getCurrentOrganisationId()).thenReturn(10L);
+        lenient().when(securityUtils.getCurrentOrganisationId()).thenReturn(10L);
+    }
+
+    @Test
+    void legacyCustomerDeleteUsesTheSharedReferenceCheck() {
+        doThrow(CustomerConflictException.inUse(new CustomerReferences(1, 0, 0)))
+                .when(customerManagementService).delete(5L);
+
+        assertThatThrownBy(() -> service.deleteCustomer(5L))
+                .isInstanceOfSatisfying(CustomerConflictException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(CustomerConflictException.IN_USE));
+        verify(customerRepository, never()).delete(any());
     }
 
     @Test

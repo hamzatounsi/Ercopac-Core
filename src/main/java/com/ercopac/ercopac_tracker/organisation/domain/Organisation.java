@@ -17,6 +17,7 @@ import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.ercopac.ercopac_tracker.common.NameNormalizer;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -205,12 +206,18 @@ public class Organisation {
         this.id = id;
     }
 
+    @PrePersist
+    @PreUpdate
+    void normalizeName() {
+        name = NameNormalizer.upper(name);
+    }
+
     public String getName() {
         return name;
     }
 
     public void setName(String name) {
-        this.name = name;
+        this.name = NameNormalizer.upper(name);
     }
 
     public String getCode() {
