@@ -1,18 +1,18 @@
 package com.ercopac.ercopac_tracker.crm.service;
 
+import com.ercopac.ercopac_tracker.admin.domain.ProjectCategory;
+import com.ercopac.ercopac_tracker.admin.repository.ProjectCategoryRepository;
 import com.ercopac.ercopac_tracker.crm.domain.*;
 import com.ercopac.ercopac_tracker.crm.dto.*;
 import com.ercopac.ercopac_tracker.crm.repository.*;
-import com.ercopac.ercopac_tracker.admin.domain.ProjectCategory;
-import com.ercopac.ercopac_tracker.admin.repository.ProjectCategoryRepository;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.PageRequest;
@@ -31,7 +31,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import com.ercopac.ercopac_tracker.crm.repository.LostReasonRepository;
+
 @Service
 @Transactional
 public class CrmService {
@@ -63,8 +63,8 @@ public class CrmService {
     private final UserRepository userRepo;
     private final SecurityUtils security;
     private final CrmOpportunityVisibilityService opportunityVisibility;
-    private final Path attachmentRoot;
     private final LostReasonRepository lostReasonRepo;
+    private final Path attachmentRoot;
 
     @Autowired
     public CrmService(CrmPipelineStageRepository stageRepo,
@@ -107,31 +107,36 @@ public class CrmService {
         this.userRepo = userRepo;
         this.security = security;
         this.opportunityVisibility = opportunityVisibility;
-        this.lostReasonRepo = lostReasonRepo; 
+        this.lostReasonRepo = lostReasonRepo;
         this.attachmentRoot = Paths.get(attachmentPath).toAbsolutePath().normalize();
     }
+
+    /** Compatibility seam for existing focused service tests. */
     CrmService(CrmPipelineStageRepository stageRepo,
-            CrmLeadRepository leadRepo,
-            CrmOpportunityRepository opportunityRepo,
-            CrmActivityRepository activityRepo,
-            CrmAccountRepository accountRepo,
-            CrmSupplyCategoryRepository categoryRepo,
-            CrmOpportunityNoteRepository noteRepo,
-            CrmOpportunityAttachmentRepository attachmentRepo,
-            CrmOpportunityHistoryRepository historyRepo,
-            CrmOpportunityStageHistoryRepository stageHistoryRepo,
-            CrmSalesTargetRepository targetRepo,
-            OrganisationRepository organisationRepo,
-            UserRepository userRepo,
-            SecurityUtils security,
-            LostReasonRepository lostReasonRepo, // ✅ ADDED HERE
-            String attachmentPath) {
-     this(stageRepo, leadRepo, opportunityRepo, activityRepo, accountRepo, null, categoryRepo, null,
-             noteRepo, attachmentRepo, historyRepo, stageHistoryRepo, targetRepo, null, null,
-             organisationRepo, userRepo, security, new CrmOpportunityVisibilityService(security), 
-             lostReasonRepo, // ✅ ADDED HERE
-             attachmentPath);
- }
+               CrmLeadRepository leadRepo,
+               CrmOpportunityRepository opportunityRepo,
+               CrmActivityRepository activityRepo,
+               CrmAccountRepository accountRepo,
+               CrmSupplyCategoryRepository categoryRepo,
+               CrmOpportunityNoteRepository noteRepo,
+               CrmOpportunityAttachmentRepository attachmentRepo,
+               CrmOpportunityHistoryRepository historyRepo,
+               CrmOpportunityStageHistoryRepository stageHistoryRepo,
+               CrmSalesTargetRepository targetRepo,
+               OrganisationRepository organisationRepo,
+               UserRepository userRepo,
+               SecurityUtils security,
+               LostReasonRepository lostReasonRepo,
+               String attachmentPath) {
+        this(stageRepo, leadRepo, opportunityRepo, activityRepo, accountRepo, null, categoryRepo, null,
+                noteRepo, attachmentRepo, historyRepo, stageHistoryRepo, targetRepo, null, null,
+                organisationRepo, userRepo, security, new CrmOpportunityVisibilityService(security),
+                lostReasonRepo, attachmentPath);
+    }
+
+    // ==========================================
+    // NOTIFICATION PREFERENCES
+    // ==========================================
     @Transactional(readOnly = true)
     public CrmNotificationPreferenceDto getNotificationPreferences(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
@@ -147,21 +152,29 @@ public class CrmService {
         CrmNotificationPreference entity = notificationPreferenceRepo
                 .findByOrganisation_IdAndUser_Id(organisation.getId(), user.getId())
                 .orElseGet(CrmNotificationPreference::new);
-        entity.setOrganisation(organisation); entity.setUser(user);
+        
+        entity.setOrganisation(organisation); 
+        entity.setUser(user);
         entity.setEmailNotifications(dto.emailNotifications());
         entity.setStageChangeAlerts(dto.stageChangeAlerts());
         entity.setClosingDateReminders(dto.closingDateReminders());
-        if (dto.commentNotifications() != null) entity.setCommentNotifications(dto.commentNotifications());
+        entity.setCommentNotifications(dto.commentNotifications()); // ✅ Saves the real value
+        
         return toNotificationPreferenceDto(notificationPreferenceRepo.save(entity));
     }
 
     private CrmNotificationPreferenceDto toNotificationPreferenceDto(CrmNotificationPreference entity) {
-        return new CrmNotificationPreferenceDto(entity.isEmailNotifications(), entity.isStageChangeAlerts(), entity.isClosingDateReminders(), entity.isCommentNotifications());
+        return new CrmNotificationPreferenceDto(
+                entity.isEmailNotifications(), 
+                entity.isStageChangeAlerts(), 
+                entity.isClosingDateReminders(),
+                entity.isCommentNotifications() // ✅ Reads the real value from DB
+        );
     }
 
-    
-    
- // Get lost reasons
+    // ==========================================
+    // LOST REASONS
+    // ==========================================
     @Transactional(readOnly = true)
     public List<LostReasonDto> getLostReasons(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
@@ -169,7 +182,6 @@ public class CrmService {
                 .stream().map(this::toLostReasonDto).toList();
     }
 
-    // Create lost reason
     public LostReasonDto createLostReason(Long requestedOrganisationId, LostReasonDto dto) {
         Organisation organisation = organisation(requestedOrganisationId);
         LostReason entity = new LostReason();
@@ -180,7 +192,6 @@ public class CrmService {
         return toLostReasonDto(lostReasonRepo.save(entity));
     }
 
-    // Update lost reason
     public LostReasonDto updateLostReason(Long requestedOrganisationId, Long id, LostReasonDto dto) {
         Long organisationId = tenant(requestedOrganisationId);
         LostReason entity = lostReasonRepo.findByIdAndOrganisation_Id(id, organisationId)
@@ -191,7 +202,6 @@ public class CrmService {
         return toLostReasonDto(lostReasonRepo.save(entity));
     }
 
-    // Delete lost reason
     public void deleteLostReason(Long requestedOrganisationId, Long id) {
         Long organisationId = tenant(requestedOrganisationId);
         LostReason entity = lostReasonRepo.findByIdAndOrganisation_Id(id, organisationId)
@@ -210,6 +220,10 @@ public class CrmService {
             entity.getUpdatedAt()
         );
     }
+
+    // ==========================================
+    // HELPERS & SECURITY
+    // ==========================================
     private Long tenant(Long requestedOrganisationId) {
         if (security.isPlatformUser()) {
             if (requestedOrganisationId == null) throw badRequest("An organisation is required.");
@@ -266,7 +280,9 @@ public class CrmService {
                 .orElseThrow(() -> badRequest("The selected organisation category is unavailable."));
     }
 
-    // Accounts
+    // ==========================================
+    // ACCOUNTS
+    // ==========================================
     @Transactional(readOnly = true)
     public List<CrmAccountDto> getAccounts(Long requestedOrganisationId, String search) {
         Long organisationId = tenant(requestedOrganisationId);
@@ -315,14 +331,16 @@ public class CrmService {
         accountRepo.delete(entity);
     }
 
+    // ==========================================
+    // INDUSTRIES
+    // ==========================================
     @Transactional(readOnly = true)
     public List<CrmIndustryDto> getIndustries(Long requestedOrganisationId, boolean includeInactive) {
         Long organisationId = tenant(requestedOrganisationId);
         List<CrmIndustry> industries = includeInactive
                 ? industryRepo.findByOrganisation_IdOrderByNameAsc(organisationId)
                 : industryRepo.findByOrganisation_IdAndActiveTrueOrderByNameAsc(organisationId);
-        return industries
-                .stream().map(this::toIndustryDto).toList();
+        return industries.stream().map(this::toIndustryDto).toList();
     }
 
     public CrmIndustryDto createIndustry(Long requestedOrganisationId, CrmIndustryDto dto) {
@@ -414,7 +432,9 @@ public class CrmService {
                 .forEach(item -> item.setAccountName(entity.getName()));
     }
 
-    // Pipeline stages and supply categories
+    // ==========================================
+    // STAGES & CATEGORIES
+    // ==========================================
     public List<CrmPipelineStageDto> getStages(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
         seedConfiguration(organisationId);
@@ -494,11 +514,6 @@ public class CrmService {
         return new CrmSupplyCategoryDto(entity.getId(), entity.getName(), 0, entity.isActive());
     }
 
-    /**
-     * One-time, idempotent bridge for opportunities saved before CRM reused
-     * organisation categories.  Legacy rows are converted into organisation
-     * categories and the opportunity is linked to that canonical category.
-     */
     private void migrateLegacySupplyCategories(Long organisationId) {
         List<CrmOpportunity> opportunities = opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId);
         for (CrmOpportunity opportunity : opportunities) {
@@ -518,7 +533,9 @@ public class CrmService {
         }
     }
 
-    // Leads
+    // ==========================================
+    // LEADS
+    // ==========================================
     public List<CrmLeadDto> getLeads(Long requestedOrganisationId, String search, String status, Long accountId) {
         Long organisationId = tenant(requestedOrganisationId);
         List<CrmLead> values;
@@ -597,6 +614,7 @@ public class CrmService {
                 "Lead converted to opportunity: " + entity.getName(), source, entity);
         return toOpportunityDto(entity);
     }
+
     private void mapLead(CrmLead entity, CrmLeadDto dto, boolean creating) {
         requireText(dto.getFullName(), "Lead name is required.");
         if (dto.getAccountId() == null) throw badRequest("An account is required for every lead.");
@@ -611,6 +629,7 @@ public class CrmService {
         entity.setNotes(blank(dto.getNotes()));
         entity.setActive(creating || dto.isActive());
     }
+
     private CrmLeadDto toLeadDto(CrmLead entity) {
         CrmLeadDto dto = new CrmLeadDto();
         dto.setId(entity.getId()); dto.setFullName(entity.getFullName()); dto.setCompany(entity.getCompany());
@@ -625,7 +644,10 @@ public class CrmService {
         dto.setActive(entity.isActive()); dto.setCreatedAt(entity.getCreatedAt());
         return dto;
     }
-    // Opportunities
+
+    // ==========================================
+    // OPPORTUNITIES
+    // ==========================================
     public List<CrmOpportunityDto> getOpportunities(Long requestedOrganisationId, Long ownerId, Long accountId,
                                                      Long leadId, Long stageId) {
         Long organisationId = tenant(requestedOrganisationId);
@@ -698,6 +720,7 @@ public class CrmService {
         }
         return toOpportunityDto(entity);
     }
+
     public CrmOpportunityDto updateOpportunityTeam(Long requestedOrganisationId, Long opportunityId, List<Long> requestedUserIds) {
         Long organisationId = tenant(requestedOrganisationId);
         CrmOpportunity entity = opportunity(organisationId, opportunityId);
@@ -705,8 +728,6 @@ public class CrmService {
     }
 
     private CrmOpportunity replaceOpportunityTeam(CrmOpportunity entity, List<Long> requestedUserIds, boolean recordHistory) {
-        System.out.println("🔥 DEBUG [CrmService]: replaceOpportunityTeam appelé. requestedUserIds = " + requestedUserIds);
-        
         Long organisationId = entity.getOrganisation().getId();
         String before = entity.getTeamMembers().stream().map(AppUser::getFullName).sorted().collect(Collectors.joining(", "));
         Set<Long> previousMemberIds = entity.getTeamMembers().stream().map(AppUser::getId).collect(Collectors.toSet());
@@ -727,14 +748,12 @@ public class CrmService {
         String after = entity.getTeamMembers().stream().map(AppUser::getFullName).sorted().collect(Collectors.joining(", "));
         if (recordHistory && !Objects.equals(before, after)) history(entity, "Team", blank(before), blank(after));
         
-        System.out.println("🔥 DEBUG [CrmService]: Avant d'appeler le notifier. assignmentNotifier est null ? " + (assignmentNotifier == null));
         if (assignmentNotifier != null) {
             assignmentNotifier.notifyNewAssignments(entity, previousMemberIds);
-        } else {
-            System.out.println("⚠️ ERREUR CRITIQUE : assignmentNotifier est NULL !");
         }
         return entity;
     }
+
     public CrmOpportunityDto markWon(Long requestedOrganisationId, Long id) {
         Long organisationId = tenant(requestedOrganisationId);
         CrmPipelineStage won = stageRepo.findByOrganisation_IdOrderByDisplayOrderAsc(organisationId).stream()
@@ -753,13 +772,11 @@ public class CrmService {
         Long organisationId = tenant(requestedOrganisationId);
         CrmOpportunity entity = opportunity(organisationId, id);
 
-        // Supprimer d'abord toutes les données liées qui référencent cette opportunity
         activityRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
         noteRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
         historyRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
         stageHistoryRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
 
-        // Supprimer les fichiers physiques d'attachments avant de supprimer les entités
         attachmentRepo.findByOpportunity_IdAndOrganisation_IdOrderByUploadedAtDesc(id, organisationId)
                 .forEach(attachment -> {
                     Path tenantRoot = attachmentRoot.resolve(String.valueOf(organisationId)).normalize();
@@ -769,37 +786,29 @@ public class CrmService {
                     }
                 });
         attachmentRepo.deleteAllByOpportunity_IdAndOrganisation_Id(id, organisationId);
-
         opportunityRepo.delete(entity);
     }
-    // ✅ NOUVEAU : Archiver une opportunité
+
     public void archiveOpportunity(Long requestedOrganisationId, Long id) {
         Long organisationId = tenant(requestedOrganisationId);
-        // On récupère directement par ID pour éviter les filtres de visibilité qui pourraient bloquer
         CrmOpportunity entity = opportunityRepo.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> notFound("Opportunity not found."));
-        
         entity.setArchived(true);
         entity.setArchivedAt(LocalDateTime.now());
         opportunityRepo.save(entity);
     }
 
-    // ✅ NOUVEAU : Récupérer la liste des opportunités archivées
     @Transactional(readOnly = true)
     public List<CrmOpportunityDto> getArchivedOpportunities(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
         return opportunityRepo.findByOrganisation_IdAndArchivedTrueOrderByArchivedAtDesc(organisationId)
-                .stream()
-                .map(this::toOpportunityDto)
-                .toList();
+                .stream().map(this::toOpportunityDto).toList();
     }
 
-    // ✅ NOUVEAU : Restaurer une opportunité archivée
     public void restoreOpportunity(Long requestedOrganisationId, Long id) {
         Long organisationId = tenant(requestedOrganisationId);
         CrmOpportunity entity = opportunityRepo.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> notFound("Opportunity not found."));
-        
         entity.setArchived(false);
         entity.setArchivedAt(null);
         opportunityRepo.save(entity);
@@ -894,7 +903,9 @@ public class CrmService {
         return dto;
     }
 
-    // Notes, attachments and audit
+    // ==========================================
+    // NOTES, ATTACHMENTS & AUDIT
+    // ==========================================
     public List<CrmOpportunityNoteDto> getNotes(Long requestedOrganisationId, Long opportunityId) {
         Long organisationId = tenant(requestedOrganisationId); opportunity(organisationId, opportunityId);
         return noteRepo.findByOpportunity_IdAndOrganisation_IdOrderByCreatedAtAsc(opportunityId, organisationId)
@@ -913,11 +924,11 @@ public class CrmService {
                 "Note added to " + opportunity.getName(), null, opportunity);
         if (assignmentNotifier != null) {
             String message = actor.getFullName() + " added a note to " + opportunity.getName() + ": " + content.trim();
-            // Owner and team members (not the author), respecting their "Comment notifications" setting
-            assignmentNotifier.notifyNewComment(opportunity, actor, "New comment on " + opportunity.getName(), message);
+            assignmentNotifier.notifyOpportunityUpdated(opportunity, actor, "New note on opportunity", message);
         }
         return toNoteDto(note);
     }
+
     public CrmOpportunityNoteDto updateNote(Long requestedOrganisationId, Long opportunityId, Long noteId, String content) {
         Long organisationId = tenant(requestedOrganisationId); requireText(content, "Note content is required.");
         opportunity(organisationId, opportunityId);
@@ -967,6 +978,7 @@ public class CrmService {
         }
         return toAttachmentDto(attachment);
     }
+
     @Transactional(readOnly = true)
     public AttachmentDownload downloadAttachment(Long requestedOrganisationId, Long opportunityId, Long attachmentId) {
         Long organisationId = tenant(requestedOrganisationId);
@@ -1051,6 +1063,9 @@ public class CrmService {
         item.setClosingDate(opportunity.getClosingDate()); item.setModifiedBy(user); stageHistoryRepo.save(item);
     }
 
+    // ==========================================
+    // DASHBOARD, REPORTS & ANALYTICS
+    // ==========================================
     public CrmDashboardDto getDashboard(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId); seedConfiguration(organisationId);
         AppUser me = currentUser();
@@ -1070,7 +1085,6 @@ public class CrmService {
         LocalDate lastMonthStart = currentMonthStart.minusMonths(1);
         LocalDate lastMonthEnd = lastMonthStart.withDayOfMonth(lastMonthStart.lengthOfMonth());
 
-        // ✅ "Leads contacted this month" — Lead voit toute l'équipe, sinon filtré par owner
         if (isLead) {
             dto.setActiveLeads(leadRepo.countByOrganisation_IdAndContactedDateBetween(
                     organisationId, currentMonthStart, currentMonthEnd));
@@ -1094,7 +1108,6 @@ public class CrmService {
                         && !item.getClosingDate().isAfter(weekEnd))
                 .count());
 
-        // ✅ "Won vs annual target" — Lead voit somme équipe, sinon filtré par owner
         int currentYear = now.getYear();
         LocalDateTime yearStart = LocalDate.of(currentYear, 1, 1).atStartOfDay();
         BigDecimal wonThisYear = visible.stream()
@@ -1118,7 +1131,6 @@ public class CrmService {
                 .stream().filter(item -> item.getOpportunity() == null || visibleIds.contains(item.getOpportunity().getId()))
                 .map(this::toActivityDto).toList());
 
-        // ✅ "Closing this month" — Lead voit toute l'équipe, sinon filtré par owner
         dto.setClosingThisMonth(visible.stream()
                 .filter(item -> isLead || (item.getOwner() != null && Objects.equals(item.getOwner().getId(), me.getId())))
                 .filter(item -> item.getClosingDate() != null
@@ -1136,6 +1148,7 @@ public class CrmService {
         }).toList(); dto.setPipeline(stages);
         return dto;
     }
+
     public CrmReportsDto getReports(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
         migrateLegacySupplyCategories(organisationId);
@@ -1192,6 +1205,9 @@ public class CrmService {
                 .sorted(Comparator.comparingLong(CrmReportsDto.Breakdown::count).reversed()).toList();
     }
 
+    // ==========================================
+    // USERS & MANAGER VIEW
+    // ==========================================
     public List<CrmUserDto> getCrmUsers(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
         return userRepo.findByOrganisation_IdAndRoleInAndActiveTrueOrderByFullNameAsc(organisationId, OPPORTUNITY_TEAM_ROLES)
@@ -1243,6 +1259,9 @@ public class CrmService {
                 .orElseGet(() -> user.getPrimaryRole() == null ? "" : user.getPrimaryRole().name());
     }
 
+    // ==========================================
+    // HELPERS & UTILS
+    // ==========================================
     private void logActivity(Organisation organisation, AppUser user, CrmActivity.ActivityType type, String description,
                              CrmLead lead, CrmOpportunity opportunity) {
         CrmActivity item = CrmActivity.of(organisation, user, type, description); item.setLead(lead); item.setOpportunity(opportunity); activityRepo.save(item);
@@ -1260,10 +1279,12 @@ public class CrmService {
     private CrmOpportunityNoteDto toNoteDto(CrmOpportunityNote note) {
         return new CrmOpportunityNoteDto(note.getId(), note.getAuthor().getId(), note.getAuthor().getFullName(), note.getContent(), note.getCreatedAt(), note.getUpdatedAt());
     }
+
     private CrmOpportunityAttachmentDto toAttachmentDto(CrmOpportunityAttachment attachment) {
         return new CrmOpportunityAttachmentDto(attachment.getId(), attachment.getOriginalFileName(), attachment.getContentType(),
                 attachment.getFileSize(), attachment.getUploadedBy().getId(), attachment.getUploadedBy().getFullName(), attachment.getUploadedAt());
     }
+
     public record AttachmentDownload(Resource resource, String fileName, String contentType) {}
 
     private String extension(String contentType) {
@@ -1274,20 +1295,25 @@ public class CrmService {
             default -> throw badRequest("Unsupported attachment type.");
         };
     }
+
     private String sanitizeFileName(String value) {
         String name = Optional.ofNullable(value).orElse("attachment").replace('\\', '/');
         name = name.substring(name.lastIndexOf('/') + 1); return name.replaceAll("[^a-zA-Z0-9._ -]", "_");
     }
+
     private <E extends Enum<E>> E parseEnum(Class<E> type, String value, String label) {
         try { return Enum.valueOf(type, value.trim().toUpperCase(Locale.ROOT)); }
         catch (Exception exception) { throw badRequest("Invalid " + label + "."); }
     }
+
     private int clamp(int value) { return Math.max(0, Math.min(100, value)); }
+
     private int probability(Integer value) {
         int probability = value == null ? 0 : value;
         if (probability < 0 || probability > 100) throw badRequest("Probability must be between 0 and 100.");
         return probability;
     }
+
     private BigDecimal discount(BigDecimal value) {
         BigDecimal discount = value == null ? BigDecimal.ZERO : value;
         if (discount.signum() < 0 || discount.compareTo(BigDecimal.valueOf(100)) > 0) {
@@ -1295,13 +1321,15 @@ public class CrmService {
         }
         return discount.setScale(2, RoundingMode.HALF_UP);
     }
+
     private void validateSplit(BigDecimal left, BigDecimal right, BigDecimal total, String label) {
         if (!CrmOpportunityValueCalculator.splitMatches(left, right, total)) {
             throw badRequest(label + " must equal Total Value.");
         }
     }
+
     @Transactional(readOnly = true)
-    public SalesDashboardDto getSalesDashboard(Long requestedOrganisationId, String opportunityType) { // ✅ Paramètre ajouté ici
+    public SalesDashboardDto getSalesDashboard(Long requestedOrganisationId, String opportunityType) {
         Long organisationId = tenant(requestedOrganisationId);
         AppUser currentUser = currentUser();
         boolean isManagerOrLead = currentUser.hasRole(Role.SALES_MANAGER_LEAD) || currentUser.hasRole(Role.MANAGER);
@@ -1313,19 +1341,17 @@ public class CrmService {
             allOpps = opportunityVisibility.visible(opportunityRepo.findByOrganisation_IdOrderByCreatedAtDesc(organisationId));
         }
 
-        // ✅ NOUVEAU : Filtrer par opportunityType si fourni ('BP' ou 'CS')
         if (opportunityType != null && !opportunityType.isBlank()) {
             final String typeFilter = opportunityType.trim().toUpperCase();
             allOpps = allOpps.stream()
                     .filter(opp -> typeFilter.equals(opp.getOpportunityType()))
-                    .collect(java.util.stream.Collectors.toList());
+                    .collect(Collectors.toList());
         }
         
         SalesDashboardDto dto = new SalesDashboardDto();
         java.time.LocalDate now = java.time.LocalDate.now();
         java.time.LocalDateTime monthStartDt = now.withDayOfMonth(1).atStartOfDay();
 
-        // 1. KPIs
         dto.setOrderIntakeMtd(allOpps.stream()
                 .filter(o -> o.isWon() && !o.getUpdatedAt().isBefore(monthStartDt))
                 .map(o -> zero(o.getValue())).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
@@ -1341,7 +1367,6 @@ public class CrmService {
         double totalClosed = wonCount + lostCount;
         dto.setWinRate(totalClosed > 0 ? (wonCount * 100.0 / totalClosed) : 0.0);
 
-        // 2. Pipeline by Stage
         java.util.Map<Long, List<CrmOpportunity>> byStage = allOpps.stream()
                 .filter(o -> !o.isWon() && !o.isLost() && o.getStage() != null)
                 .collect(java.util.stream.Collectors.groupingBy(o -> o.getStage().getId()));
@@ -1353,7 +1378,6 @@ public class CrmService {
                     return new SalesDashboardDto.StageMetricDto(stage.getName(), stage.getColor(), (long) stageOpps.size(), val);
                 }).collect(java.util.stream.Collectors.toList()));
 
-        // 3. Top 5 Opportunities
         dto.setTopOpportunities(allOpps.stream()
                 .filter(o -> !o.isWon() && !o.isLost())
                 .sorted(java.util.Comparator.comparing((CrmOpportunity o) -> zero(o.getValue())).reversed())
@@ -1361,7 +1385,6 @@ public class CrmService {
                 .map(this::toOpportunityDto)
                 .collect(java.util.stream.Collectors.toList()));
 
-        // 4. Monthly Revenue vs Target (6 derniers mois)
         java.math.BigDecimal annualTarget = targetRepo.sumAmountByOrganisation_IdAndTargetYear(organisationId, now.getYear());
         if (annualTarget == null) annualTarget = java.math.BigDecimal.ZERO;
         java.math.BigDecimal monthlyTarget = annualTarget.divide(java.math.BigDecimal.valueOf(12), 2, java.math.RoundingMode.HALF_UP);
@@ -1384,6 +1407,7 @@ public class CrmService {
 
         return dto;
     }
+
     private BigDecimal sum(BigDecimal left, BigDecimal right) { return zero(left).add(zero(right)); }
     private BigDecimal zero(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
     private BigDecimal nonNegative(BigDecimal value, String label) {

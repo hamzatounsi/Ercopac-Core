@@ -156,7 +156,7 @@ public class CrmController {
     public CrmOpportunityDto convert(@PathVariable Long orgId, @PathVariable Long id, @RequestBody Map<String, Long> body) {
         return service.convertLead(orgId, id, body.get("stageId"));
     }
-
+   
     @GetMapping("/opportunities") @PreAuthorize(CRM_READ)
     public List<CrmOpportunityDto> opportunities(@PathVariable Long orgId,
             @RequestParam(required = false) Long ownerId, @RequestParam(required = false) Long accountId,
