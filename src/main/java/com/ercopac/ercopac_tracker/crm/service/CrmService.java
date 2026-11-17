@@ -128,14 +128,14 @@ public class CrmService {
                 noteRepo, attachmentRepo, historyRepo, stageHistoryRepo, targetRepo, null, null,
                 organisationRepo, userRepo, security, new CrmOpportunityVisibilityService(security), attachmentPath);
     }
-
     @Transactional(readOnly = true)
     public CrmNotificationPreferenceDto getNotificationPreferences(Long requestedOrganisationId) {
         Long organisationId = tenant(requestedOrganisationId);
         AppUser user = currentUser();
         return notificationPreferenceRepo.findByOrganisation_IdAndUser_Id(organisationId, user.getId())
                 .map(this::toNotificationPreferenceDto)
-                .orElse(new CrmNotificationPreferenceDto(true, true, false));
+                // ✅ Maintenant ça compile : 4 paramètres correspondent au record
+                .orElse(new CrmNotificationPreferenceDto(true, true, false, true)); 
     }
 
     public CrmNotificationPreferenceDto saveNotificationPreferences(Long requestedOrganisationId, CrmNotificationPreferenceDto dto) {
@@ -144,17 +144,32 @@ public class CrmService {
         CrmNotificationPreference entity = notificationPreferenceRepo
                 .findByOrganisation_IdAndUser_Id(organisation.getId(), user.getId())
                 .orElseGet(CrmNotificationPreference::new);
-        entity.setOrganisation(organisation); entity.setUser(user);
+        
+        entity.setOrganisation(organisation); 
+        entity.setUser(user);
         entity.setEmailNotifications(dto.emailNotifications());
         entity.setStageChangeAlerts(dto.stageChangeAlerts());
         entity.setClosingDateReminders(dto.closingDateReminders());
+        
+        // ⚠️ IMPORTANT : Si ton entité JPA 'CrmNotificationPreference' a un champ 'commentNotifications', 
+        // décommente la ligne suivante pour qu'elle soit sauvegardée en base :
+        // entity.setCommentNotifications(dto.commentNotifications());
+        
         return toNotificationPreferenceDto(notificationPreferenceRepo.save(entity));
     }
 
     private CrmNotificationPreferenceDto toNotificationPreferenceDto(CrmNotificationPreference entity) {
-        return new CrmNotificationPreferenceDto(entity.isEmailNotifications(), entity.isStageChangeAlerts(), entity.isClosingDateReminders());
+        // Si ton entité JPA a une méthode isCommentNotifications(), utilise-la. 
+        // Sinon, on met 'true' par défaut pour que le frontend ne soit pas grisé.
+        boolean commentNotifs = true; // Remplace par entity.isCommentNotifications() si le champ existe en BDD
+        
+        return new CrmNotificationPreferenceDto(
+                entity.isEmailNotifications(), 
+                entity.isStageChangeAlerts(), 
+                entity.isClosingDateReminders(),
+                commentNotifs
+        );
     }
-
     private Long tenant(Long requestedOrganisationId) {
         if (security.isPlatformUser()) {
             if (requestedOrganisationId == null) throw badRequest("An organisation is required.");

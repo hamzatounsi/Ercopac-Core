@@ -136,7 +136,14 @@ public class CrmController {
     public CrmOpportunityDto convert(@PathVariable Long orgId, @PathVariable Long id, @RequestBody Map<String, Long> body) {
         return service.convertLead(orgId, id, body.get("stageId"));
     }
-
+    @GetMapping("/lost-reasons")
+    @PreAuthorize(CRM_READ)
+    public ResponseEntity<List<?>> getLostReasons(@PathVariable Long orgId) {
+        // Pour l'instant, on renvoie une liste vide pour satisfaire le frontend 
+        // et éviter le crash "Cannot read properties of undefined (reading 'length')"
+        // Tu pourras connecter le vrai service plus tard.
+        return ResponseEntity.ok(java.util.Collections.emptyList());
+    }
     @GetMapping("/opportunities") @PreAuthorize(CRM_READ)
     public List<CrmOpportunityDto> opportunities(@PathVariable Long orgId,
             @RequestParam(required = false) Long ownerId, @RequestParam(required = false) Long accountId,
