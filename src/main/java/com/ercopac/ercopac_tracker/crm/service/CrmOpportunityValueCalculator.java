@@ -58,6 +58,8 @@ public final class CrmOpportunityValueCalculator {
         return money(material.multiply(discount).divide(ONE_HUNDRED, 2, RoundingMode.HALF_UP));
     }
 
+    
+    
     public static boolean splitMatches(BigDecimal left, BigDecimal right, BigDecimal total) {
         if (left == null && right == null) return true;
         return money(zero(left).add(zero(right))).compareTo(money(total)) == 0;

@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 public class ActionCommentDto {
     private Long id;
     private String author;
+    private Long authorId;
     private String text;
     private LocalDateTime createdAt;
 
@@ -15,6 +16,8 @@ public class ActionCommentDto {
 
     public String getAuthor() { return author; }
     public void setAuthor(String author) { this.author = author; }
+    public Long getAuthorId() { return authorId; }
+    public void setAuthorId(Long authorId) { this.authorId = authorId; }
 
     public String getText() { return text; }
     public void setText(String text) { this.text = text; }

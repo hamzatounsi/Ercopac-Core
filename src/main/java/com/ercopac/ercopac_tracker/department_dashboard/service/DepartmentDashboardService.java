@@ -9,6 +9,7 @@ import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskResourceAssignment;
 import com.ercopac.ercopac_tracker.tasks.repository.ProjectTaskRepository;
 import com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository;
+import com.ercopac.ercopac_tracker.security.DepartmentScope;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
@@ -40,19 +41,22 @@ public class DepartmentDashboardService {
     private final ProjectTaskRepository projectTaskRepository;
     private final TaskResourceAssignmentRepository taskResourceAssignmentRepository;
     private final SupplierRepository supplierRepository;
+    private final DepartmentScope departmentScope;
 
     public DepartmentDashboardService(UserRepository userRepository,
                                       ProjectRepository projectRepository,
                                       DepartmentHolidayService departmentHolidayService,
                                       ProjectTaskRepository projectTaskRepository,
                                       TaskResourceAssignmentRepository taskResourceAssignmentRepository,
-                                      SupplierRepository supplierRepository) {
+                                      SupplierRepository supplierRepository,
+                                      DepartmentScope departmentScope) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.departmentHolidayService = departmentHolidayService;
         this.projectTaskRepository = projectTaskRepository;
         this.taskResourceAssignmentRepository = taskResourceAssignmentRepository;
         this.supplierRepository = supplierRepository;
+        this.departmentScope = departmentScope;
     }
 
     public List<DepartmentManagerDto> getManagers() {
@@ -81,34 +85,10 @@ public class DepartmentDashboardService {
         int span = query.span() <= 0 ? ("day".equals(timelineView) ? 28 : 16) : query.span();
 
         Long currentOrgId = getCurrentOrganisationIdOrThrow();
-        AppUser currentUser = getCurrentUserOrThrow();
-        assertUserInOrganisation(currentUser, currentOrgId);
-
-        AppUser manager;
-
-        if (currentUser.hasRole(Role.DEPARTMENT_MANAGER)) {
-            manager = currentUser;
-        } else {
-            if (query == null || query.managerId() == null) {
-                throw new IllegalArgumentException("managerId is required for this user.");
-            }
-
-            manager = userRepository.findByIdAndOrganisation_Id(query.managerId(), currentOrgId)
-                    .orElseThrow(() -> new EntityNotFoundException("Department manager not found with id: " + query.managerId()));
-
-            if (!manager.hasRole(Role.DEPARTMENT_MANAGER)) {
-                throw new AccessDeniedException("Selected user is not a department manager.");
-            }
-            if (!manager.isActive() || !hasDepartment(manager)) {
-                throw new AccessDeniedException("Selected department manager is not available.");
-            }
-        }
-
-        if (!hasDepartment(manager)) {
-            throw new AccessDeniedException("Department manager has no department.");
-        }
+        AppUser manager = resolveManager(query == null ? null : query.managerId());
 
         String departmentCode = manager.getDepartmentCode();
+        DepartmentScope.Scope scope = departmentScope.forManager(manager, currentOrgId);
 
         List<DepartmentMemberDto> realMembers = userRepository
                 .findByOrganisation_IdAndDepartmentCodeOrderByFullNameAsc(currentOrgId, departmentCode)
@@ -119,10 +99,10 @@ public class DepartmentDashboardService {
                 .toList();
 
         List<DepartmentMemberDto> members = new ArrayList<>(realMembers);
-        members.addAll(toSupplierMembers(currentOrgId, departmentCode));
+        members.addAll(toSupplierMembers(currentOrgId, departmentCode, scope));
 
         long genericBaseId = -1L;
-        for (String resourceType : getDepartmentResourceTypes(departmentCode)) {
+        for (String resourceType : scope.sortedResourceTypeCodes()) {
             members.add(new DepartmentMemberDto(
                     genericBaseId--,
                     "G-" + resourceType,
@@ -585,6 +565,41 @@ public class DepartmentDashboardService {
         return date.getDayOfWeek() == DayOfWeek.SATURDAY || date.getDayOfWeek() == DayOfWeek.SUNDAY;
     }
 
+    /**
+     * The department manager whose department is shown: the current user when they are a Department
+     * Manager, otherwise the selected same-organisation manager. Same checks as the overview.
+     */
+    public AppUser resolveManager(Long managerId) {
+        Long currentOrgId = getCurrentOrganisationIdOrThrow();
+        AppUser currentUser = getCurrentUserOrThrow();
+        assertUserInOrganisation(currentUser, currentOrgId);
+
+        AppUser manager;
+
+        if (currentUser.hasRole(Role.DEPARTMENT_MANAGER)) {
+            manager = currentUser;
+        } else {
+            if (managerId == null) {
+                throw new IllegalArgumentException("managerId is required for this user.");
+            }
+
+            manager = userRepository.findByIdAndOrganisation_Id(managerId, currentOrgId)
+                    .orElseThrow(() -> new EntityNotFoundException("Department manager not found with id: " + managerId));
+
+            if (!manager.hasRole(Role.DEPARTMENT_MANAGER)) {
+                throw new AccessDeniedException("Selected user is not a department manager.");
+            }
+            if (!manager.isActive() || !hasDepartment(manager)) {
+                throw new AccessDeniedException("Selected department manager is not available.");
+            }
+        }
+
+        if (!hasDepartment(manager)) {
+            throw new AccessDeniedException("Department manager has no department.");
+        }
+        return manager;
+    }
+
     private Long getCurrentOrganisationIdOrThrow() {
         Object value = authDetails().get("organisationId");
         if (value == null) {
@@ -751,35 +766,17 @@ public class DepartmentDashboardService {
         return type.contains("SUMMARY") || type.equals("SUM");
     }
 
-    private List<String> getDepartmentResourceTypes(String departmentCode) {
-        if (departmentCode == null || departmentCode.isBlank()) {
-            return Collections.emptyList();
-        }
-
-        return switch (departmentCode.toUpperCase(Locale.ROOT)) {
-            case "SW" -> List.of("PC", "PLC");
-            case "MFC" -> List.of("MFC.M", "MFC.E");
-            case "INST" -> List.of("MEC", "ELECT", "INST");
-            case "PM" -> List.of("PM");
-            case "ME" -> List.of("ME");
-            case "CE" -> List.of("CE");
-            case "PRC" -> List.of("PRC");
-            case "QA" -> List.of("QA");
-            case "HSE" -> List.of("HSE");
-            case "FIN" -> List.of("FIN");
-            case "CS" -> List.of("CS");
-            default -> List.of(departmentCode.toUpperCase(Locale.ROOT));
-        };
-    }
-
-    private List<DepartmentMemberDto> toSupplierMembers(Long organisationId, String departmentCode) {
+    /**
+     * Suppliers shown in a department: active suppliers linked to at least one resource type in the
+     * department scope ({@link DepartmentScope}). Their row uses the first resource type in scope.
+     */
+    private List<DepartmentMemberDto> toSupplierMembers(Long organisationId, String departmentCode,
+                                                        DepartmentScope.Scope scope) {
         return supplierRepository.findByOrganisation_IdAndActiveTrueOrderByNameAsc(organisationId).stream()
-                .filter(supplier -> supplier.getDepartmentsCsv() == null || supplier.getDepartmentsCsv().isBlank()
-                        || Arrays.stream(supplier.getDepartmentsCsv().split(",")).map(String::trim)
-                        .anyMatch(code -> code.equalsIgnoreCase(departmentCode)))
+                .filter(scope::allowsSupplier)
                 .map(supplier -> new DepartmentMemberDto(-1_000_000L - supplier.getId(), supplier.getName(),
                         supplier.getCode(), null, departmentCode,
-                        supplier.getResourceTypes().stream().map(type -> type.getCode()).findFirst().orElse("SUPPLIER"),
+                        scope.visibleResourceTypes(supplier).stream().findFirst().orElse("SUPPLIER"),
                         "SUPPLIER", null, false, null, null, List.of(), "#7c3aed"))
                 .toList();
     }
@@ -805,6 +802,9 @@ public class DepartmentDashboardService {
         } else if (currentUser.getRoles().stream().anyMatch(Role::isProjectManagerRole)) {
             throw new AccessDeniedException("Project managers must select a department manager.");
         }
+        DepartmentScope.Scope scope = currentUser.hasRole(Role.DEPARTMENT_MANAGER)
+                ? departmentScope.forManager(currentUser, currentOrgId)
+                : departmentScope.forDepartment(currentOrgId, departmentCode, null);
 
         List<DepartmentMemberDto> realMembers = userRepository
                 .findByOrganisation_IdAndDepartmentCodeOrderByFullNameAsc(currentOrgId, departmentCode)
@@ -815,10 +815,10 @@ public class DepartmentDashboardService {
                 .toList();
 
         List<DepartmentMemberDto> members = new ArrayList<>(realMembers);
-        members.addAll(toSupplierMembers(currentOrgId, departmentCode));
+        members.addAll(toSupplierMembers(currentOrgId, departmentCode, scope));
 
         long genericBaseId = -1L;
-        for (String resourceType : getDepartmentResourceTypes(departmentCode)) {
+        for (String resourceType : scope.sortedResourceTypeCodes()) {
             members.add(new DepartmentMemberDto(
                     genericBaseId--,
                     "G-" + resourceType,

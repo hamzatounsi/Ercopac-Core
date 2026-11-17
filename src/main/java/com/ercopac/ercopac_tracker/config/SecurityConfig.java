@@ -17,6 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfigurationSource;
 
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.DispatcherType;
 import java.io.IOException;
 import java.time.Instant;
 
@@ -47,7 +48,21 @@ public class SecurityConfig {
     };
 
     private static final String[] EMPLOYEE_ROLES = { "EMPLOYEE", "ROLE_EMPLOYEE" };
-    
+
+    /** Roles that pick a customer in a form (projects, tickets, CRM). Not CLIENT, EMPLOYEE or PLATFORM_OWNER. */
+    private static final String[] CUSTOMER_PICKER_ROLES = {
+            "ORG_ADMIN", "ROLE_ORG_ADMIN",
+            "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
+            "PROJECT_MANAGER_LEAD", "ROLE_PROJECT_MANAGER_LEAD",
+            "DEPARTMENT_MANAGER", "ROLE_DEPARTMENT_MANAGER",
+            "MANAGER", "ROLE_MANAGER",
+            "SALES_MANAGER_LEAD", "ROLE_SALES_MANAGER_LEAD",
+            "SALES_MANAGER", "ROLE_SALES_MANAGER",
+            "SYSTEM_ENGINEER", "ROLE_SYSTEM_ENGINEER",
+            "H24", "ROLE_H24",
+            "H24_LEAD", "ROLE_H24_LEAD"
+    };
+
     private static final String[] COMPANY_DASHBOARD_ROLES = { "MANAGER", "ROLE_MANAGER" };
 
     private static final String[] CRM_ROLES = {
@@ -62,17 +77,12 @@ public class SecurityConfig {
     };
 
     // 👈 NOUVEAU : Tableau des rôles autorisés pour le module Ticketing
+    // Support staff (SALES_MANAGER_LEAD, H24, H24_LEAD) and CLIENT for the client portal
     private static final String[] TICKET_ROLES = {
-            "PLATFORM_OWNER", "ROLE_PLATFORM_OWNER",
-            "ORG_ADMIN", "ROLE_ORG_ADMIN",
-            "PROJECT_MANAGER", "ROLE_PROJECT_MANAGER",
-            "PROJECT_MANAGER_LEAD", "ROLE_PROJECT_MANAGER_LEAD",
-            "MANAGER", "ROLE_MANAGER",
-            "DEPARTMENT_MANAGER", "ROLE_DEPARTMENT_MANAGER",
-            "EMPLOYEE", "ROLE_EMPLOYEE",
-            "CLIENT", "ROLE_CLIENT",
-            "H24", "ROLE_H24",          // 👈 AJOUT
-            "H24_LEAD", "ROLE_H24_LEAD" // 👈 AJOUT
+            "SALES_MANAGER_LEAD", "ROLE_SALES_MANAGER_LEAD",
+            "H24", "ROLE_H24",
+            "H24_LEAD", "ROLE_H24_LEAD",
+            "CLIENT", "ROLE_CLIENT"
     };
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter, CorsConfigurationSource corsConfigurationSource) {
@@ -94,6 +104,7 @@ public class SecurityConfig {
                                 HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You do not have permission to access this resource.")))
                 .authorizeHttpRequests(auth -> auth
 
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         .requestMatchers(
@@ -122,6 +133,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**")
                         .hasAnyAuthority(ORG_ADMIN_ROLES)
 
+                        .requestMatchers("/api/customers/**")
+                        .hasAnyAuthority(CUSTOMER_PICKER_ROLES)
+
                         .requestMatchers("/api/crm/**")
                         .hasAnyAuthority(CRM_ROLES)
 
@@ -145,6 +159,10 @@ public class SecurityConfig {
 
                         .requestMatchers("/api/employee/**")
                         .hasAnyAuthority(EMPLOYEE_ROLES)
+
+                        // Own account settings (language, theme): any signed-in user, scoped to the token's user id
+                        .requestMatchers("/api/users/me/**")
+                        .authenticated()
 
                         .anyRequest().authenticated());
 
@@ -173,6 +191,7 @@ public class SecurityConfig {
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write(
                 "{\"timestamp\":\"" + Instant.now() + "\",\"status\":" + status
-                        + ",\"error\":\"" + error + "\",\"message\":\"" + message + "\"}");
+                        + ",\"error\":\"" + error + "\",\"code\":\"" + (status == HttpServletResponse.SC_UNAUTHORIZED ? "UNAUTHORIZED" : "FORBIDDEN")
+                        + "\",\"message\":\"" + message + "\"}");
     }
 }

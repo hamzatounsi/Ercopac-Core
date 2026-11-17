@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 
 public class FinanceEntryDto {
     private Long id;
+    private Long parentId;
     private String wbsCode;
     private String description;
     private Integer level;
@@ -22,9 +23,14 @@ public class FinanceEntryDto {
     private BigDecimal costReserve;
     private BigDecimal updatedBudget;
 
+    private String rowType;
+    private boolean leaf;
+
     // Getters and Setters for ALL fields
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public Long getParentId() { return parentId; }
+    public void setParentId(Long parentId) { this.parentId = parentId; }
     
     public String getWbsCode() { return wbsCode; }
     public void setWbsCode(String wbsCode) { this.wbsCode = wbsCode; }
@@ -71,4 +77,11 @@ public class FinanceEntryDto {
     
     public BigDecimal getUpdatedBudget() { return updatedBudget; }
     public void setUpdatedBudget(BigDecimal updatedBudget) { this.updatedBudget = updatedBudget; }
+
+    public String getRowType() { return rowType; }
+    public void setRowType(String rowType) { this.rowType = rowType; }
+
+    /** Only leaf rows accept budget, actual, committed and forecast values; parents are calculated. */
+    public boolean isLeaf() { return leaf; }
+    public void setLeaf(boolean leaf) { this.leaf = leaf; }
 }

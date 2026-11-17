@@ -24,4 +24,9 @@ public interface TaskResourceAssignmentRepository extends JpaRepository<TaskReso
     List<Long> findDistinctProjectIdsForAssignedUser(@Param("userId") Long userId, @Param("organisationId") Long organisationId);
 
     void deleteByProjectIdAndTaskId(Long projectId, Long taskId);
+
+    /** Keeps the stored type of a resource's (non-supplier) assignments in line with its configured resource type. */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("update TaskResourceAssignment a set a.resourceType = :code where a.assignedUserId = :userId and a.supplierId is null")
+    int syncResourceTypeForUser(@Param("userId") Long userId, @Param("code") String code);
 }

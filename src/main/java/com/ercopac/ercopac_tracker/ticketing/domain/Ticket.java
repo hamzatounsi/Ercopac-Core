@@ -1,7 +1,10 @@
 package com.ercopac.ercopac_tracker.ticketing.domain;
 
+import com.ercopac.ercopac_tracker.admin.domain.Customer;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.projects.domain.Project;
 import com.ercopac.ercopac_tracker.user.AppUser;
+import com.ercopac.ercopac_tracker.common.NameNormalizer;
 import jakarta.persistence.*;
 import java.time.Instant;
 
@@ -20,11 +23,34 @@ public class Ticket {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "created_by_user_id", nullable = false) private AppUser createdByUser;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "client_user_id") private AppUser clientUser;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "assigned_sales_manager_id") private AppUser assignedSalesManager;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 32) private TicketCategory category;
+    // Category code: one of the system categories (TicketCategory names) or a custom category of Ticket settings
+    // (TicketCategorySetting.code). Same varchar column as before, existing values are kept.
+    @Column(nullable = false, length = 32) private String category;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private TicketPriority priority;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private TicketStatus status = TicketStatus.OPEN;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private TicketOrigin origin = TicketOrigin.WEB;
     @Column(length = 160) private String site;
+    // Optional organisation-defined status shown instead of the lifecycle status; status always holds its base lifecycle status
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "custom_status_id") private TicketCustomStatus customStatus;
+    // Contact person at the customer for this ticket
+    @Column(name = "contact_name", length = 150) private String contactName;
+    @Column(name = "contact_email", length = 180) private String contactEmail;
+    @Column(name = "contact_phone", length = 60) private String contactPhone;
+    // Customer company, project and equipment the ticket is about (Customers settings), plus the L2 technician handling an escalation
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "customer_id") private Customer customer;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "project_id") private Project project;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "equipment_id") private TicketCustomerEquipment equipment;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "l2_technician_id") private AppUser l2Technician;
+    // Customer and project as saved on the ticket: copied from Projectum when linked (customer / project set),
+    // typed by hand for historical or external records (customer / project null). Keeps old tickets stable.
+    @Column(name = "customer_name", length = 180) private String customerName;
+    @Column(name = "project_name", length = 250) private String projectName;
+    @Column(name = "project_number", length = 60) private String projectNumber;
+    @Column(name = "project_year") private Integer projectYear;
+    // Problem statement: observed problem, root cause and solution
+    @Column(name = "rca_problem", length = 4000) private String rcaProblem;
+    @Column(name = "rca_cause", length = 4000) private String rcaCause;
+    @Column(name = "rca_solution", length = 4000) private String rcaSolution;
     @Column(name = "escalation_level", nullable = false) private int escalationLevel;
     @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
     @Column(name = "updated_at", nullable = false) private Instant updatedAt;
@@ -32,14 +58,21 @@ public class Ticket {
     @Column(name = "closed_at") private Instant closedAt;
     @Column(name = "last_message_at") private Instant lastMessageAt;
     @Version private Long version;
-    @PrePersist void createTimestamps() { Instant now = Instant.now(); createdAt = now; updatedAt = now; }
-    @PreUpdate void updateTimestamp() { updatedAt = Instant.now(); }
+    @PrePersist void createTimestamps() { customerName = NameNormalizer.upper(customerName); Instant now = Instant.now(); createdAt = now; updatedAt = now; }
+    @PreUpdate void updateTimestamp() { customerName = NameNormalizer.upper(customerName); updatedAt = Instant.now(); }
     public Long getId(){return id;} public String getTicketNumber(){return ticketNumber;} public void setTicketNumber(String v){ticketNumber=v;}
     public String getSubject(){return subject;} public void setSubject(String v){subject=v;} public String getDescription(){return description;} public void setDescription(String v){description=v;}
     public Organisation getOrganisation(){return organisation;} public void setOrganisation(Organisation v){organisation=v;} public AppUser getCreatedByUser(){return createdByUser;} public void setCreatedByUser(AppUser v){createdByUser=v;}
     public AppUser getClientUser(){return clientUser;} public void setClientUser(AppUser v){clientUser=v;} public AppUser getAssignedSalesManager(){return assignedSalesManager;} public void setAssignedSalesManager(AppUser v){assignedSalesManager=v;}
-    public TicketCategory getCategory(){return category;} public void setCategory(TicketCategory v){category=v;} public TicketPriority getPriority(){return priority;} public void setPriority(TicketPriority v){priority=v;}
-    public TicketStatus getStatus(){return status;} public void setStatus(TicketStatus v){status=v;} public TicketOrigin getOrigin(){return origin;} public void setOrigin(TicketOrigin v){origin=v;}
+    public String getCategory(){return category;} public void setCategory(String v){category=v;} public void setCategory(TicketCategory v){category=v==null?null:v.name();}
+    public TicketCustomStatus getCustomStatus(){return customStatus;} public void setCustomStatus(TicketCustomStatus v){customStatus=v;}
+    public String getContactName(){return contactName;} public void setContactName(String v){contactName=v;} public String getContactEmail(){return contactEmail;} public void setContactEmail(String v){contactEmail=v;} public String getContactPhone(){return contactPhone;} public void setContactPhone(String v){contactPhone=v;} public TicketPriority getPriority(){return priority;} public void setPriority(TicketPriority v){priority=v;}
+    public TicketStatus getStatus(){return status;} public void setStatus(TicketStatus v){status=v;if(customStatus!=null&&customStatus.getBaseStatus()!=v)customStatus=null;} public TicketOrigin getOrigin(){return origin;} public void setOrigin(TicketOrigin v){origin=v;}
     public String getSite(){return site;} public void setSite(String v){site=v;} public int getEscalationLevel(){return escalationLevel;} public void setEscalationLevel(int v){escalationLevel=v;}
     public Instant getCreatedAt(){return createdAt;} public Instant getUpdatedAt(){return updatedAt;} public Instant getResolvedAt(){return resolvedAt;} public void setResolvedAt(Instant v){resolvedAt=v;} public Instant getClosedAt(){return closedAt;} public void setClosedAt(Instant v){closedAt=v;} public Instant getLastMessageAt(){return lastMessageAt;} public void setLastMessageAt(Instant v){lastMessageAt=v;} public Long getVersion(){return version;}
+    public Customer getCustomer(){return customer;} public void setCustomer(Customer v){customer=v;} public Project getProject(){return project;} public void setProject(Project v){project=v;}
+    public TicketCustomerEquipment getEquipment(){return equipment;} public void setEquipment(TicketCustomerEquipment v){equipment=v;} public AppUser getL2Technician(){return l2Technician;} public void setL2Technician(AppUser v){l2Technician=v;}
+    public String getCustomerName(){return customerName;} public void setCustomerName(String v){customerName=NameNormalizer.upper(v);} public String getProjectName(){return projectName;} public void setProjectName(String v){projectName=v;}
+    public String getProjectNumber(){return projectNumber;} public void setProjectNumber(String v){projectNumber=v;} public Integer getProjectYear(){return projectYear;} public void setProjectYear(Integer v){projectYear=v;}
+    public String getRcaProblem(){return rcaProblem;} public void setRcaProblem(String v){rcaProblem=v;} public String getRcaCause(){return rcaCause;} public void setRcaCause(String v){rcaCause=v;} public String getRcaSolution(){return rcaSolution;} public void setRcaSolution(String v){rcaSolution=v;}
 }

@@ -1,5 +1,8 @@
 package com.ercopac.ercopac_tracker.projectum.risks.service;
 
+import com.ercopac.ercopac_tracker.notifications.domain.NotificationChannel;
+import com.ercopac.ercopac_tracker.notifications.dto.NotificationRequest;
+import com.ercopac.ercopac_tracker.notifications.service.NotificationService;
 import com.ercopac.ercopac_tracker.projectum.risks.domain.RiskItem;
 import com.ercopac.ercopac_tracker.projectum.risks.dto.RiskExposureItemDto;
 import com.ercopac.ercopac_tracker.projectum.risks.dto.RiskItemDto;
@@ -39,16 +42,19 @@ public class RiskService {
     private final UserRepository userRepository;
     private final ResourceTypeRepository resourceTypeRepository;
     private final ProjectTaskRepository projectTaskRepository;
+    private final NotificationService notificationService;
     public RiskService(RiskItemRepository riskItemRepository,
                        ProjectRepository projectRepository,
                        SecurityUtils securityUtils,UserRepository userRepository,
-                       ResourceTypeRepository resourceTypeRepository,ProjectTaskRepository projectTaskRepository) {
+                       ResourceTypeRepository resourceTypeRepository,ProjectTaskRepository projectTaskRepository,
+                       NotificationService notificationService) {
         this.riskItemRepository = riskItemRepository;
         this.projectRepository = projectRepository;
         this.securityUtils = securityUtils;
         this.userRepository = userRepository;
         this.resourceTypeRepository = resourceTypeRepository;
         this.projectTaskRepository = projectTaskRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -140,7 +146,17 @@ public class RiskService {
         item.setOrganisation(project.getOrganisation());
         applyEditableFields(item, request);
 
-        return toDto(riskItemRepository.save(item));
+        RiskItem saved = riskItemRepository.save(item);
+        if (saved.getOwnerUser() != null) {
+            AppUser owner = saved.getOwnerUser();
+            String message = "You have been assigned a risk in project " + project.getName()
+                    + ": " + saved.getDescription();
+            notificationService.create(new NotificationRequest(
+                    project.getOrganisation().getId(), project.getId(), null,
+                    owner.getId(), owner.getEmail(), NotificationChannel.APP_ALERT,
+                    "INFO", "Risk assigned to you", message, null));
+        }
+        return toDto(saved);
     }
 
     public RiskItemDto update(Long projectId, Long itemId, UpsertRiskItemRequest request) {

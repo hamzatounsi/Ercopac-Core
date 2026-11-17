@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Pattern;
 import java.math.BigDecimal;
 
 public class UpsertForecastEntryRequest {
+    private Long financeEntryId;
 
     @NotBlank
     private String wbsCode;
@@ -21,6 +22,8 @@ public class UpsertForecastEntryRequest {
 
     public UpsertForecastEntryRequest() {
     }
+    public Long getFinanceEntryId() { return financeEntryId; }
+    public void setFinanceEntryId(Long financeEntryId) { this.financeEntryId = financeEntryId; }
 
     public String getWbsCode() {
         return wbsCode;

@@ -6,17 +6,23 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class SmtpEmailProvider implements EmailProvider {
+    private static final Logger log = LoggerFactory.getLogger(SmtpEmailProvider.class);
 
     private final JavaMailSender mailSender;
 
-    @Value("${app.mail.from:no-reply@projectum.local}")
+    @Value("${app.mail.from:info@projectumall.com}")
     private String fromEmail;
 
-    @Value("${app.mail.from-name:ERCOPAC Projectum}")
+    @Value("${app.mail.from-name:Projectum}")
     private String fromName;
+
+    @Value("${app.mail.delivery-enabled:true}")
+    private boolean deliveryEnabled;
 
     public SmtpEmailProvider(JavaMailSender mailSender) {
         this.mailSender = mailSender;
@@ -24,6 +30,10 @@ public class SmtpEmailProvider implements EmailProvider {
 
     @Override
     public void sendEmail(String to, String subject, String htmlBody) {
+        if (!deliveryEnabled) {
+            log.info("Email delivery is disabled; suppressed message to {}", to);
+            return;
+        }
         try {
             MimeMessage message = mailSender.createMimeMessage();
 

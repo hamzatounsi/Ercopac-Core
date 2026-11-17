@@ -33,18 +33,15 @@ public class TicketController {
     
     // 1. Accès standard : Lecture, création, messages
     private static final String STANDARD_ACCESS = 
-        "hasAnyRole('H24', 'H24_LEAD', 'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', " +
-        "'PROJECT_MANAGER_LEAD', 'MANAGER', 'DEPARTMENT_MANAGER', 'EMPLOYEE', 'CLIENT')";
+        "hasAnyRole('SALES_MANAGER_LEAD', 'H24', 'H24_LEAD', 'CLIENT')";
     
     // 2. Accès avancé : Modification, clôture, réouverture, assignation
     private static final String ADVANCED_ACCESS = 
-        "hasAnyRole('H24', 'H24_LEAD', 'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER', " +
-        "'PROJECT_MANAGER_LEAD', 'MANAGER', 'DEPARTMENT_MANAGER')";
+        "hasAnyRole('SALES_MANAGER_LEAD', 'H24', 'H24_LEAD')";
 
     // 3. Accès critique : Escalade, suppression (Réservé aux Leads et Admins)
     private static final String CRITICAL_ACCESS = 
-        "hasAnyRole('H24_LEAD', 'PLATFORM_OWNER', 'ORG_ADMIN', 'PROJECT_MANAGER_LEAD', " +
-        "'MANAGER', 'DEPARTMENT_MANAGER')";
+        "hasAnyRole('SALES_MANAGER_LEAD', 'H24_LEAD')";
 
     @GetMapping
     @PreAuthorize(STANDARD_ACCESS)
@@ -52,25 +49,47 @@ public class TicketController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) TicketStatus status,
             @RequestParam(required = false) TicketPriority priority,
-            @RequestParam(required = false) TicketCategory category,
+            @RequestParam(required = false) String category,
             @RequestParam(required = false) Long organisationId,
             @RequestParam(required = false) Long assigneeId,
             @RequestParam(required = false) Long creatorId,
+            @RequestParam(required = false) Long customerId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "updatedAt,desc") String sort) {
+            @RequestParam(defaultValue = "id,desc") String sort) {
         
+        // Default order is the ticket id: editing a ticket never moves it. Only whitelisted columns can be sorted (server side).
         String[] s = sort.split(",");
+        String property = SORTABLE.getOrDefault(s[0].trim(), "id");
         return service.list(
-                search, status, priority, category, organisationId, assigneeId, creatorId, from, to,
+                search, status, priority, category, organisationId, assigneeId, creatorId, customerId, from, to,
                 PageRequest.of(
                         Math.max(0, page),
                         Math.min(Math.max(1, size), 100),
-                        Sort.by(s.length > 1 && "asc".equalsIgnoreCase(s[1]) ? Sort.Direction.ASC : Sort.Direction.DESC, s[0])
+                        Sort.by(s.length > 1 && "asc".equalsIgnoreCase(s[1].trim()) ? Sort.Direction.ASC : Sort.Direction.DESC, property)
+                                .and(Sort.by(Sort.Direction.DESC, "id"))
                 )
         );
+    }
+
+    private static final Map<String, String> SORTABLE = Map.ofEntries(
+            Map.entry("id", "id"), Map.entry("ticketNumber", "ticketNumber"), Map.entry("subject", "subject"), Map.entry("status", "status"),
+            Map.entry("priority", "priority"), Map.entry("category", "category"), Map.entry("customer", "customerName"), Map.entry("site", "site"),
+            Map.entry("projectNumber", "projectNumber"), Map.entry("createdAt", "createdAt"), Map.entry("updatedAt", "updatedAt"));
+
+    /** Client portal dashboard: statistics of the current client's own tickets only. */
+    @GetMapping("/my-dashboard")
+    @PreAuthorize("hasRole('CLIENT')")
+    public ClientDashboard myDashboard() {
+        return service.clientDashboard();
+    }
+
+    @GetMapping("/agents")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public List<UserSummary> agents() {
+        return service.agents();
     }
 
     @GetMapping("/statistics")
@@ -97,6 +116,20 @@ public class TicketController {
         return service.update(id, r);
     }
 
+    @PatchMapping("/{id}/contact")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public TicketDetails contact(@PathVariable Long id, @Valid @RequestBody ContactPersonRequest r) {
+        return service.updateContact(id, r);
+    }
+
+    /** Deletes the ticket with its messages, activities and attachments (support leads). */
+    @DeleteMapping("/{id}")
+    @PreAuthorize(CRITICAL_ACCESS)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteTicket(@PathVariable Long id) {
+        attachments.deleteTicket(id);
+    }
+
     @PatchMapping("/{id}/status")
     @PreAuthorize(ADVANCED_ACCESS)
     public TicketDetails status(@PathVariable Long id, @Valid @RequestBody StatusRequest r) {
@@ -113,6 +146,24 @@ public class TicketController {
     @PreAuthorize(ADVANCED_ACCESS)
     public TicketDetails assign(@PathVariable Long id, @Valid @RequestBody AssignmentRequest r) {
         return service.assign(id, r);
+    }
+
+    @PatchMapping("/{id}/l2-technician")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public TicketDetails assignL2(@PathVariable Long id, @Valid @RequestBody AssignmentRequest r) {
+        return service.assignL2(id, r);
+    }
+
+    @PatchMapping("/{id}/context")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public TicketDetails context(@PathVariable Long id, @Valid @RequestBody TicketContextRequest r) {
+        return service.updateContext(id, r);
+    }
+
+    @PatchMapping("/{id}/problem-statement")
+    @PreAuthorize(ADVANCED_ACCESS)
+    public TicketDetails problemStatement(@PathVariable Long id, @Valid @RequestBody ProblemStatementRequest r) {
+        return service.updateProblemStatement(id, r);
     }
 
     @PostMapping("/{id}/escalate")
@@ -168,9 +219,17 @@ public class TicketController {
     @GetMapping("/{id}/attachments/{attachmentId}")
     @PreAuthorize(STANDARD_ACCESS)
     public ResponseEntity<Resource> download(@PathVariable Long id, @PathVariable Long attachmentId) {
+        TicketAttachmentDto meta = attachments.metadata(id, attachmentId);
         Resource r = attachments.download(id, attachmentId);
+        MediaType type;
+        try { type = MediaType.parseMediaType(meta.contentType()); } catch (RuntimeException ex) { type = MediaType.APPLICATION_OCTET_STREAM; }
+        // Images, videos and PDFs open in the browser viewer; other files download
+        boolean inline = type.getType().equals("image") || type.getType().equals("video") || MediaType.APPLICATION_PDF.includes(type);
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + r.getFilename() + "\"")
+                .contentType(type)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.builder(inline ? "inline" : "attachment")
+                        .filename(meta.originalFileName(), java.nio.charset.StandardCharsets.UTF_8).build().toString())
+                .header("X-Content-Type-Options", "nosniff")
                 .body(r);
     }
 

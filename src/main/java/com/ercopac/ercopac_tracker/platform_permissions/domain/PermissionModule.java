@@ -24,5 +24,7 @@ public enum PermissionModule {
     SUPPLIERS,
 
     DEPARTMENT_DASHBOARD,
-    EMPLOYEE_DASHBOARD
+    EMPLOYEE_DASHBOARD,
+
+    TICKETING
 }

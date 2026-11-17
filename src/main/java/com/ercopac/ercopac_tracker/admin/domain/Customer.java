@@ -1,6 +1,7 @@
 package com.ercopac.ercopac_tracker.admin.domain;
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
+import com.ercopac.ercopac_tracker.common.NameNormalizer;
 import jakarta.persistence.*;
 
 @Entity
@@ -53,6 +54,12 @@ public class Customer {
     @Column(nullable = false)
     private boolean active = true;
 
+    @PrePersist
+    @PreUpdate
+    void normalizeName() {
+        name = NameNormalizer.upper(name);
+    }
+
     public Long getId() { return id; }
 
     public Organisation getOrganisation() { return organisation; }
@@ -62,7 +69,7 @@ public class Customer {
     public void setCustomerCode(String customerCode) { this.customerCode = customerCode; }
 
     public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    public void setName(String name) { this.name = NameNormalizer.upper(name); }
 
     public String getCountry() { return country; }
     public void setCountry(String country) { this.country = country; }

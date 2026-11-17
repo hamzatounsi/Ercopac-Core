@@ -27,7 +27,13 @@ public class NotificationService {
 
     @Transactional
     public Notification create(NotificationRequest request) {
+        return create(request, null);
+    }
+
+    // link: route opened when the user clicks the notification (e.g. /tickets/12)
+    public Notification create(NotificationRequest request, String link) {
         Notification notification = new Notification();
+        notification.setLink(link);
         notification.setOrganisationId(request.organisationId());
         notification.setProjectId(request.projectId());
         notification.setTaskId(request.taskId());

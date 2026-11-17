@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY . .
 
+ENV MAVEN_OPTS="-Xmx768m -XX:MaxMetaspaceSize=256m"
 RUN chmod +x mvnw && ./mvnw clean package -DskipTests
 
 EXPOSE 10000

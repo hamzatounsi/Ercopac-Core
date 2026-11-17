@@ -2,6 +2,7 @@ package com.ercopac.ercopac_tracker.user.domain;
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.user.ResourceType;
+import com.ercopac.ercopac_tracker.common.NameNormalizer;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
@@ -80,6 +81,7 @@ public class Supplier {
 
     @PrePersist
     void onCreate() {
+        name = NameNormalizer.upper(name);
         LocalDateTime now = LocalDateTime.now();
         if (createdAt == null) createdAt = now;
         updatedAt = now;
@@ -87,6 +89,7 @@ public class Supplier {
 
     @PreUpdate
     void onUpdate() {
+        name = NameNormalizer.upper(name);
         updatedAt = LocalDateTime.now();
     }
 
@@ -107,7 +110,7 @@ public class Supplier {
     }
 
     public void setName(String name) {
-        this.name = name;
+        this.name = NameNormalizer.upper(name);
     }
 
     public String getCode() { return code; }

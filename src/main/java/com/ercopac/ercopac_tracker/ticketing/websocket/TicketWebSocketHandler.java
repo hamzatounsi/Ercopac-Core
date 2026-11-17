@@ -22,6 +22,8 @@ public class TicketWebSocketHandler extends TextWebSocketHandler {
     private final TicketService ticketService;
     private final ObjectMapper objectMapper;
     private final Map<Long, Set<WebSocketSession>> subscribers = new ConcurrentHashMap<>();
+    // Open sessions per user, for Live chat messages
+    private final Map<Long, Set<WebSocketSession>> userSessions = new ConcurrentHashMap<>();
 
     public TicketWebSocketHandler(TicketService ticketService, ObjectMapper objectMapper) {
         this.ticketService = ticketService;
@@ -34,6 +36,7 @@ public class TicketWebSocketHandler extends TextWebSocketHandler {
             session.close(CloseStatus.NOT_ACCEPTABLE.withReason("Invalid ticket channel token"));
             return;
         }
+        userSessions.computeIfAbsent((Long) session.getAttributes().get("userId"), ignored -> ConcurrentHashMap.newKeySet()).add(session);
         send(session, Map.of("type", "connected"));
     }
 
@@ -68,6 +71,17 @@ public class TicketWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         subscribers.values().forEach(sessions -> sessions.remove(session));
+        userSessions.values().forEach(sessions -> sessions.remove(session));
+    }
+
+    public void sendToUser(Long userId, Object payload) {
+        for (WebSocketSession session : userSessions.getOrDefault(userId, Set.of())) {
+            try {
+                send(session, payload);
+            } catch (Exception ignored) {
+                // A closed/stale client is removed by the WebSocket lifecycle callback.
+            }
+        }
     }
 
     public void broadcastMessage(Long ticketId, TicketMessageDto message) {
@@ -77,8 +91,11 @@ public class TicketWebSocketHandler extends TextWebSocketHandler {
     private void broadcast(Long ticketId, TicketMessageDto message) {
         for (WebSocketSession session : subscribers.getOrDefault(ticketId, Set.of())) {
             try {
-                String role = (String) session.getAttributes().get("role");
-                if (message.internalNote() && Role.CLIENT.name().equals(role)) {
+                // Internal notes only go to support staff (the handshake stores the list of roles)
+                Object roles = session.getAttributes().get("roles");
+                boolean staff = roles instanceof java.util.List<?> list
+                        && (list.contains(Role.SALES_MANAGER_LEAD.name()) || list.contains(Role.H24.name()) || list.contains(Role.H24_LEAD.name()));
+                if (message.internalNote() && !staff) {
                     continue;
                 }
                 send(session, Map.of("type", "message", "ticketId", ticketId, "message", message));

@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.config;
 
+import com.ercopac.ercopac_tracker.customer.service.CustomerConflictException;
 import com.ercopac.ercopac_tracker.auth.LoginTemporarilyLockedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,16 +33,15 @@ public class GlobalExceptionHandler {
         body.put("timestamp", LocalDateTime.now());
         body.put("status", HttpStatus.BAD_REQUEST.value());
         body.put("error", "Bad Request");
+        body.put("code", "BAD_REQUEST");
         body.put("message", ex.getMessage());
         return ResponseEntity.badRequest().body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationException(MethodArgumentNotValidException ex) {
-        String message = ex.getBindingResult()
-                .getFieldErrors()
-                .stream()
-                .findFirst()
+        var firstError = ex.getBindingResult().getFieldErrors().stream().findFirst();
+        String message = firstError
                 .map(error -> error.getField() + " " + error.getDefaultMessage())
                 .orElse("Validation error");
 
@@ -49,6 +49,8 @@ public class GlobalExceptionHandler {
         body.put("timestamp", LocalDateTime.now());
         body.put("status", HttpStatus.BAD_REQUEST.value());
         body.put("error", "Validation Error");
+        body.put("code", "VALIDATION_ERROR");
+        firstError.ifPresent(error -> body.put("field", error.getField()));
         body.put("message", message);
         return ResponseEntity.badRequest().body(body);
     }
@@ -77,6 +79,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TicketConflictException.class)
     public ResponseEntity<Map<String, Object>> handleTicketConflict(TicketConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorBody(HttpStatus.CONFLICT, ex.getMessage()));
+    }
+
+    @ExceptionHandler(CustomerConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleCustomerConflict(CustomerConflictException ex) {
+        Map<String, Object> body = errorBody(HttpStatus.CONFLICT, ex.getMessage());
+        body.put("code", ex.getCode());
+        if (ex.getReferences() != null) {
+            Map<String, Object> references = new HashMap<>();
+            references.put("projects", ex.getReferences().projects());
+            references.put("tickets", ex.getReferences().tickets());
+            references.put("ticketingRecords", ex.getReferences().ticketingRecords());
+            references.put("total", ex.getReferences().total());
+            body.put("references", references);
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -123,7 +140,23 @@ public class GlobalExceptionHandler {
         body.put("timestamp", Instant.now());
         body.put("status", status.value());
         body.put("error", status.getReasonPhrase());
+        body.put("code", errorCode(status));
         body.put("message", message == null || message.isBlank() ? status.getReasonPhrase() : message);
         return body;
+    }
+
+    /** Stable, language-independent code: the frontend translates it (errors.<CODE>) instead of showing the English message. */
+    static String errorCode(HttpStatus status) {
+        return switch (status) {
+            case BAD_REQUEST -> "BAD_REQUEST";
+            case UNAUTHORIZED -> "UNAUTHORIZED";
+            case FORBIDDEN -> "FORBIDDEN";
+            case NOT_FOUND -> "NOT_FOUND";
+            case CONFLICT -> "CONFLICT";
+            case PAYLOAD_TOO_LARGE -> "PAYLOAD_TOO_LARGE";
+            case TOO_MANY_REQUESTS -> "TOO_MANY_REQUESTS";
+            case SERVICE_UNAVAILABLE -> "SERVICE_UNAVAILABLE";
+            default -> status.is5xxServerError() ? "INTERNAL_ERROR" : status.name();
+        };
     }
 }

@@ -57,6 +57,7 @@ class CrmOpportunityValueCalculatorTest {
                 new BigDecimal("100000"), new BigDecimal("100000"), CrmOpportunityValueCalculator.total(opportunity)));
     }
 
+    
     @Test
     void nullValuesAndDiscountRemainSafeForExistingRecords() {
         CrmOpportunity opportunity = new CrmOpportunity();

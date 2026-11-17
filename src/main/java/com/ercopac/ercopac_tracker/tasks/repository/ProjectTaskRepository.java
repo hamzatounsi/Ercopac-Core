@@ -14,6 +14,12 @@ import java.util.Optional;
 
 public interface ProjectTaskRepository extends JpaRepository<ProjectTask, Long> {
 
+    @Query("select t from ProjectTask t where t.id = :taskId and t.projectId = :projectId " +
+           "and t.organisationId = :organisationId and (t.assignedUser.id = :userId " +
+           "or exists (select a.id from TaskResourceAssignment a where a.task.id = t.id and a.assignedUserId = :userId))")
+    Optional<ProjectTask> findAssignedTask(@Param("taskId") Long taskId, @Param("projectId") Long projectId,
+                                            @Param("organisationId") Long organisationId, @Param("userId") Long userId);
+
     List<ProjectTask> findByProjectIdOrderByDisplayOrderAscIdAsc(Long projectId);
     List<ProjectTask> findByProjectIdAndOrganisationIdOrderByDisplayOrderAscIdAsc(Long projectId, Long organisationId);
     List<ProjectTask> findByProjectId(Long projectId);

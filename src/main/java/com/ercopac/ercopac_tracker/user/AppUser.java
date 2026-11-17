@@ -9,6 +9,7 @@ import com.ercopac.ercopac_tracker.projectum.risks.domain.RiskItem;
 import com.ercopac.ercopac_tracker.tasks.domain.ProjectTask;
 import com.ercopac.ercopac_tracker.tasks.domain.TaskResourceAssignment;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.ercopac.ercopac_tracker.common.NameNormalizer;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -99,10 +100,17 @@ public class AppUser {
 
     private Boolean emailNotificationsEnabled = true;
 
+    // UI preferences; null until the user chooses (the API then returns the defaults "en" / "light")
+    @Column(name = "preferred_language", length = 5)
+    private String preferredLanguage;
+
+    @Column(name = "preferred_theme", length = 10)
+    private String preferredTheme;
+
     public AppUser() {}
 
     public AppUser(String fullName, String email, String passwordHash, Role role) {
-        this.fullName = fullName;
+        this.fullName = NameNormalizer.upper(fullName);
         this.email = email;
         this.passwordHash = passwordHash;
         setRoles(Set.of(role));
@@ -114,8 +122,14 @@ public class AppUser {
     }
 
     public Long getId() { return id; }
+    @PrePersist
+    @PreUpdate
+    void normalizeFullName() {
+        fullName = NameNormalizer.upper(fullName);
+    }
+
     public String getFullName() { return fullName; }
-    public void setFullName(String fullName) { this.fullName = fullName; }
+    public void setFullName(String fullName) { this.fullName = NameNormalizer.upper(fullName); }
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
     public String getPasswordHash() { return passwordHash; }
@@ -187,4 +201,8 @@ public class AppUser {
     public Boolean getEmailNotificationsEnabled() { return emailNotificationsEnabled; }
     public void setEmailNotificationsEnabled(Boolean v) { this.emailNotificationsEnabled = v; }
     public String getUsername() { return email; }
+    public String getPreferredLanguage() { return preferredLanguage; }
+    public void setPreferredLanguage(String preferredLanguage) { this.preferredLanguage = preferredLanguage; }
+    public String getPreferredTheme() { return preferredTheme; }
+    public void setPreferredTheme(String preferredTheme) { this.preferredTheme = preferredTheme; }
 }

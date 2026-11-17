@@ -3,6 +3,7 @@ package com.ercopac.ercopac_tracker.user.service;
 import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.organisation.repository.OrganisationRepository;
+import com.ercopac.ercopac_tracker.security.DepartmentScope;
 import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.ResourceType;
@@ -16,6 +17,8 @@ import com.ercopac.ercopac_tracker.user.dto.ResourceOptionDto;
 import com.ercopac.ercopac_tracker.user.dto.UpdateResourceRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,13 +35,22 @@ public class ResourceService {
     private final DepartmentRepository departmentRepository;
     private final PasswordEncoder        passwordEncoder;
     private final SecurityUtils          securityUtils;
+    private final com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository taskResourceAssignmentRepository;
+    private final DepartmentScope        departmentScope;
+
+    /** Placeholder that keeps the JPQL "in" list non-empty when a manager has no resource type at all. */
+    private static final String NO_RESOURCE_TYPE = "__NONE__";
 
     public ResourceService(UserRepository userRepository,
                            OrganisationRepository organisationRepository,
                            ResourceTypeRepository resourceTypeRepository,
                            DepartmentRepository departmentRepository,
                            PasswordEncoder passwordEncoder,
-                           SecurityUtils securityUtils) {
+                           SecurityUtils securityUtils,
+                           com.ercopac.ercopac_tracker.tasks.repository.TaskResourceAssignmentRepository taskResourceAssignmentRepository,
+                           DepartmentScope departmentScope) {
+        this.taskResourceAssignmentRepository = taskResourceAssignmentRepository;
+        this.departmentScope        = departmentScope;
         this.userRepository         = userRepository;
         this.organisationRepository = organisationRepository;
         this.resourceTypeRepository = resourceTypeRepository;
@@ -57,6 +69,10 @@ public class ResourceService {
         Long organisationId = getOrganisationIdOrNullForPlatform();
         Role parsedRole = parseRole(role);
         String searchPattern = toSearchPattern(search);
+        DepartmentScope.Scope scope = departmentScope.current();
+        java.util.Collection<String> scopeTypes = scope.resourceTypeCodes().isEmpty()
+                ? List.of(NO_RESOURCE_TYPE)
+                : scope.resourceTypeCodes();
 
         return userRepository.searchResources(
                 organisationId,
@@ -65,6 +81,9 @@ public class ResourceService {
                 parsedRole,
                 active,
                 internalUser,
+                scope.restricted(),
+                scopeTypes,
+                scope.departmentCode() == null ? NO_RESOURCE_TYPE : scope.departmentCode(),
                 pageable
         ).map(this::toListItemDto);
     }
@@ -72,6 +91,7 @@ public class ResourceService {
     @Transactional(readOnly = true)
     public ResourceDetailsDto getResourceById(Long id) {
         AppUser user = findAccessibleResource(id);
+        assertResourceInScope(departmentScope.current(), user);
         return toDetailsDto(user);
     }
 
@@ -79,6 +99,7 @@ public class ResourceService {
         Long organisationId = requireOrganisationIdForWrite();
 
         validateCreateRequest(request, organisationId);
+        assertResourceTypeInScope(departmentScope.current(), request.resourceType());
 
         Organisation organisation = organisationRepository.findById(organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Organisation not found"));
@@ -121,6 +142,13 @@ public class ResourceService {
             throw new IllegalArgumentException("Only internal resource accounts can be managed here");
         }
 
+        DepartmentScope.Scope scope = departmentScope.current();
+        assertResourceInScope(scope, user);
+        String currentType = user.getResourceType() == null ? null : user.getResourceType().getCode();
+        if (!java.util.Objects.equals(normalize(request.resourceType()), currentType)) {
+            assertResourceTypeInScope(scope, request.resourceType());
+        }
+
         if (request.fullName() != null && !request.fullName().isBlank()) {
             user.setFullName(request.fullName().trim());
         }
@@ -138,6 +166,9 @@ public class ResourceService {
         }
 
         assignResourceProfile(user, request.departmentCode(), request.resourceType(), organisationId);
+        // Propagate a resource type change to existing Gantt assignments (no stale type values)
+        taskResourceAssignmentRepository.syncResourceTypeForUser(user.getId(),
+                user.getResourceType() == null ? null : user.getResourceType().getCode());
         user.setJobTitle(normalize(request.jobTitle()));
         user.setSeniority(normalize(request.seniority()));
         user.setInternalUser(true);
@@ -162,6 +193,7 @@ public class ResourceService {
         if (!user.requiresResourceProfile()) {
             throw new IllegalArgumentException("Only internal resource accounts can be managed here");
         }
+        assertResourceInScope(departmentScope.current(), user);
         user.setActive(active);
         userRepository.save(user);
     }
@@ -221,7 +253,10 @@ public class ResourceService {
                     .filter(v -> v != null && !v.isBlank())
                     .distinct().sorted().toList();
         }
-        return userRepository.findDistinctResourceTypesByOrganisationId(organisationId);
+        DepartmentScope.Scope scope = departmentScope.current();
+        return userRepository.findDistinctResourceTypesByOrganisationId(organisationId).stream()
+                .filter(scope::allowsResourceType)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -324,6 +359,21 @@ public class ResourceService {
                     .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
         return userRepository.findByIdAndOrganisation_Id(id, organisationId)
                 .orElseThrow(() -> new IllegalArgumentException("Resource not found"));
+    }
+
+    private void assertResourceInScope(DepartmentScope.Scope scope, AppUser user) {
+        if (!scope.allowsResource(user)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "This resource is outside the resource types of your department.");
+        }
+    }
+
+    private void assertResourceTypeInScope(DepartmentScope.Scope scope, String resourceTypeCode) {
+        String code = normalize(resourceTypeCode);
+        if (code != null && !scope.allowsResourceType(code)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Resource type outside your department: " + code);
+        }
     }
 
     private void validateCreateRequest(CreateResourceRequest request, Long organisationId) {

@@ -34,6 +34,7 @@ class CrmServiceTenantTest {
     @Mock CrmOpportunityHistoryRepository historyRepo;
     @Mock CrmOpportunityStageHistoryRepository stageHistoryRepo;
     @Mock CrmSalesTargetRepository targetRepo;
+    @Mock LostReasonRepository lostReasonRepo;
     @Mock OrganisationRepository organisationRepo;
     @Mock UserRepository userRepo;
     @Mock SecurityUtils security;
@@ -43,7 +44,7 @@ class CrmServiceTenantTest {
     void setUp() {
         service = new CrmService(stageRepo, leadRepo, opportunityRepo, activityRepo, accountRepo,
                 categoryRepo, noteRepo, attachmentRepo, historyRepo, stageHistoryRepo, targetRepo,
-                organisationRepo, userRepo, security, "target/test-crm-attachments");
+                organisationRepo, userRepo, security, lostReasonRepo, "target/test-crm-attachments");
         when(security.isPlatformUser()).thenReturn(false);
         when(security.getCurrentOrganisationId()).thenReturn(11L);
     }

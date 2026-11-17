@@ -82,14 +82,16 @@ public class PlatformPermissionService {
                 .map(module -> {
                     RolePermission p = existing.get(module);
                     boolean fixedCrmRole = module == PermissionModule.CRM && role.isCrmRole();
+                    // Ticketing roles always use the Ticketing app; the matrix shows that access read-only
+                    boolean fixedTicketingRole = module == PermissionModule.TICKETING && role.isTicketingRole();
 
                     return new RolePermissionDto(
                             module.name(),
                             label(module),
                             group(module),
                             icon(module),
-                            fixedCrmRole || (p != null && p.isCanRead()),
-                            fixedCrmRole ? role.isSalesManagerRole() : (p != null && p.isCanWrite())
+                            fixedCrmRole || fixedTicketingRole || (p != null && p.isCanRead()),
+                            fixedCrmRole ? role.isSalesManagerRole() : fixedTicketingRole || (p != null && p.isCanWrite())
                     );
                 })
                 .forEach(result::add);
@@ -130,6 +132,11 @@ public class PlatformPermissionService {
 
             if (module == PermissionModule.CRM && role.isCrmRole()) {
                 saveSinglePermission(organisation, organisationId, role, module, true, role.isSalesManagerRole());
+                continue;
+            }
+
+            if (module == PermissionModule.TICKETING && role.isTicketingRole()) {
+                saveSinglePermission(organisation, organisationId, role, module, true, true);
                 continue;
             }
 
@@ -176,6 +183,7 @@ public class PlatformPermissionService {
             case GM_DASHBOARD, PROJECTS, PLANNING, TASKS -> "Schedule";
             case DEPARTMENT_DASHBOARD -> "Department Workspace";
             case EMPLOYEE_DASHBOARD -> "Employee Workspace";
+            case TICKETING -> "Ticketing Workspace";
         };
     }
 
@@ -203,6 +211,7 @@ public class PlatformPermissionService {
             case SUPPLIERS -> "Suppliers";
             case DEPARTMENT_DASHBOARD -> "Department Dashboard";
             case EMPLOYEE_DASHBOARD -> "Employee Dashboard";
+            case TICKETING -> "Ticketing (tickets, H24 / L2, customers)";
         };
     }
 
@@ -230,6 +239,7 @@ public class PlatformPermissionService {
             case SUPPLIERS -> "🚚";
             case DEPARTMENT_DASHBOARD -> "🏭";
             case EMPLOYEE_DASHBOARD -> "👤";
+            case TICKETING -> "🎫";
         };
     }
 }

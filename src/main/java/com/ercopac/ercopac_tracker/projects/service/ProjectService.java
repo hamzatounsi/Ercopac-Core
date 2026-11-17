@@ -15,6 +15,7 @@ import com.ercopac.ercopac_tracker.security.SecurityUtils;
 import com.ercopac.ercopac_tracker.admin.repository.ProjectCategoryRepository;
 import com.ercopac.ercopac_tracker.admin.domain.ProjectCategory;
 import com.ercopac.ercopac_tracker.admin.domain.Customer;
+import com.ercopac.ercopac_tracker.common.NameNormalizer;
 import com.ercopac.ercopac_tracker.admin.repository.CustomerRepository;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
@@ -189,14 +190,37 @@ public class ProjectService {
         projectRepository.save(project);
     }
 
+    /**
+     * Customer of a saved project:
+     * - customerId: an active customer of the organisation; the customer the project already has
+     *   is accepted even after it was deactivated, so existing projects can still be edited;
+     * - legacy callers sending only the customer name: matched to an existing customer ignoring
+     *   case and spacing (never created here: customers are managed by the organisation admin);
+     * - neither: no customer.
+     */
+    private Customer resolveCustomer(Project project, UpsertProjectRequest request, Long organisationId) {
+        if (request.getCustomerId() != null) {
+            Long currentCustomerId = project.getCustomerId();
+            return customerRepository.findByIdAndOrganisation_Id(request.getCustomerId(), organisationId)
+                    .filter(customer -> customer.isActive() || customer.getId().equals(currentCustomerId))
+                    .orElseThrow(() -> new IllegalArgumentException("Customer is not available for this organisation"));
+        }
+        String legacyName = NameNormalizer.upper(request.getCustomer());
+        if (legacyName == null) {
+            return null;
+        }
+        Long currentCustomerId = project.getCustomerId();
+        return customerRepository.findFirstByOrganisation_IdAndNameIgnoreCase(organisationId, legacyName)
+                .filter(customer -> customer.isActive() || customer.getId().equals(currentCustomerId))
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Customer " + legacyName + " does not exist. Ask your organisation administrator to add it in Customer Management."));
+    }
+
     private void applyRequest(Project project, UpsertProjectRequest request, Long organisationId) {
         project.setCode(request.getCode());
         project.setName(request.getName());
         project.setShortName(request.getShortName());
-        Customer customer = request.getCustomerId() == null ? null : customerRepository
-                .findByIdAndOrganisation_Id(request.getCustomerId(), organisationId)
-                .filter(Customer::isActive)
-                .orElseThrow(() -> new IllegalArgumentException("Customer is not available for this organisation"));
+        Customer customer = resolveCustomer(project, request, organisationId);
         project.setCustomerEntity(customer);
         project.setCustomer(customer == null ? null : customer.getName());
         if (request.getCategoryId() == null) throw new IllegalArgumentException("Category is required");

@@ -1,0 +1,3 @@
+package com.ercopac.ercopac_tracker.ticketing.repository;
+import com.ercopac.ercopac_tracker.ticketing.domain.TicketCustomerContact; import org.springframework.data.jpa.repository.JpaRepository; import java.util.*;
+public interface TicketCustomerContactRepository extends JpaRepository<TicketCustomerContact,Long> { List<TicketCustomerContact> findByOrganisation_IdAndCustomer_IdOrderByFullNameAsc(Long org,Long customerId); Optional<TicketCustomerContact> findByIdAndOrganisation_Id(Long id,Long org); Optional<TicketCustomerContact> findFirstByPortalUser_Id(Long userId); List<TicketCustomerContact> findByOrganisation_IdAndPortalUserIsNotNull(Long org); long countByCustomer_Id(Long customerId); }

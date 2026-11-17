@@ -139,6 +139,11 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
           and (:role is null or :role member of u.roles)
           and (:active is null or u.active = :active)
           and (:internalUser is null or u.internalUser = :internalUser)
+          and (
+                :scoped = false or
+                upper(u.resourceType.code) in :scopeResourceTypes or
+                upper(coalesce(u.departmentCode, '')) = upper(:scopeDepartmentCode)
+              )
         order by u.fullName asc
     """)
     Page<AppUser> searchResources(
@@ -148,6 +153,9 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
             @Param("role") Role role,
             @Param("active") Boolean active,
             @Param("internalUser") Boolean internalUser,
+            @Param("scoped") boolean scoped,
+            @Param("scopeResourceTypes") java.util.Collection<String> scopeResourceTypes,
+            @Param("scopeDepartmentCode") String scopeDepartmentCode,
             Pageable pageable
     );
 
@@ -202,6 +210,22 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
     default Optional<AppUser> findFirstByOrganisationIdAndRole(Long organisationId, Role role) {
         return findByOrganisationIdAndRole(organisationId, role).stream().findFirst();
     }
+    // Active users holding one of the roles or the resource type (e.g. the H24 team: H24 / H24_LEAD role or H24 resource type)
+    @Query("""
+        select distinct u
+        from AppUser u
+        left join u.roles r
+        left join u.resourceType rt
+        where u.organisation.id = :organisationId
+          and u.active = true
+          and (r in :roles or upper(rt.code) = upper(:resourceTypeCode))
+        order by u.fullName asc
+    """)
+    List<AppUser> findActiveByRolesOrResourceTypeCode(
+            @Param("organisationId") Long organisationId,
+            @Param("roles") Collection<Role> roles,
+            @Param("resourceTypeCode") String resourceTypeCode);
+
     List<AppUser> findByOrganisation_IdAndResourceType_IdAndActiveTrue(
     	    Long organisationId, Long resourceTypeId);
  // Add this inside UserRepository.java
