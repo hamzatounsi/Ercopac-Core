@@ -94,7 +94,57 @@ public final class OrgAdminDtos {
             String resourceTypeName,
             String employeeCode,
             String jobTitle,
-            boolean active
+            boolean active,
+            // INTERNAL or CUSTOMER; customer fields are only set for CUSTOMER accounts
+            String userType,
+            Long customerId,
+            String customerName,
+            Long organisationId,
+            String organisationName
+    ) {
+    }
+
+    /** Customer user (Customer Users page): always the CLIENT role, no department, resource type or employee code. */
+    public record CreateCustomerUserRequest(
+            @NotBlank(message = "Full name is required")
+            @Size(max = 150, message = "Full name must not exceed 150 characters")
+            String fullName,
+
+            @NotBlank(message = "Email is required")
+            @Email(message = "Enter a valid email address")
+            @Size(max = 180, message = "Email must not exceed 180 characters")
+            String email,
+
+            @NotBlank(message = "A temporary password is required")
+            @Size(min = 8, max = 128, message = "Temporary password must contain 8 to 128 characters")
+            String password,
+
+            @Size(max = 80, message = "Job title must not exceed 80 characters")
+            String jobTitle,
+
+            @NotNull(message = "A customer is required") Long customerId,
+            Boolean active
+    ) {
+    }
+
+    public record UpdateCustomerUserRequest(
+            @NotBlank(message = "Full name is required")
+            @Size(max = 150, message = "Full name must not exceed 150 characters")
+            String fullName,
+
+            @NotBlank(message = "Email is required")
+            @Email(message = "Enter a valid email address")
+            @Size(max = 180, message = "Email must not exceed 180 characters")
+            String email,
+
+            @Size(min = 8, max = 128, message = "Password must contain 8 to 128 characters if provided")
+            String password,
+
+            @Size(max = 80, message = "Job title must not exceed 80 characters")
+            String jobTitle,
+
+            @NotNull(message = "A customer is required") Long customerId,
+            @NotNull(message = "Account status is required") Boolean active
     ) {
     }
 

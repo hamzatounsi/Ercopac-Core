@@ -1,5 +1,7 @@
 package com.ercopac.ercopac_tracker.org_admin.service;
 
+import com.ercopac.ercopac_tracker.admin.domain.Customer;
+import com.ercopac.ercopac_tracker.admin.repository.CustomerRepository;
 import com.ercopac.ercopac_tracker.auth.passwordreset.PasswordResetRequestRepository;
 import com.ercopac.ercopac_tracker.department.domain.Department;
 import com.ercopac.ercopac_tracker.department.repository.DepartmentRepository;
@@ -14,6 +16,7 @@ import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.ResourceType;
 import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
+import com.ercopac.ercopac_tracker.user.UserType;
 import com.ercopac.ercopac_tracker.user.repository.SupplierRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,12 +31,19 @@ import org.mockito.ArgumentCaptor;
 import java.util.Optional;
 import java.util.Set;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 
 @ExtendWith(MockitoExtension.class)
 class OrganisationAdminServiceTest {
@@ -48,6 +58,7 @@ class OrganisationAdminServiceTest {
     @Mock private PasswordResetRequestRepository passwordResetRepository;
     @Mock private RolePermissionRepository permissionRepository;
     @Mock private PasswordEncoder passwordEncoder;
+    @Mock private CustomerRepository customerRepository;
 
     private OrganisationAdminService service;
     private Organisation organisation;
@@ -64,7 +75,8 @@ class OrganisationAdminServiceTest {
                 taskRepository,
                 passwordResetRepository,
                 permissionRepository,
-                passwordEncoder
+                passwordEncoder,
+                customerRepository
         );
 
         organisation = new Organisation();
@@ -171,18 +183,16 @@ class OrganisationAdminServiceTest {
         createOrganisationUser("sales-lead@example.com", "SALES_MANAGER_LEAD");
         createOrganisationUser("sales@example.com", "SALES_MANAGER");
         createOrganisationUser("engineer@example.com", "SYSTEM_ENGINEER");
-        createOrganisationUser("client@example.com", "CLIENT");
 
         ArgumentCaptor<AppUser> users = ArgumentCaptor.forClass(AppUser.class);
-        verify(userRepository, org.mockito.Mockito.times(4)).save(users.capture());
+        verify(userRepository, org.mockito.Mockito.times(3)).save(users.capture());
 
         assertThat(users.getAllValues())
                 .extracting(AppUser::getRoles, AppUser::getOrganisation, AppUser::isActive, AppUser::isInternalUser)
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple(Set.of(Role.SALES_MANAGER_LEAD), organisation, true, false),
                         org.assertj.core.groups.Tuple.tuple(Set.of(Role.SALES_MANAGER), organisation, true, false),
-                        org.assertj.core.groups.Tuple.tuple(Set.of(Role.SYSTEM_ENGINEER), organisation, true, false),
-                        org.assertj.core.groups.Tuple.tuple(Set.of(Role.CLIENT), organisation, true, false)
+                        org.assertj.core.groups.Tuple.tuple(Set.of(Role.SYSTEM_ENGINEER), organisation, true, false)
                 );
     }
 
@@ -319,4 +329,168 @@ class OrganisationAdminServiceTest {
                 true
         ));
     }
+
+    // ---------- Customer users ----------
+
+    @Test
+    void usersPageListsInternalUsersOnlyWithTheirOrganisationName() {
+        AppUser internal = user(21L, Role.EMPLOYEE, true);
+        when(userRepository.searchOrganisationUsers(eq(10L), any(), any(), any(), any(), eq(UserType.INTERNAL), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(internal)));
+
+        OrgAdminDtos.PageResponse<OrgAdminDtos.UserSummary> page = service.getUsers(null, null, null, null, 0, 20, "fullName", "asc");
+
+        assertThat(page.content()).singleElement().satisfies(summary -> {
+            assertThat(summary.userType()).isEqualTo("INTERNAL");
+            assertThat(summary.organisationName()).isEqualTo("TENANT ONE");
+            assertThat(summary.customerId()).isNull();
+        });
+    }
+
+    @Test
+    void customerUsersPageListsCustomerUsersOnly() {
+        Customer acme = customer(7L, organisation, true);
+        AppUser client = customerUser(31L, acme);
+        when(userRepository.searchOrganisationUsers(eq(10L), any(), isNull(), isNull(), any(), eq(UserType.CUSTOMER), eq(7L), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(client)));
+
+        OrgAdminDtos.PageResponse<OrgAdminDtos.UserSummary> page = service.getCustomerUsers(null, 7L, null, 0, 20, "fullName", "asc");
+
+        assertThat(page.content()).singleElement().satisfies(summary -> {
+            assertThat(summary.userType()).isEqualTo("CUSTOMER");
+            assertThat(summary.customerId()).isEqualTo(7L);
+            assertThat(summary.customerName()).isEqualTo("ACME");
+            assertThat(summary.roles()).containsExactly("CLIENT");
+        });
+    }
+
+    @Test
+    void createsCustomerUserWithClientRoleOnlyAndNoResourceProfile() {
+        Customer acme = customer(7L, organisation, true);
+        when(customerRepository.findByIdAndOrganisation_Id(7L, 10L)).thenReturn(Optional.of(acme));
+        when(passwordEncoder.encode("temporary-password")).thenReturn("encoded-password");
+        when(userRepository.save(any(AppUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrgAdminDtos.UserSummary summary = service.createCustomerUser(new OrgAdminDtos.CreateCustomerUserRequest(
+                "Jane Buyer", "Jane@Acme.test", "temporary-password", "Buyer", 7L, true));
+
+        ArgumentCaptor<AppUser> captor = ArgumentCaptor.forClass(AppUser.class);
+        verify(userRepository).save(captor.capture());
+        AppUser saved = captor.getValue();
+        assertThat(saved.getUserType()).isEqualTo(UserType.CUSTOMER);
+        assertThat(saved.getCustomer()).isSameAs(acme);
+        assertThat(saved.getRoles()).containsExactly(Role.CLIENT);
+        assertThat(saved.getOrganisation()).isSameAs(organisation);
+        assertThat(saved.isInternalUser()).isFalse();
+        assertThat(saved.getDepartment()).isNull();
+        assertThat(saved.getResourceType()).isNull();
+        assertThat(saved.getEmployeeCode()).isNull();
+        assertThat(saved.getEmail()).isEqualTo("jane@acme.test");
+        assertThat(summary.customerName()).isEqualTo("ACME");
+    }
+
+    @Test
+    void customerUserRequiresACustomer() {
+        assertThatThrownBy(() -> service.createCustomerUser(new OrgAdminDtos.CreateCustomerUserRequest(
+                "Jane Buyer", "jane@acme.test", "temporary-password", null, null, true)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("customer is required");
+        verify(userRepository, never()).save(any(AppUser.class));
+    }
+
+    @Test
+    void customerUserCannotUseACustomerOfAnotherOrganisation() {
+        when(customerRepository.findByIdAndOrganisation_Id(70L, 10L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createCustomerUser(new OrgAdminDtos.CreateCustomerUserRequest(
+                "Jane Buyer", "jane@acme.test", "temporary-password", null, 70L, true)))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getStatusCode().value()).isEqualTo(404));
+        verify(userRepository, never()).save(any(AppUser.class));
+    }
+
+    @Test
+    void customerUserCannotBeLinkedToAnInactiveCustomer() {
+        when(customerRepository.findByIdAndOrganisation_Id(7L, 10L)).thenReturn(Optional.of(customer(7L, organisation, false)));
+
+        assertThatThrownBy(() -> service.createCustomerUser(new OrgAdminDtos.CreateCustomerUserRequest(
+                "Jane Buyer", "jane@acme.test", "temporary-password", null, 7L, true)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("inactive");
+    }
+
+    @Test
+    void internalUsersCannotBeCreatedWithTheClientRole() {
+        assertThatThrownBy(() -> createOrganisationUser("client@example.com", "CLIENT"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Customer Users");
+        verify(userRepository, never()).save(any(AppUser.class));
+    }
+
+    @Test
+    void internalUserCannotGainTheClientRole() {
+        AppUser target = user(21L, Role.EMPLOYEE, true);
+        when(userRepository.findByIdAndOrganisation_Id(21L, 10L)).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service.updateUser(21L, new OrgAdminDtos.UpdateUserRequest(
+                "Employee", "employee@example.com", Set.of("EMPLOYEE", "CLIENT"), null, null, null, null, true)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void usersEndpointCannotEditACustomerUser() {
+        AppUser client = customerUser(31L, customer(7L, organisation, true));
+        when(userRepository.findByIdAndOrganisation_Id(31L, 10L)).thenReturn(Optional.of(client));
+
+        assertThatThrownBy(() -> service.updateUser(31L, new OrgAdminDtos.UpdateUserRequest(
+                "Jane Buyer", "jane@acme.test", Set.of("EMPLOYEE"), null, null, null, null, true)))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getStatusCode().value()).isEqualTo(404));
+    }
+
+    @Test
+    void customerUsersEndpointCannotEditAnInternalUser() {
+        when(userRepository.findByIdAndOrganisation_Id(21L, 10L)).thenReturn(Optional.of(user(21L, Role.EMPLOYEE, true)));
+
+        assertThatThrownBy(() -> service.updateCustomerUser(21L, new OrgAdminDtos.UpdateCustomerUserRequest(
+                "Employee", "employee@example.com", null, null, 7L, true)))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getStatusCode().value()).isEqualTo(404));
+    }
+
+    @Test
+    void customerUserCanMoveToAnotherCustomerOfTheOrganisation() {
+        Customer acme = customer(7L, organisation, true);
+        Customer stark = customer(8L, organisation, true);
+        AppUser client = customerUser(31L, acme);
+        when(userRepository.findByIdAndOrganisation_Id(31L, 10L)).thenReturn(Optional.of(client));
+        when(customerRepository.findByIdAndOrganisation_Id(8L, 10L)).thenReturn(Optional.of(stark));
+        when(userRepository.save(client)).thenReturn(client);
+
+        OrgAdminDtos.UserSummary summary = service.updateCustomerUser(31L, new OrgAdminDtos.UpdateCustomerUserRequest(
+                "Jane Buyer", "jane@acme.test", null, "Lead buyer", 8L, true));
+
+        assertThat(client.getCustomer()).isSameAs(stark);
+        assertThat(client.getRoles()).containsExactly(Role.CLIENT);
+        assertThat(summary.customerId()).isEqualTo(8L);
+    }
+
+    private Customer customer(Long id, Organisation owner, boolean active) {
+        Customer customer = new Customer();
+        ReflectionTestUtils.setField(customer, "id", id);
+        customer.setOrganisation(owner);
+        customer.setName("Acme");
+        customer.setCustomerCode("CUST-" + id);
+        customer.setActive(active);
+        return customer;
+    }
+
+    private AppUser customerUser(Long id, Customer customer) {
+        AppUser client = user(id, Role.CLIENT, true);
+        client.setUserType(UserType.CUSTOMER);
+        client.setCustomer(customer);
+        client.setInternalUser(false);
+        return client;
+    }
+
 }

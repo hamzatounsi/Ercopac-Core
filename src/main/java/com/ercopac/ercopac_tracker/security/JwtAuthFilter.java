@@ -28,6 +28,15 @@ import java.time.Instant;
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
+    /**
+     * The only API paths a CUSTOMER account (Ticketing portal) may call: Ticketing, its websocket,
+     * the shared notifications bell, its own account settings and the auth endpoints. Everything
+     * else is refused with 403 whatever the roles say.
+     */
+    static final List<String> CUSTOMER_ALLOWED_PREFIXES = List.of(
+            "/api/tickets/", "/ws/tickets/", "/api/notifications/", "/api/users/me/", "/api/auth/"
+    );
+
     private final JwtService jwtService;
     private final UserRepository userRepository;
 
@@ -105,6 +114,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 details.put("organisationId", organisationId);
                 details.put("roles", user.getRoles().stream().map(Enum::name).sorted().toList());
 
+                details.put("userType", user.getUserType().name());
+
+                if (user.isCustomerUser() && !isCustomerAllowedPath(request.getServletPath())) {
+                    sendForbidden(response, "Customer accounts can only use the Ticketing app.");
+                    return;
+                }
+
                 authToken.setDetails(details);
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
@@ -149,6 +165,30 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         return user.getOrganisation() == null
                 || (user.getOrganisation().isActive()
                 && user.getOrganisation().getStatus() != OrganisationStatus.SUSPENDED);
+    }
+
+    static boolean isCustomerAllowedPath(String path) {
+        if (path == null) {
+            return false;
+        }
+        String normalised = path.endsWith("/") ? path : path + "/";
+        return CUSTOMER_ALLOWED_PREFIXES.stream().anyMatch(normalised::startsWith);
+    }
+
+    private void sendForbidden(HttpServletResponse response, String message) throws IOException {
+        SecurityContextHolder.clearContext();
+
+        if (!response.isCommitted()) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+            response.getWriter().write(
+                    "{\"timestamp\":\"" + Instant.now()
+                            + "\",\"status\":403,\"error\":\"Forbidden\",\"code\":\"FORBIDDEN\",\"message\":\""
+                            + message + "\"}"
+            );
+            response.getWriter().flush();
+        }
     }
 
     private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {

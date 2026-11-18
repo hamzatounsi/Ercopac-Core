@@ -1,5 +1,6 @@
 package com.ercopac.ercopac_tracker.user;
 
+import com.ercopac.ercopac_tracker.admin.domain.Customer;
 import com.ercopac.ercopac_tracker.department.domain.Department;
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.projectum.actions.domain.ActionAssignee;
@@ -107,6 +108,16 @@ public class AppUser {
     @Column(name = "preferred_theme", length = 10)
     private String preferredTheme;
 
+    // INTERNAL staff or CUSTOMER account (Ticketing only). The column default fills existing rows (UserTypeMigration).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "user_type", nullable = false, length = 20, columnDefinition = "varchar(20) default 'INTERNAL'")
+    private UserType userType = UserType.INTERNAL;
+
+    // Customer a CUSTOMER account belongs to; always null for INTERNAL accounts
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id")
+    private Customer customer;
+
     public AppUser() {}
 
     public AppUser(String fullName, String email, String passwordHash, Role role) {
@@ -205,4 +216,9 @@ public class AppUser {
     public void setPreferredLanguage(String preferredLanguage) { this.preferredLanguage = preferredLanguage; }
     public String getPreferredTheme() { return preferredTheme; }
     public void setPreferredTheme(String preferredTheme) { this.preferredTheme = preferredTheme; }
+    public UserType getUserType() { return userType == null ? UserType.INTERNAL : userType; }
+    public void setUserType(UserType userType) { this.userType = userType == null ? UserType.INTERNAL : userType; }
+    public boolean isCustomerUser() { return getUserType() == UserType.CUSTOMER; }
+    public Customer getCustomer() { return customer; }
+    public void setCustomer(Customer customer) { this.customer = customer; }
 }

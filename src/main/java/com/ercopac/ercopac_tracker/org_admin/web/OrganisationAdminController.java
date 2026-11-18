@@ -100,6 +100,50 @@ public class OrganisationAdminController {
         return service.updateUserStatus(id, request.active());
     }
 
+    // Customer users: CUSTOMER accounts (CLIENT role, one customer) of the organisation, Ticketing only
+
+    @GetMapping("/customer-users")
+    public OrgAdminDtos.PageResponse<OrgAdminDtos.UserSummary> customerUsers(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long customerId,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "fullName") String sort,
+            @RequestParam(defaultValue = "asc") String direction
+    ) {
+        return service.getCustomerUsers(search, customerId, active, page, size, sort, direction);
+    }
+
+    @PostMapping("/customer-users")
+    public ResponseEntity<OrgAdminDtos.UserSummary> createCustomerUser(
+            @Valid @RequestBody OrgAdminDtos.CreateCustomerUserRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createCustomerUser(request));
+    }
+
+    @PutMapping("/customer-users/{id}")
+    public OrgAdminDtos.UserSummary updateCustomerUser(
+            @PathVariable Long id,
+            @Valid @RequestBody OrgAdminDtos.UpdateCustomerUserRequest request
+    ) {
+        return service.updateCustomerUser(id, request);
+    }
+
+    @PatchMapping("/customer-users/{id}/status")
+    public OrgAdminDtos.UserSummary updateCustomerUserStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody OrgAdminDtos.UpdateUserStatusRequest request
+    ) {
+        return service.updateCustomerUserStatus(id, request.active());
+    }
+
+    @DeleteMapping("/customer-users/{id}")
+    public ResponseEntity<Void> deleteCustomerUser(@PathVariable Long id) {
+        service.deleteCustomerUser(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/departments")
     public List<OrgAdminDtos.DepartmentSummary> departments() {
         return service.getDepartments();

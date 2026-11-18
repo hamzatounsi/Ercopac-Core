@@ -70,6 +70,20 @@ public class JwtService {
             String organisationName,
             long expirationMillis
     ) {
+        return generateToken(userId, username, fullName, roles, organisationId, organisationName, null, expirationMillis);
+    }
+
+    /** userType (INTERNAL / CUSTOMER) lets the frontend hide everything but Ticketing for customer users. */
+    public String generateToken(
+            Long userId,
+            String username,
+            String fullName,
+            Collection<String> roles,
+            Long organisationId,
+            String organisationName,
+            String userType,
+            long expirationMillis
+    ) {
         long safeExpirationMillis = Math.max(60_000L, expirationMillis);
         return Jwts.builder()
                 .setSubject(username)
@@ -78,6 +92,7 @@ public class JwtService {
                 .claim("roles", roles == null ? List.of() : roles.stream().distinct().toList())
                 .claim("organisationId", organisationId)
                 .claim("organisationName", organisationName)
+                .claim("userType", userType == null ? "INTERNAL" : userType)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + safeExpirationMillis))
                 .signWith(Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8)), SignatureAlgorithm.HS256)
