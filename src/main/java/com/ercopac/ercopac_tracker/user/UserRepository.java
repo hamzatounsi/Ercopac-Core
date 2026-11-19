@@ -102,6 +102,7 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
         select distinct u
         from AppUser u
         left join u.department1 d
+        left join u.customer cu
         where u.organisation.id = :organisationId
           and (
                 :searchPattern is null or
@@ -112,6 +113,8 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
           and (:departmentId is null or d.id = :departmentId)
           and (:role is null or :role member of u.roles)
           and (:active is null or u.active = :active)
+          and u.userType = :userType
+          and (:customerId is null or cu.id = :customerId)
     """)
     Page<AppUser> searchOrganisationUsers(
             @Param("organisationId") Long organisationId,
@@ -119,6 +122,8 @@ public interface UserRepository extends JpaRepository<AppUser, Long> {
             @Param("departmentId") Long departmentId,
             @Param("role") Role role,
             @Param("active") Boolean active,
+            @Param("userType") UserType userType,
+            @Param("customerId") Long customerId,
             Pageable pageable
     );
 

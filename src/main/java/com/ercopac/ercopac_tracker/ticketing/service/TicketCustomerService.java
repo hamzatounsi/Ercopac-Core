@@ -204,8 +204,12 @@ public class TicketCustomerService {
  }
 
  // ---------- used by TicketService ----------
- /** Customer a CLIENT account belongs to, through the customer contact linked to it. */
- public Customer customerOfClient(AppUser client) { return client == null ? null : contacts.findFirstByPortalUser_Id(client.getId()).map(TicketCustomerContact::getCustomer).orElse(null); }
+ /** Customer a CLIENT account belongs to: its own customer (CUSTOMER account), else the customer contact linked to it (legacy portal account). */
+ public Customer customerOfClient(AppUser client) {
+  if (client == null) return null;
+  if (client.isCustomerUser() && client.getCustomer() != null) return client.getCustomer();
+  return contacts.findFirstByPortalUser_Id(client.getId()).map(TicketCustomerContact::getCustomer).orElse(null);
+ }
  public Customer requireCustomer(Long id, Long org) { return customer(id, org); }
  public Project requireProject(Long projectId, Customer customer, Long org) {
   Project p = projects.findByIdAndOrganisationId(projectId, org).orElseThrow(() -> bad("Project not found."));

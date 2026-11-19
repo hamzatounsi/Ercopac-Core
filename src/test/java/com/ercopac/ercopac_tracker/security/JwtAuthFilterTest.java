@@ -4,6 +4,10 @@ import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import com.ercopac.ercopac_tracker.user.Role;
 import com.ercopac.ercopac_tracker.user.UserRepository;
+import com.ercopac.ercopac_tracker.user.UserType;
+import com.ercopac.ercopac_tracker.admin.domain.Customer;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -97,6 +101,73 @@ class JwtAuthFilterTest {
                 .extracting(authority -> authority.getAuthority())
                 .contains("PROJECT_MANAGER", "ROLE_PROJECT_MANAGER", "SALES_MANAGER", "ROLE_SALES_MANAGER");
         verify(chain).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    // ---------- Customer users: Ticketing only ----------
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "/api/projects", "/api/gm/dashboard", "/api/org-admin/users", "/api/crm/organisations/10/opportunities",
+            "/api/tasks/5", "/api/planning/projects", "/api/employee/tasks", "/api/admin/customers", "/api/customers/options",
+            "/api/ticketsx", "/api/department-dashboard"
+    })
+    void customerUserIsRefusedOutsideTicketing(String path) throws Exception {
+        stubCustomerUser();
+
+        MockHttpServletResponse response = filter("token", path);
+
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentAsString()).contains("Ticketing");
+        verify(chain, never()).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "/api/tickets", "/api/tickets/12", "/api/tickets/chat/contacts", "/api/notifications",
+            "/api/notifications/read-all", "/api/users/me/preferences", "/api/auth/me"
+    })
+    void customerUserReachesTicketingAndOwnAccount(String path) throws Exception {
+        stubCustomerUser();
+
+        MockHttpServletResponse response = filter("token", path);
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        verify(chain).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void internalClientAccountIsNotRestrictedByTheFilter() throws Exception {
+        AppUser user = currentUser(7L, 10L, Role.CLIENT, true);
+        when(jwtService.extractUsername("token")).thenReturn("admin@example.com");
+        when(jwtService.extractUserId("token")).thenReturn(7L);
+        when(jwtService.extractRoles("token")).thenReturn(List.of("CLIENT"));
+        when(jwtService.extractOrganisationId("token")).thenReturn(10L);
+        when(userRepository.findByEmail1("admin@example.com")).thenReturn(Optional.of(user));
+
+        // URL rules in SecurityConfig still refuse CLIENT on /api/projects; the filter only adds the CUSTOMER rule
+        assertThat(filter("token", "/api/projects").getStatus()).isEqualTo(200);
+    }
+
+    private void stubCustomerUser() {
+        AppUser user = currentUser(7L, 10L, Role.CLIENT, true);
+        Customer customer = new Customer();
+        ReflectionTestUtils.setField(customer, "id", 3L);
+        user.setUserType(UserType.CUSTOMER);
+        user.setCustomer(customer);
+        when(jwtService.extractUsername("token")).thenReturn("admin@example.com");
+        when(jwtService.extractUserId("token")).thenReturn(7L);
+        when(jwtService.extractRoles("token")).thenReturn(List.of("CLIENT"));
+        when(jwtService.extractOrganisationId("token")).thenReturn(10L);
+        when(userRepository.findByEmail1("admin@example.com")).thenReturn(Optional.of(user));
+    }
+
+    private MockHttpServletResponse filter(String token, String path) throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", path);
+        request.setServletPath(path);
+        request.addHeader("Authorization", "Bearer " + token);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(request, response, chain);
+        return response;
     }
 
     private MockHttpServletResponse filter(String token) throws Exception {

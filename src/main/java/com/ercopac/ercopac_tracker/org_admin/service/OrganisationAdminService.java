@@ -1,5 +1,7 @@
 package com.ercopac.ercopac_tracker.org_admin.service;
 
+import com.ercopac.ercopac_tracker.admin.domain.Customer;
+import com.ercopac.ercopac_tracker.admin.repository.CustomerRepository;
 import com.ercopac.ercopac_tracker.auth.passwordreset.PasswordResetRequestRepository;
 import com.ercopac.ercopac_tracker.auth.passwordreset.PasswordResetStatus;
 import com.ercopac.ercopac_tracker.department.domain.Department;
@@ -20,6 +22,7 @@ import com.ercopac.ercopac_tracker.user.ResourceTypeRepository;
 import com.ercopac.ercopac_tracker.user.domain.Supplier;
 import com.ercopac.ercopac_tracker.user.repository.SupplierRepository;
 import com.ercopac.ercopac_tracker.user.UserRepository;
+import com.ercopac.ercopac_tracker.user.UserType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -56,6 +59,9 @@ public class OrganisationAdminService {
             Role.H24,
             Role.H24_LEAD
     );
+
+    private static final String CLIENT_IS_CUSTOMER_USER =
+            "Client accounts are customer users: create them on the Customer Users page.";
 
     private static final Set<String> SESSION_TIMEOUTS = Set.of(
             "1_HOUR", "4_HOURS", "8_HOURS", "12_HOURS"
@@ -95,6 +101,7 @@ public class OrganisationAdminService {
     private final PasswordResetRequestRepository passwordResetRepository;
     private final RolePermissionRepository permissionRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CustomerRepository customerRepository;
 
     public OrganisationAdminService(
             SecurityUtils securityUtils,
@@ -106,7 +113,8 @@ public class OrganisationAdminService {
             ProjectTaskRepository taskRepository,
             PasswordResetRequestRepository passwordResetRepository,
             RolePermissionRepository permissionRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            CustomerRepository customerRepository
     ) {
         this.securityUtils = securityUtils;
         this.organisationRepository = organisationRepository;
@@ -118,6 +126,7 @@ public class OrganisationAdminService {
         this.passwordResetRepository = passwordResetRepository;
         this.permissionRepository = permissionRepository;
         this.passwordEncoder = passwordEncoder;
+        this.customerRepository = customerRepository;
     }
 
     @Transactional(readOnly = true)
@@ -243,6 +252,8 @@ public class OrganisationAdminService {
                 departmentId,
                 parsedRole,
                 active,
+                UserType.INTERNAL,
+                null,
                 pageRequest
         ).map(this::toUserSummary);
 
@@ -259,6 +270,9 @@ public class OrganisationAdminService {
         Organisation organisation = currentOrganisation();
         Long organisationId = organisation.getId();
         Set<Role> roles = parseAssignableRoles(request.roles());
+        if (roles.contains(Role.CLIENT)) {
+            throw new IllegalArgumentException(CLIENT_IS_CUSTOMER_USER);
+        }
         boolean active = request.active() == null || request.active();
         String email = request.email().trim().toLowerCase(Locale.ROOT);
 
@@ -291,9 +305,16 @@ public class OrganisationAdminService {
         Organisation organisation = currentOrganisation();
         Long organisationId = organisation.getId();
         AppUser user = findOrganisationUser(id, organisationId);
+        if (user.isCustomerUser()) {
+            throw notFound("User not found.");
+        }
         Set<Role> targetRoles = request.roles() != null && !request.roles().isEmpty()
                 ? parseAssignableRoles(request.roles())
                 : parseAssignableRoles(request.role() == null ? null : Set.of(request.role()));
+        // Legacy CLIENT accounts keep their role; new client accounts are customer users
+        if (targetRoles.contains(Role.CLIENT) && !user.hasRole(Role.CLIENT)) {
+            throw new IllegalArgumentException(CLIENT_IS_CUSTOMER_USER);
+        }
         boolean targetActive = request.active();
         String email = request.email().trim().toLowerCase(Locale.ROOT);
 
@@ -358,6 +379,158 @@ public class OrganisationAdminService {
         user.setActive(active);
         return toUserSummary(userRepository.save(user));
     }
+    // ---------- Customer users (Customer Users page) ----------
+
+    @Transactional(readOnly = true)
+    public OrgAdminDtos.PageResponse<OrgAdminDtos.UserSummary> getCustomerUsers(
+            String search,
+            Long customerId,
+            Boolean active,
+            int page,
+            int size,
+            String sort,
+            String direction
+    ) {
+        Long organisationId = currentOrganisationId();
+        String sortProperty = USER_SORTS.getOrDefault(sort, "fullName");
+        if ("department.label".equals(sortProperty)) {
+            sortProperty = "fullName";
+        }
+        Sort.Direction sortDirection = "desc".equalsIgnoreCase(direction)
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+        PageRequest pageRequest = PageRequest.of(
+                Math.max(0, page),
+                Math.max(5, Math.min(100, size)),
+                Sort.by(sortDirection, sortProperty)
+        );
+
+        Page<OrgAdminDtos.UserSummary> result = userRepository.searchOrganisationUsers(
+                organisationId,
+                searchPattern(search),
+                null,
+                null,
+                active,
+                UserType.CUSTOMER,
+                customerId,
+                pageRequest
+        ).map(this::toUserSummary);
+
+        return new OrgAdminDtos.PageResponse<>(
+                result.getContent(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements(),
+                result.getTotalPages()
+        );
+    }
+
+    public OrgAdminDtos.UserSummary createCustomerUser(OrgAdminDtos.CreateCustomerUserRequest request) {
+        Organisation organisation = currentOrganisation();
+        Long organisationId = organisation.getId();
+        Customer customer = findAssignableCustomer(request.customerId(), organisationId, null);
+        boolean active = request.active() == null || request.active();
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw conflict("Email address already exists.");
+        }
+        validatePassword(request.password(), organisation);
+        if (active) {
+            enforceActiveCapacity(organisation);
+            enforceRoleCapacity(organisation, Role.CLIENT);
+        }
+
+        AppUser user = new AppUser();
+        user.setFullName(request.fullName().trim());
+        user.setEmail(email);
+        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setOrganisation(organisation);
+        user.setJobTitle(normalize(request.jobTitle()));
+        user.setActive(active);
+        applyCustomerProfile(user, customer);
+
+        return toUserSummary(userRepository.save(user));
+    }
+
+    public OrgAdminDtos.UserSummary updateCustomerUser(Long id, OrgAdminDtos.UpdateCustomerUserRequest request) {
+        Organisation organisation = currentOrganisation();
+        Long organisationId = organisation.getId();
+        AppUser user = findCustomerUser(id, organisationId);
+        Customer customer = findAssignableCustomer(request.customerId(), organisationId, user.getCustomer());
+        boolean targetActive = request.active();
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+
+        userRepository.findByEmailIgnoreCase(email)
+                .filter(existing -> !existing.getId().equals(user.getId()))
+                .ifPresent(existing -> {
+                    throw conflict("Email address already exists.");
+                });
+        if (targetActive && !user.isActive()) {
+            enforceActiveCapacity(organisation);
+            enforceRoleCapacity(organisation, Role.CLIENT);
+        }
+
+        user.setFullName(request.fullName().trim());
+        user.setEmail(email);
+        user.setJobTitle(normalize(request.jobTitle()));
+        user.setActive(targetActive);
+        if (request.password() != null && !request.password().isBlank()) {
+            validatePassword(request.password(), organisation);
+            user.setPasswordHash(passwordEncoder.encode(request.password()));
+        }
+        applyCustomerProfile(user, customer);
+
+        return toUserSummary(userRepository.save(user));
+    }
+
+    public OrgAdminDtos.UserSummary updateCustomerUserStatus(Long id, boolean active) {
+        findCustomerUser(id, currentOrganisationId());
+        return updateUserStatus(id, active);
+    }
+
+    public void deleteCustomerUser(Long id) {
+        findCustomerUser(id, currentOrganisationId());
+        deleteUser(id);
+    }
+
+    /** A CUSTOMER account: exactly the CLIENT role, one customer, no resource profile. */
+    private void applyCustomerProfile(AppUser user, Customer customer) {
+        user.setUserType(UserType.CUSTOMER);
+        user.setCustomer(customer);
+        user.setRoles(Set.of(Role.CLIENT));
+        user.setInternalUser(false);
+        user.setEmployeeCode(null);
+        user.setDepartment(null);
+        user.setDepartmentCode(null);
+        user.setResourceType(null);
+    }
+
+    /**
+     * Customer of the current organisation for a customer user. An inactive customer can only be
+     * kept by a user already linked to it, not newly assigned.
+     */
+    private Customer findAssignableCustomer(Long customerId, Long organisationId, Customer currentCustomer) {
+        if (customerId == null) {
+            throw new IllegalArgumentException("A customer is required for a customer user.");
+        }
+        Customer customer = customerRepository.findByIdAndOrganisation_Id(customerId, organisationId)
+                .orElseThrow(() -> notFound("Customer not found."));
+        boolean keepsCurrent = currentCustomer != null && currentCustomer.getId().equals(customer.getId());
+        if (!customer.isActive() && !keepsCurrent) {
+            throw new IllegalArgumentException("This customer is inactive.");
+        }
+        return customer;
+    }
+
+    private AppUser findCustomerUser(Long userId, Long organisationId) {
+        AppUser user = findOrganisationUser(userId, organisationId);
+        if (!user.isCustomerUser()) {
+            throw notFound("Customer user not found.");
+        }
+        return user;
+    }
+
     public void deleteUser(Long id) {
         Long organisationId = currentOrganisationId();
         AppUser user = findOrganisationUser(id, organisationId);
@@ -796,7 +969,12 @@ public class OrganisationAdminService {
                 resourceType == null ? null : resourceType.getLabel(),
                 user.getEmployeeCode(),
                 user.getJobTitle(),
-                user.isActive()
+                user.isActive(),
+                user.getUserType().name(),
+                user.getCustomer() == null ? null : user.getCustomer().getId(),
+                user.getCustomer() == null ? null : user.getCustomer().getName(),
+                user.getOrganisation() == null ? null : user.getOrganisation().getId(),
+                user.getOrganisation() == null ? null : user.getOrganisation().getName()
         );
     }
 

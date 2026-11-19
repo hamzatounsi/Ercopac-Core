@@ -133,6 +133,7 @@ public class AuthController {
                 roleNames(user),
                 organisationId,
                 organisationName,
+                user.getUserType().name(),
                 sessionDurationMillis(user)
         );
 

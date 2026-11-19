@@ -39,7 +39,9 @@ public class CustomerUsageService {
                 count("select count(x) from TicketCustomerSite x where x.customer.id = :customerId", customerId)
                 + count("select count(x) from TicketCustomerContact x where x.customer.id = :customerId", customerId)
                 + count("select count(x) from TicketCustomerEquipment x where x.customer.id = :customerId", customerId)
-                + count("select count(x) from TicketCustomerProject x where x.customer.id = :customerId", customerId);
+                + count("select count(x) from TicketCustomerProject x where x.customer.id = :customerId", customerId)
+                // Customer user accounts (Ticketing portal) of the customer
+                + count("select count(u) from AppUser u where u.customer.id = :customerId", customerId);
 
         return new CustomerReferences(projects, tickets, ticketingRecords);
     }
