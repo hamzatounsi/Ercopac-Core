@@ -15,11 +15,17 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy Backend
-    if: github.ref == 'refs/heads/staging'
-    runs-on: ubuntu-latest
-    environment: staging
-
+      - name: Test staging SSH
+        env:
+          HOST: ${{ secrets.STAGING_HOST }}
+          USER: ${{ secrets.STAGING_USER }}
+          PORT: ${{ secrets.STAGING_SSH_PORT }}
+        run: |
+          ssh -i ~/.ssh/staging_key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -p "$PORT" \
+            "$USER@$HOST" "echo SSH_OK"
     steps:
       - name: Configure staging SSH
         env:
