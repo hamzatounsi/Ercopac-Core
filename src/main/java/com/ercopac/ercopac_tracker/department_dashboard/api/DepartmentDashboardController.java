@@ -3,6 +3,7 @@ package com.ercopac.ercopac_tracker.department_dashboard.api;
 import com.ercopac.ercopac_tracker.department.service.DepartmentHolidayService;
 import com.ercopac.ercopac_tracker.department_dashboard.dto.DepartmentContextDto;
 import com.ercopac.ercopac_tracker.department_dashboard.dto.DepartmentHolidayDto;
+import com.ercopac.ercopac_tracker.department_dashboard.dto.DepartmentLoadResponseDto;
 import com.ercopac.ercopac_tracker.department_dashboard.dto.DepartmentManagerDto;
 import com.ercopac.ercopac_tracker.department_dashboard.dto.DepartmentSupplierDto;
 import com.ercopac.ercopac_tracker.department_dashboard.dto.MyDepartmentResponseDto;
@@ -10,6 +11,8 @@ import com.ercopac.ercopac_tracker.department_dashboard.request.CreateDepartment
 import com.ercopac.ercopac_tracker.department_dashboard.request.DepartmentOverviewQuery;
 import com.ercopac.ercopac_tracker.department_dashboard.service.DepartmentDashboardService;
 import com.ercopac.ercopac_tracker.department_dashboard.service.DepartmentWorkspaceService;
+
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -49,7 +52,17 @@ public class DepartmentDashboardController {
     public DepartmentContextDto getContext(@RequestParam(required = false) Long managerId) {
         return departmentWorkspaceService.getContext(managerId);
     }
-
+    @GetMapping("/load")
+    // (ou l'annotation de sécurité que tu utilises)
+    public ResponseEntity<DepartmentLoadResponseDto> getDepartmentLoad(
+            @RequestParam(required = false) Long managerId,
+            @RequestParam(defaultValue = "week") String timelineView,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "16") int span) {
+        
+        DepartmentOverviewQuery query = new DepartmentOverviewQuery(managerId, timelineView, offset, span);
+        return ResponseEntity.ok(departmentDashboardService.getLoad(query));
+    }
     /** Active suppliers linked to the department's resource types. */
     @GetMapping("/suppliers")
     @PreAuthorize(DEPARTMENT_READ)

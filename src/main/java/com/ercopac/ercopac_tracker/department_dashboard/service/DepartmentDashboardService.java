@@ -78,7 +78,145 @@ public class DepartmentDashboardService {
                 .map(this::toManagerDto)
                 .toList();
     }
+    // 1. Endpoint public
+    public DepartmentLoadResponseDto getLoad(DepartmentOverviewQuery query) {
+        String timelineView = normalizeTimelineView(query.timelineView());
+        int offset = query.offset();
+        int span = query.span() <= 0 ? ("day".equals(timelineView) ? 28 : 16) : query.span();
 
+        Long currentOrgId = getCurrentOrganisationIdOrThrow();
+        AppUser manager = resolveManager(query.managerId());
+        String departmentCode = manager.getDepartmentCode();
+
+        List<DepartmentMemberDto> realMembers = userRepository
+                .findByOrganisation_IdAndDepartmentCodeOrderByFullNameAsc(currentOrgId, departmentCode)
+                .stream().filter(AppUser::isActive).filter(AppUser::requiresResourceProfile)
+                .map(this::toMemberDto).toList();
+
+        List<Long> realMemberIds = realMembers.stream().map(DepartmentMemberDto::id).filter(Objects::nonNull).toList();
+        List<DepartmentHolidayDto> holidays = departmentHolidayService.findHolidays(currentOrgId, realMemberIds);
+        List<DepartmentTimelineColumnDto> timelineColumns = buildTimelineColumns(timelineView, offset, span);
+        
+        List<ProjectTask> departmentTasks = loadDepartmentTasks(currentOrgId, departmentCode, realMemberIds);
+        Map<Long, List<TaskResourceAssignment>> assignmentsByTaskId = loadAssignmentsByTaskId(departmentTasks);
+
+        List<LoadRowDto> rows = buildLoadRows(realMembers, holidays, departmentTasks, assignmentsByTaskId, timelineColumns, timelineView);
+
+        int totalPeak = rows.stream().mapToInt(LoadRowDto::peakResourcesNeeded).sum();
+        int totalHours = rows.stream().mapToInt(LoadRowDto::totalHours).sum();
+
+        return new DepartmentLoadResponseDto(departmentCode, timelineView, timelineColumns, rows, totalPeak, totalHours);
+    }
+
+    // 2. Méthode de calcul (à ajouter dans la classe)
+    private List<LoadRowDto> buildLoadRows(
+            List<DepartmentMemberDto> members,
+            List<DepartmentHolidayDto> holidays,
+            List<ProjectTask> tasks,
+            Map<Long, List<TaskResourceAssignment>> assignmentsByTaskId,
+            List<DepartmentTimelineColumnDto> timelineColumns,
+            String timelineView) {
+
+        // A. Capacité de base par type de ressource (nombre de membres réels)
+        Map<String, Long> capacityByType = members.stream()
+                .filter(m -> m.id() != null && m.id() > 0)
+                .collect(Collectors.groupingBy(DepartmentMemberDto::resourceType, Collectors.counting()));
+
+        // B. Réduction de capacité due aux congés (simplifié : -1 par semaine de congé)
+        Map<String, Map<String, Integer>> holidayReductions = new HashMap<>();
+        for (DepartmentHolidayDto holiday : holidays) {
+            members.stream().filter(m -> m.id().equals(holiday.memberId())).findFirst().ifPresent(member -> {
+                for (DepartmentTimelineColumnDto col : timelineColumns) {
+                    if (!holiday.toDate().isBefore(col.startDate()) && !holiday.fromDate().isAfter(col.endDate())) {
+                        holidayReductions.computeIfAbsent(member.resourceType(), k -> new HashMap<>())
+                                .merge(col.startDate().toString(), 1, Integer::sum);
+                    }
+                }
+            });
+        }
+
+        // C. Calcul de la charge (Needed & Hours)
+        Map<String, Map<String, Set<Long>>> usersByTypeAndWeek = new HashMap<>();
+        Map<String, Map<String, Integer>> hoursByTypeAndWeek = new HashMap<>();
+
+        for (ProjectTask task : tasks) {
+            LocalDate start = firstNonNullDate(task.getActualStart(), task.getPlannedStart(), task.getBaselineStart());
+            LocalDate end = firstNonNullDate(task.getActualEnd(), task.getPlannedEnd(), task.getBaselineEnd());
+            if (start == null || end == null) continue;
+
+            String resourceType = task.getResourceTypeCode() != null ? task.getResourceTypeCode() : "UNKNOWN";
+            int taskHours = task.getPlannedHours() != null ? task.getPlannedHours().intValue() : 0;
+            int durationDays = task.getDurationDays() != null ? task.getDurationDays() : 1;
+
+            List<TaskResourceAssignment> assignments = assignmentsByTaskId.getOrDefault(task.getId(), Collections.emptyList());
+
+            for (DepartmentTimelineColumnDto col : timelineColumns) {
+                if (end.isBefore(col.startDate()) || start.isAfter(col.endDate())) continue;
+
+                String weekKey = col.startDate().toString();
+                
+                Set<Long> usersThisWeek = usersByTypeAndWeek
+                        .computeIfAbsent(resourceType, k -> new HashMap<>())
+                        .computeIfAbsent(weekKey, k -> new HashSet<>());
+                if (task.getAssignedUser() != null) {
+                    usersThisWeek.add(task.getAssignedUser().getId());
+                }
+                for (TaskResourceAssignment a : assignments) {
+                    if (a.getAssignedUserId() != null) {
+                        usersThisWeek.add(a.getAssignedUserId());
+                    }
+                }
+                // 👇 Si aucune affectation explicite, la tâche consomme au moins 1 ressource du type
+                if (usersThisWeek.isEmpty() && taskHours > 0) {
+                    usersThisWeek.add(-task.getId()); // ID négatif = tâche non affectée
+                }
+
+                // Répartir les heures au prorata des jours d'overlap (beaucoup plus précis que ta version actuelle)
+                long overlapDays = java.time.temporal.ChronoUnit.DAYS.between(
+                        start.isAfter(col.startDate()) ? start : col.startDate(),
+                        end.isBefore(col.endDate()) ? end.plusDays(1) : col.endDate().plusDays(1)
+                );
+                int workdaysInOverlap = (int) Math.max(1, overlapDays); 
+                int proratedHours = (taskHours * workdaysInOverlap) / Math.max(1, durationDays);
+
+                hoursByTypeAndWeek.computeIfAbsent(resourceType, k -> new HashMap<>())
+                        .merge(weekKey, proratedHours, Integer::sum);
+            }
+        }
+
+        // D. Assemblage des lignes
+        List<LoadRowDto> rows = new ArrayList<>();
+        Set<String> allTypes = new LinkedHashSet<>(capacityByType.keySet());
+        allTypes.addAll(usersByTypeAndWeek.keySet());
+
+        for (String type : allTypes) {
+            int baseCapacity = capacityByType.getOrDefault(type, 0L).intValue();
+            int peakNeeded = 0;
+            int totalHours = 0;
+            List<LoadCellDto> cells = new ArrayList<>();
+
+            for (DepartmentTimelineColumnDto col : timelineColumns) {
+                String weekKey = col.startDate().toString();
+                int needed = usersByTypeAndWeek.getOrDefault(type, new HashMap<>())
+                        .getOrDefault(weekKey, Collections.emptySet()).size();
+                int hours = hoursByTypeAndWeek.getOrDefault(type, new HashMap<>()).getOrDefault(weekKey, 0);
+                
+                int reduction = holidayReductions.getOrDefault(type, new HashMap<>()).getOrDefault(weekKey, 0);
+                int effectiveCapacity = Math.max(0, baseCapacity - reduction);
+
+                String status = "OK";
+                if (needed == effectiveCapacity && effectiveCapacity > 0) status = "AT_CAPACITY";
+                else if (needed > effectiveCapacity) status = "OVER_CAPACITY";
+
+                peakNeeded = Math.max(peakNeeded, needed);
+                totalHours += hours;
+
+                cells.add(new LoadCellDto(col.label(), col.startDate(), col.endDate(), needed, hours, effectiveCapacity, status));
+            }
+            rows.add(new LoadRowDto(type, type, peakNeeded, totalHours, cells));
+        }
+        return rows;
+    }
     public MyDepartmentResponseDto getOverview(DepartmentOverviewQuery query) {
         String timelineView = normalizeTimelineView(query.timelineView());
         int offset = query.offset();
