@@ -1,5 +1,5 @@
 package com.ercopac.ercopac_tracker.ticketing.dto;
-import com.ercopac.ercopac_tracker.ticketing.domain.*; import jakarta.validation.constraints.*; import java.time.Instant; import java.util.List;
+import com.ercopac.ercopac_tracker.ticketing.domain.*; import com.fasterxml.jackson.annotation.JsonProperty; import jakarta.validation.constraints.*; import java.time.Instant; import java.util.List;
 public final class TicketDtos { private TicketDtos(){}
  // customerId / projectId link Projectum records; when they are null, customerName and projectName/Number/Year are a manual entry
  // category: code of a system (TicketCategory) or custom category of Ticket settings
@@ -20,30 +20,34 @@ public final class TicketDtos { private TicketDtos(){}
   public TicketContextRequest(Long customerId,String site,Long projectId,Long equipmentId,Long version){this(customerId,site,projectId,equipmentId,version,null,null,null,null);}
  }
  public record ProblemStatementRequest(@Size(max=4000) String problem,@Size(max=4000) String cause,@Size(max=4000) String solution,@NotNull Long version){}
- public record StatusRequest(TicketStatus status,@NotNull Long version,Long customStatusId){ public StatusRequest(TicketStatus status,Long version){this(status,version,null);} } public record PriorityRequest(@NotNull TicketPriority priority,@NotNull Long version){} public record AssignmentRequest(Long assigneeId,@NotNull Long version){} public record MessageRequest(@NotBlank @Size(max=8000) String message,boolean internalNote){}
+ // statusId: an active status of the ticket organisation (Ticketing settings > Statuses); status: its code, accepted when statusId is missing
+ public record StatusRequest(Long statusId,@Size(max=40) String status,@NotNull Long version){} public record PriorityRequest(@NotNull TicketPriority priority,@NotNull Long version){} public record AssignmentRequest(Long assigneeId,@NotNull Long version){} public record MessageRequest(@NotBlank @Size(max=8000) String message,boolean internalNote){}
  public record Ref(Long id,String name){}
- public record UserSummary(Long id,String fullName,String email,String role){} public record TicketSummary(Long id,String ticketNumber,String subject,Long organisationId,String organisationName,TicketStatus status,TicketPriority priority,String category,String site,UserSummary client,UserSummary assignee,Instant createdAt,Instant updatedAt,Instant lastMessageAt,long unreadCount,Ref customer,Ref project,UserSummary l2Technician,boolean overdue,String projectNumber,Integer projectYear,CustomStatusRef customStatus){}
- public record CustomStatusRef(Long id,String label,String color){}
+ public record UserSummary(Long id,String fullName,String email,String role){} public record TicketSummary(Long id,String ticketNumber,String subject,Long organisationId,String organisationName,String status,TicketPriority priority,String category,String site,UserSummary client,UserSummary assignee,Instant createdAt,Instant updatedAt,Instant lastMessageAt,long unreadCount,Ref customer,Ref project,UserSummary l2Technician,boolean overdue,String projectNumber,Integer projectYear,StatusRef statusRef){}
+ // Status of a ticket as shown on badges; status (on TicketSummary) is its code
+ public record StatusRef(Long id,String code,String name,String color,@JsonProperty("isClosed") boolean isClosed){}
  public record ContactPerson(String name,String email,String phone){}
  public record TicketDetails(TicketSummary ticket,String description,TicketOrigin origin,int escalationLevel,Instant resolvedAt,Instant closedAt,Long version,List<TicketMessageDto> messages,List<TicketActivityDto> activities,List<TicketAttachmentDto> attachments,boolean canManage,boolean canClose,EquipmentDto equipment,String problem,String cause,String solution,String clientLanguage,ContactPerson contact,boolean canDelete){}
  public record TicketMessageDto(Long id,String message,String messageType,boolean internalNote,UserSummary sender,Instant createdAt,Instant editedAt){} public record TicketActivityDto(Long id,TicketActivityType activityType,String previousValue,String newValue,String description,UserSummary actor,Instant createdAt,String field){} public record TicketAttachmentDto(Long id,String originalFileName,String contentType,long fileSize,UserSummary uploadedBy,Instant uploadedAt){}
- public record TicketStatistics(long open,long inProgress,long escalated,long resolved,long closed,long createdToday,long overdue,double averageResolutionHours,List<Breakdown> byPriority,List<Breakdown> byCategory){}
- // Client portal dashboard: statistics of the current client's own tickets only (filtered in the backend)
- public record ClientDashboard(long total,long open,long inProgress,long resolved,long closed,long overdue,double averageResolutionHours,List<Breakdown> byStatus,List<Breakdown> byPriority,List<Breakdown> byCategory,List<Breakdown> byMonth,List<TicketSummary> recent){} public record Breakdown(String key,long count){}
+ // open: tickets in a status that is not closed; byStatus: count per status code
+ public record TicketStatistics(long open,long closed,long createdToday,long overdue,double averageResolutionHours,List<Breakdown> byStatus){}
+ // Client portal dashboard (open: default status, inProgress: other non-closed statuses, closed: closed statuses): statistics of the current client's own tickets only (filtered in the backend)
+ public record ClientDashboard(long total,long open,long inProgress,long closed,long overdue,double averageResolutionHours,List<Breakdown> byStatus,List<Breakdown> byPriority,List<Breakdown> byCategory,List<Breakdown> byMonth,List<TicketSummary> recent){} public record Breakdown(String key,long count){}
  // Live chat (one-to-one, not linked to a ticket)
  public record ChatContact(Long id,String fullName,String email,String kind,boolean staff){} public record ChatConversation(ChatContact contact,String lastMessage,Instant lastMessageAt,boolean lastFromMe,long unread){} public record ChatMessageDto(Long id,Long senderId,Long recipientId,String message,Instant createdAt,Instant readAt){} public record ChatMessageRequest(@NotBlank @Size(max=4000) String message){}
 
- // Settings: status wording, priority SLA targets, support team profiles and the current user's language
- public record StatusSettingDto(@NotNull TicketStatus status,@NotBlank @Size(max=60) String label,@Size(max=300) String description,@NotBlank @Size(max=20) String color){}
+ // Settings: ticket statuses, priority SLA targets, support team profiles and the current user's language
+ public record TicketStatusDto(Long id,String code,String name,String description,String color,int displayOrder,@JsonProperty("isDefault") boolean isDefault,@JsonProperty("isClosed") boolean isClosed,boolean active,long ticketCount){}
+ // code: optional on creation (generated from the name), ignored on update; null flags keep the current value
+ public record TicketStatusRequest(@NotBlank @Size(max=60) String name,@Size(max=40) String code,@Size(max=300) String description,@NotBlank @Size(max=20) String color,@Min(0) @Max(10000) Integer displayOrder,@JsonProperty("isDefault") Boolean isDefault,@JsonProperty("isClosed") Boolean isClosed,Boolean active){}
+ public record StatusOrderRequest(@NotNull @Size(max=500) List<Long> ids){}
  public record PrioritySettingDto(@NotNull TicketPriority priority,@NotBlank @Size(max=60) String label,@Min(1) @Max(100000) int firstResponseMinutes,@Min(1) @Max(10000) int resolutionHours){}
- public record TicketSettingsDto(List<StatusSettingDto> statuses,List<PrioritySettingDto> priorities,List<CategoryDto> categories,List<CustomStatusDto> customStatuses){
-  public TicketSettingsDto(List<StatusSettingDto> statuses,List<PrioritySettingDto> priorities){this(statuses,priorities,List.of(),List.of());}
+ public record TicketSettingsDto(List<TicketStatusDto> statuses,List<PrioritySettingDto> priorities,List<CategoryDto> categories){
+  public TicketSettingsDto(List<TicketStatusDto> statuses,List<PrioritySettingDto> priorities){this(statuses,priorities,List.of());}
  }
- // Categories (system ones cannot be deleted) and custom statuses mapped onto a lifecycle status
+ // Categories (system ones cannot be deleted)
  public record CategoryDto(Long id,String code,String label,boolean system,boolean active,long ticketCount){}
  public record CategoryRequest(@Size(max=32) String code,@NotBlank @Size(max=80) String label,Boolean active){}
- public record CustomStatusDto(Long id,String code,String label,String description,String color,TicketStatus baseStatus,long ticketCount){}
- public record CustomStatusRequest(@Size(max=40) String code,@NotBlank @Size(max=60) String label,@Size(max=300) String description,@NotBlank @Size(max=20) String color,@NotNull TicketStatus baseStatus){}
  // Support account created from Ticketing settings: kind H24 (agent), H24_LEAD (lead) or TECHNICIAN (employee flagged as L2 technician)
  public record AccountRequest(@NotBlank @Size(max=150) String fullName,@NotBlank @Email @Size(max=180) String email,@NotBlank @Size(min=8,max=128) String password,@NotBlank String kind,Long departmentId,Long resourceTypeId,@Size(max=120) String specialization){}
  public record AgentDto(Long id,String fullName,String email,List<String> roles,boolean lead,boolean l2Technician,String specialization,String preferredLanguage,long openTickets,long l2OpenTickets,boolean active,Long resourceTypeId,String resourceType,boolean h24,boolean ticketingAccess){}
@@ -83,6 +87,6 @@ public final class TicketDtos { private TicketDtos(){}
  public record CustomerStat(Long id,String name,long total,long open,Double slaCompliance){}
  public record AgentStat(Long id,String name,String specialization,boolean l2Technician,long assigned,long open,long resolved,long escalated,Double avgFirstResponseHours,Double slaCompliance){}
  // Tickets matching an equipment filter (listed under the charts when one is set)
- public record EquipmentTicket(Long id,String ticketNumber,String subject,String customer,String site,String equipment,String serialNumber,TicketStatus status){}
+ public record EquipmentTicket(Long id,String ticketNumber,String subject,String customer,String site,String equipment,String serialNumber,String status){}
  public record TicketAnalytics(Instant from,Instant to,String bucket,AnalyticsTotals totals,List<Breakdown> byStatus,List<Breakdown> byPriority,List<CustomerStat> byCustomer,List<Breakdown> timeline,List<AgentStat> agents,List<EquipmentTicket> equipmentTickets){}
 }

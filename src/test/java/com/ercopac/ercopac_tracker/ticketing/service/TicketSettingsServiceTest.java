@@ -33,7 +33,6 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class TicketSettingsServiceTest {
 
-    @Mock TicketStatusSettingRepository statusSettings;
     @Mock TicketPrioritySettingRepository prioritySettings;
     @Mock TicketAgentProfileRepository profiles;
     @Mock TicketCustomerContactRepository contacts;
@@ -48,7 +47,7 @@ class TicketSettingsServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TicketSettingsService(statusSettings, prioritySettings, profiles, contacts, tickets, users, organisations, security, resourceTypes);
+        service = new TicketSettingsService(prioritySettings, profiles, contacts, tickets, users, organisations, security, resourceTypes);
         organisation = new Organisation();
         organisation.setId(5L);
     }
@@ -97,25 +96,6 @@ class TicketSettingsServiceTest {
     }
 
     @Test
-    void agentsCannotChangeSettings() {
-        signIn(user(2L, Role.H24));
-
-        assertThatThrownBy(() -> service.saveStatuses(List.of(new StatusSettingDto(TicketStatus.OPEN, "Open", null, "blue"))))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Only support leads");
-    }
-
-    @Test
-    void statusColourMustBeKnown() {
-        signIn(user(1L, Role.SALES_MANAGER_LEAD));
-        when(statusSettings.findByOrganisation_Id(5L)).thenReturn(List.of());
-
-        assertThatThrownBy(() -> service.saveStatuses(List.of(new StatusSettingDto(TicketStatus.OPEN, "Open", null, "#ff0000"))))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Unknown colour");
-    }
-
-    @Test
     void leadFlagsSupportUserAsL2Technician() {
         signIn(user(1L, Role.H24_LEAD));
         AppUser agent = user(7L, Role.H24);
@@ -153,7 +133,7 @@ class TicketSettingsServiceTest {
         byType.setResourceType(resourceType(30L, "H24", "H24 Support"));
         when(users.findActiveByRolesOrResourceTypeCode(5L, TicketSettingsService.H24_ROLES, "H24")).thenReturn(List.of(byRole, byType));
         when(profiles.findByOrganisation_Id(5L)).thenReturn(List.of());
-        when(tickets.findActive(any(), any())).thenReturn(List.of());
+        when(tickets.findActive(any())).thenReturn(List.of());
 
         List<AgentDto> result = service.agents("H24");
 
@@ -200,7 +180,7 @@ class TicketSettingsServiceTest {
         engineer.setResourceType(resourceType(3L, "PLC", "PLC Engineer"));
         when(users.findByIdAndOrganisation_Id(20L, 5L)).thenReturn(Optional.of(engineer));
         when(profiles.findByUser_Id(20L)).thenReturn(Optional.empty());
-        when(tickets.findActive(any(), any())).thenReturn(List.of());
+        when(tickets.findActive(any())).thenReturn(List.of());
         when(profiles.save(any())).thenAnswer(inv -> {
             TicketAgentProfile p = inv.getArgument(0);
             when(profiles.findByUser_Id(20L)).thenReturn(Optional.of(p));

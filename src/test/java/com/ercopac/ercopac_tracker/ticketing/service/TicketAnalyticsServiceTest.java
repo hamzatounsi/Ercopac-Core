@@ -36,6 +36,7 @@ class TicketAnalyticsServiceTest {
     @Mock TicketMessageRepository messages;
     @Mock UserRepository users;
     @Mock TicketSettingsService settings;
+    @Mock TicketStatusService statuses;
 
     private TicketAnalyticsService service;
     private Organisation organisation;
@@ -43,7 +44,7 @@ class TicketAnalyticsServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TicketAnalyticsService(tickets, messages, users, settings);
+        service = new TicketAnalyticsService(tickets, messages, users, settings, statuses);
         organisation = new Organisation();
         organisation.setId(5L);
         lead = new AppUser("Lead", "lead@example.test", "x", Role.H24_LEAD);
@@ -53,9 +54,9 @@ class TicketAnalyticsServiceTest {
 
     @Test
     void ticketMeetsSlaOnlyWhenResponseAndResolutionAreWithinTargets() {
-        Ticket fast = ticket(1L, TicketStatus.RESOLVED, NOW.minus(10, ChronoUnit.HOURS));
+        Ticket fast = ticket(1L, TicketStatusFixtures.standard("RESOLVED"), NOW.minus(10, ChronoUnit.HOURS));
         fast.setResolvedAt(fast.getCreatedAt().plus(5, ChronoUnit.HOURS));
-        Ticket slowResponse = ticket(2L, TicketStatus.RESOLVED, NOW.minus(10, ChronoUnit.HOURS));
+        Ticket slowResponse = ticket(2L, TicketStatusFixtures.standard("RESOLVED"), NOW.minus(10, ChronoUnit.HOURS));
         slowResponse.setResolvedAt(slowResponse.getCreatedAt().plus(5, ChronoUnit.HOURS));
 
         var met = TicketAnalyticsService.measure(fast, fast.getCreatedAt().plus(30, ChronoUnit.MINUTES), HIGH, NOW);
@@ -70,8 +71,8 @@ class TicketAnalyticsServiceTest {
 
     @Test
     void unfinishedTicketIsMeasuredUpToNowAndFlaggedOverdue() {
-        Ticket old = ticket(3L, TicketStatus.IN_PROGRESS, NOW.minus(9, ChronoUnit.HOURS));
-        Ticket fresh = ticket(4L, TicketStatus.OPEN, NOW.minus(10, ChronoUnit.MINUTES));
+        Ticket old = ticket(3L, TicketStatusFixtures.standard("IN_PROGRESS"), NOW.minus(9, ChronoUnit.HOURS));
+        Ticket fresh = ticket(4L, TicketStatusFixtures.standard("OPEN"), NOW.minus(10, ChronoUnit.MINUTES));
 
         var oldMeasure = TicketAnalyticsService.measure(old, old.getCreatedAt().plus(20, ChronoUnit.MINUTES), HIGH, NOW);
         var freshMeasure = TicketAnalyticsService.measure(fresh, null, HIGH, NOW);
@@ -84,12 +85,12 @@ class TicketAnalyticsServiceTest {
     }
 
     @Test
-    void cancelledTicketsAreLeftOutOfSlaFigures() {
-        Ticket cancelled = ticket(5L, TicketStatus.CANCELLED, NOW.minus(30, ChronoUnit.HOURS));
-        var measure = TicketAnalyticsService.measure(cancelled, null, HIGH, NOW);
+    void ticketsInAClosedStatusAreDoneAndNeverOverdue() {
+        Ticket custom = ticket(5L, TicketStatusFixtures.status(42L, "DONE_ON_SITE", true, false), NOW.minus(30, ChronoUnit.HOURS));
+        var measure = TicketAnalyticsService.measure(custom, null, HIGH, NOW);
 
-        assertThat(measure.slaMet()).isNull();
-        assertThat(TicketAnalyticsService.compliance(List.of(measure))).isNull();
+        assertThat(measure.done()).isTrue();
+        assertThat(measure.resolved()).isTrue();
         assertThat(measure.overdue()).isFalse();
     }
 
@@ -101,11 +102,11 @@ class TicketAnalyticsServiceTest {
         AppUser agent = new AppUser("Agent", "agent@example.test", "x", Role.H24);
         ReflectionTestUtils.setField(agent, "id", 2L);
 
-        Ticket resolved = ticket(10L, TicketStatus.RESOLVED, NOW.minus(2, ChronoUnit.DAYS));
+        Ticket resolved = ticket(10L, TicketStatusFixtures.standard("RESOLVED"), NOW.minus(2, ChronoUnit.DAYS));
         resolved.setResolvedAt(resolved.getCreatedAt().plus(2, ChronoUnit.HOURS));
         resolved.setCustomer(acme);
         resolved.setAssignedSalesManager(agent);
-        Ticket open = ticket(11L, TicketStatus.OPEN, NOW.minus(1, ChronoUnit.HOURS));
+        Ticket open = ticket(11L, TicketStatusFixtures.standard("OPEN"), NOW.minus(1, ChronoUnit.HOURS));
 
         Instant from = NOW.minus(7, ChronoUnit.DAYS);
         when(settings.requireLead()).thenReturn(lead);

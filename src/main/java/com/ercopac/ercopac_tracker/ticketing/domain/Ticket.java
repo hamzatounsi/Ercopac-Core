@@ -10,7 +10,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "tickets", indexes = {
-        @Index(name = "idx_ticket_org_status", columnList = "organisation_id,status"),
+        @Index(name = "idx_ticket_org_status_id", columnList = "organisation_id,status_id"),
         @Index(name = "idx_ticket_assignee", columnList = "assigned_sales_manager_id"),
         @Index(name = "idx_ticket_number", columnList = "ticket_number", unique = true)
 })
@@ -27,11 +27,11 @@ public class Ticket {
     // (TicketCategorySetting.code). Same varchar column as before, existing values are kept.
     @Column(nullable = false, length = 32) private String category;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private TicketPriority priority;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private TicketStatus status = TicketStatus.OPEN;
+    // Status of Ticketing settings > Statuses (organisation scoped). Filled for older tickets by TicketStatusMigration;
+    // the legacy varchar column "status" is left in place, no longer mapped.
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "status_id") private TicketStatus status;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private TicketOrigin origin = TicketOrigin.WEB;
     @Column(length = 160) private String site;
-    // Optional organisation-defined status shown instead of the lifecycle status; status always holds its base lifecycle status
-    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "custom_status_id") private TicketCustomStatus customStatus;
     // Contact person at the customer for this ticket
     @Column(name = "contact_name", length = 150) private String contactName;
     @Column(name = "contact_email", length = 180) private String contactEmail;
@@ -65,9 +65,10 @@ public class Ticket {
     public Organisation getOrganisation(){return organisation;} public void setOrganisation(Organisation v){organisation=v;} public AppUser getCreatedByUser(){return createdByUser;} public void setCreatedByUser(AppUser v){createdByUser=v;}
     public AppUser getClientUser(){return clientUser;} public void setClientUser(AppUser v){clientUser=v;} public AppUser getAssignedSalesManager(){return assignedSalesManager;} public void setAssignedSalesManager(AppUser v){assignedSalesManager=v;}
     public String getCategory(){return category;} public void setCategory(String v){category=v;} public void setCategory(TicketCategory v){category=v==null?null:v.name();}
-    public TicketCustomStatus getCustomStatus(){return customStatus;} public void setCustomStatus(TicketCustomStatus v){customStatus=v;}
     public String getContactName(){return contactName;} public void setContactName(String v){contactName=v;} public String getContactEmail(){return contactEmail;} public void setContactEmail(String v){contactEmail=v;} public String getContactPhone(){return contactPhone;} public void setContactPhone(String v){contactPhone=v;} public TicketPriority getPriority(){return priority;} public void setPriority(TicketPriority v){priority=v;}
-    public TicketStatus getStatus(){return status;} public void setStatus(TicketStatus v){status=v;if(customStatus!=null&&customStatus.getBaseStatus()!=v)customStatus=null;} public TicketOrigin getOrigin(){return origin;} public void setOrigin(TicketOrigin v){origin=v;}
+    public TicketStatus getStatus(){return status;} public void setStatus(TicketStatus v){status=v;}
+    /** Finished work: the status is flagged closed in Ticketing settings. */
+    public boolean isClosed(){return status!=null&&status.isClosed();} public TicketOrigin getOrigin(){return origin;} public void setOrigin(TicketOrigin v){origin=v;}
     public String getSite(){return site;} public void setSite(String v){site=v;} public int getEscalationLevel(){return escalationLevel;} public void setEscalationLevel(int v){escalationLevel=v;}
     public Instant getCreatedAt(){return createdAt;} public Instant getUpdatedAt(){return updatedAt;} public Instant getResolvedAt(){return resolvedAt;} public void setResolvedAt(Instant v){resolvedAt=v;} public Instant getClosedAt(){return closedAt;} public void setClosedAt(Instant v){closedAt=v;} public Instant getLastMessageAt(){return lastMessageAt;} public void setLastMessageAt(Instant v){lastMessageAt=v;} public Long getVersion(){return version;}
     public Customer getCustomer(){return customer;} public void setCustomer(Customer v){customer=v;} public Project getProject(){return project;} public void setProject(Project v){project=v;}

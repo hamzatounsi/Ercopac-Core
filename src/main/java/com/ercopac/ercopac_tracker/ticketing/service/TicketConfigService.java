@@ -11,20 +11,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import java.util.*;
 
-// Ticket categories and custom statuses of the current organisation (Ticketing settings).
+// Ticket categories of the current organisation (Ticketing settings); statuses are managed by TicketStatusService.
 // System categories are the TicketCategory values: always available, renamable, never deletable.
-// Custom statuses map onto a system lifecycle status (TicketStatus); the system statuses cannot be deleted.
 // Everyone in the Ticketing app reads them; only support leads change them.
 @Service @Transactional
 public class TicketConfigService {
- private static final Set<String> COLORS = Set.of("blue", "amber", "red", "green", "gray", "purple", "coral");
  private static final Map<TicketCategory, String> SYSTEM_LABELS = new EnumMap<>(Map.of(
    TicketCategory.SOFTWARE, "Software", TicketCategory.ACCESS, "Access", TicketCategory.PERFORMANCE, "Performance", TicketCategory.BILLING, "Billing",
    TicketCategory.DATA, "Data", TicketCategory.INTEGRATION, "Integration", TicketCategory.FEATURE_REQUEST, "Feature request", TicketCategory.OTHER, "Other"));
 
- private final TicketCategorySettingRepository categories; private final TicketCustomStatusRepository customStatuses; private final TicketRepository tickets; private final TicketSettingsService settings;
- public TicketConfigService(TicketCategorySettingRepository categories, TicketCustomStatusRepository customStatuses, TicketRepository tickets, TicketSettingsService settings) {
-  this.categories = categories; this.customStatuses = customStatuses; this.tickets = tickets; this.settings = settings;
+ private final TicketCategorySettingRepository categories; private final TicketRepository tickets; private final TicketSettingsService settings;
+ public TicketConfigService(TicketCategorySettingRepository categories, TicketRepository tickets, TicketSettingsService settings) {
+  this.categories = categories; this.tickets = tickets; this.settings = settings;
  }
 
  // ---------- categories ----------
@@ -56,7 +54,7 @@ public class TicketConfigService {
   if (c.isSystem()) throw conflict("System categories cannot be deleted.");
   long used = tickets.countByOrganisation_IdAndCategory(org, c.getCode());
   if (used > 0) {
-   if (reassignTo == null || reassignTo.isBlank()) throw conflict("This category is used by " + used + " ticket(s); choose a category to move them to.");
+   if (reassignTo == null || reassignTo.isBlank()) throw conflict("Cannot delete: " + used + " ticket(s) use this category. Choose a category to move them to.");
    String target = requireCategory(org, reassignTo);
    if (target.equalsIgnoreCase(c.getCode())) throw bad("Choose another category to move the tickets to.");
    tickets.reassignCategory(org, c.getCode(), target);
@@ -72,36 +70,6 @@ public class TicketConfigService {
   return categories.findByOrganisation_IdAndCodeIgnoreCase(org, c).filter(TicketCategorySetting::isActive).map(TicketCategorySetting::getCode)
     .orElseThrow(() -> bad("Unknown ticket category " + c + "."));
  }
-
- // ---------- custom statuses ----------
- public List<CustomStatusDto> customStatuses() { Long org = orgOf(settings.current()); return customStatuses.findByOrganisation_IdOrderByLabelAsc(org).stream().map(this::status).toList(); }
-
- public CustomStatusDto createStatus(CustomStatusRequest r) {
-  AppUser lead = settings.requireLead(); Long org = lead.getOrganisation().getId();
-  String code = code(r.code() == null || r.code().isBlank() ? r.label() : r.code(), 40);
-  if (isSystemStatus(code) || customStatuses.existsByOrganisation_IdAndCodeIgnoreCase(org, code)) throw conflict("Status code " + code + " is already used.");
-  TicketCustomStatus s = new TicketCustomStatus(); s.setOrganisation(lead.getOrganisation()); s.setCode(code); apply(s, r);
-  return status(customStatuses.save(s));
- }
-
- public CustomStatusDto updateStatus(Long id, CustomStatusRequest r) {
-  Long org = orgOf(settings.requireLead());
-  TicketCustomStatus s = customStatuses.findByIdAndOrganisation_Id(id, org).orElseThrow(() -> notFound("Status not found."));
-  // The lifecycle status of a status in use cannot change: tickets would silently change lifecycle state
-  if (r.baseStatus() != s.getBaseStatus() && tickets.countByCustomStatus_Id(id) > 0) throw conflict("This status is used by tickets; its lifecycle status cannot change.");
-  apply(s, r);
-  return status(customStatuses.save(s));
- }
-
- /** Deletes a custom status; tickets using it fall back to its lifecycle (system) status, which they already have. */
- public void deleteStatus(Long id) {
-  Long org = orgOf(settings.requireLead());
-  TicketCustomStatus s = customStatuses.findByIdAndOrganisation_Id(id, org).orElseThrow(() -> notFound("Status not found."));
-  tickets.clearCustomStatus(s.getId());
-  customStatuses.delete(s);
- }
-
- public TicketCustomStatus requireStatus(Long id, Long org) { return customStatuses.findByIdAndOrganisation_Id(id, org).orElseThrow(() -> bad("Unknown ticket status.")); }
 
  // ---------- helpers ----------
  /** Stored categories of the organisation; the system ones are created on first use so they can be renamed. */
@@ -120,14 +88,7 @@ public class TicketConfigService {
  }
  private Organisation organisation(Long org) { AppUser a = settings.current(); return a.getOrganisation(); }
  private CategoryDto category(TicketCategorySetting c, Long org) { return new CategoryDto(c.getId(), c.getCode(), c.getLabel(), c.isSystem(), c.isActive(), tickets.countByOrganisation_IdAndCategory(org, c.getCode())); }
- private CustomStatusDto status(TicketCustomStatus s) { return new CustomStatusDto(s.getId(), s.getCode(), s.getLabel(), s.getDescription(), s.getColor(), s.getBaseStatus(), s.getId() == null ? 0 : tickets.countByCustomStatus_Id(s.getId())); }
- private void apply(TicketCustomStatus s, CustomStatusRequest r) {
-  if (!COLORS.contains(r.color())) throw bad("Unknown colour " + r.color() + ".");
-  if (r.baseStatus() == null) throw bad("Choose the lifecycle status this status belongs to.");
-  s.setLabel(r.label().trim()); s.setDescription(r.description() == null || r.description().isBlank() ? null : r.description().trim()); s.setColor(r.color()); s.setBaseStatus(r.baseStatus());
- }
  private static boolean isSystemCode(String code) { return Arrays.stream(TicketCategory.values()).anyMatch(s -> s.name().equalsIgnoreCase(code)); }
- private static boolean isSystemStatus(String code) { return Arrays.stream(TicketStatus.values()).anyMatch(s -> s.name().equalsIgnoreCase(code)); }
  private static String code(String value, int max) {
   String c = Objects.toString(value, "").trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "_").replaceAll("^_+|_+$", "");
   if (c.isEmpty()) throw bad("A code is required.");

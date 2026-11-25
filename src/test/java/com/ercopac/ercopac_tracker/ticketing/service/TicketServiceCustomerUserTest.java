@@ -53,6 +53,7 @@ class TicketServiceCustomerUserTest {
     @Mock TicketAnalyticsService analytics;
     @Mock TicketNotifier notifier;
     @Mock TicketConfigService config;
+    @Mock TicketStatusService statuses;
 
     private TicketService service;
     private Organisation organisation;
@@ -65,7 +66,7 @@ class TicketServiceCustomerUserTest {
     @BeforeEach
     void setUp() {
         service = new TicketService(tickets, messages, activities, attachments, readStates, users, organisations, security,
-                new TicketStatusTransitionValidator(), customers, settings, analytics, notifier, config);
+                statuses, customers, settings, analytics, notifier, config);
         organisation = new Organisation();
         organisation.setId(5L);
         acme = customer(7L, "Acme");
@@ -91,12 +92,12 @@ class TicketServiceCustomerUserTest {
     @Test
     void customerUserListIsScopedToItsCustomer() {
         signIn(acmeUser);
-        when(tickets.search(anyBoolean(), any(), anyBoolean(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+        when(tickets.search(anyBoolean(), any(), anyBoolean(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(Pageable.class))).thenReturn(Page.empty());
 
-        service.list(null, null, null, null, null, null, null, null, null, null, PageRequest.of(0, 20));
+        service.list(null, null, null, null, null, null, null, null, null, null, null, PageRequest.of(0, 20));
 
-        verify(tickets).search(eq(false), eq(5L), eq(true), eq(20L), eq(7L), any(), any(), any(), any(), any(), any(), any(),
+        verify(tickets).search(eq(false), eq(5L), eq(true), eq(20L), eq(7L), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(Pageable.class));
     }
 
@@ -105,25 +106,25 @@ class TicketServiceCustomerUserTest {
         AppUser legacy = user(30L, Role.CLIENT);
         when(users.findById(30L)).thenReturn(Optional.of(legacy));
         signIn(legacy);
-        when(tickets.search(anyBoolean(), any(), anyBoolean(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+        when(tickets.search(anyBoolean(), any(), anyBoolean(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(Pageable.class))).thenReturn(Page.empty());
 
-        service.list(null, null, null, null, null, null, null, null, null, null, PageRequest.of(0, 20));
+        service.list(null, null, null, null, null, null, null, null, null, null, null, PageRequest.of(0, 20));
 
-        verify(tickets).search(eq(false), eq(5L), eq(true), eq(30L), isNull(), any(), any(), any(), any(), any(), any(), any(),
+        verify(tickets).search(eq(false), eq(5L), eq(true), eq(30L), isNull(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(Pageable.class));
     }
 
     @Test
     void staffVisibilityIsUnchangedAndCanFilterByCustomer() {
         signIn(agent);
-        when(tickets.search(anyBoolean(), any(), anyBoolean(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+        when(tickets.search(anyBoolean(), any(), anyBoolean(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(Pageable.class))).thenReturn(Page.empty());
 
-        service.list(null, null, null, null, null, null, null, 8L, null, null, PageRequest.of(0, 20));
+        service.list(null, null, null, null, null, null, null, null, 8L, null, null, PageRequest.of(0, 20));
 
         // platform, organisation, clientOnly, user, scopeCustomerId, search..creatorId (6), customerId filter, from, to, page
-        verify(tickets).search(eq(false), eq(5L), eq(false), eq(1L), isNull(), any(), any(), any(), any(), any(), any(),
+        verify(tickets).search(eq(false), eq(5L), eq(false), eq(1L), isNull(), any(), any(), any(), any(), any(), any(), any(),
                 eq(8L), any(), any(), any(Pageable.class));
     }
 
@@ -211,7 +212,7 @@ class TicketServiceCustomerUserTest {
         t.setOrganisation(organisation);
         t.setCreatedByUser(creator);
         t.setCustomer(customer);
-        t.setStatus(TicketStatus.OPEN);
+        t.setStatus(TicketStatusFixtures.standard("OPEN"));
         t.setPriority(TicketPriority.MEDIUM);
         t.setCategory(TicketCategory.SOFTWARE);
         return t;

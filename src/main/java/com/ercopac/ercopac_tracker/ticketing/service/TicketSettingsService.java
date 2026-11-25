@@ -24,21 +24,9 @@ public class TicketSettingsService {
  // Projectum resource type code of the H24 support team (Resources > Resource types)
  public static final String H24_RESOURCE_TYPE = "H24";
  public static final Set<String> LANGUAGES = Set.of("en", "fr", "es", "it", "pt", "de", "ar");
- private static final Set<String> COLORS = Set.of("blue", "amber", "red", "green", "gray", "purple", "coral");
- static final List<TicketStatus> DONE = List.of(TicketStatus.RESOLVED, TicketStatus.CLOSED, TicketStatus.CANCELLED);
 
- private static final Map<TicketStatus, StatusSettingDto> DEFAULT_STATUSES = new LinkedHashMap<>();
  private static final Map<TicketPriority, PrioritySettingDto> DEFAULT_PRIORITIES = new LinkedHashMap<>();
  static {
-  for (StatusSettingDto s : List.of(
-    new StatusSettingDto(TicketStatus.OPEN, "Open", "Waiting for a first response; the response SLA is running", "blue"),
-    new StatusSettingDto(TicketStatus.IN_PROGRESS, "In progress", "An H24 agent is working on a fix", "amber"),
-    new StatusSettingDto(TicketStatus.ESCALATED, "Escalated L2", "Handed over to an L2 technician", "red"),
-    new StatusSettingDto(TicketStatus.RESOLVED, "Resolved", "Solution delivered, waiting for the customer", "green"),
-    new StatusSettingDto(TicketStatus.CLOSED, "Closed", "No further action", "gray"),
-    new StatusSettingDto(TicketStatus.REOPENED, "Reopened", "The customer reported the problem again", "purple"),
-    new StatusSettingDto(TicketStatus.CANCELLED, "Cancelled", "Withdrawn, no action needed", "gray")))
-   DEFAULT_STATUSES.put(s.status(), s);
   for (PrioritySettingDto p : List.of(
     new PrioritySettingDto(TicketPriority.CRITICAL, "Critical", 30, 4),
     new PrioritySettingDto(TicketPriority.HIGH, "High", 60, 8),
@@ -47,26 +35,14 @@ public class TicketSettingsService {
    DEFAULT_PRIORITIES.put(p.priority(), p);
  }
 
- private final TicketStatusSettingRepository statusSettings; private final TicketPrioritySettingRepository prioritySettings; private final TicketAgentProfileRepository profiles;
+ private final TicketPrioritySettingRepository prioritySettings; private final TicketAgentProfileRepository profiles;
  private final TicketCustomerContactRepository contacts; private final TicketRepository tickets; private final UserRepository users; private final OrganisationRepository organisations; private final SecurityUtils security; private final ResourceTypeRepository resourceTypes;
- public TicketSettingsService(TicketStatusSettingRepository statusSettings, TicketPrioritySettingRepository prioritySettings, TicketAgentProfileRepository profiles, TicketCustomerContactRepository contacts, TicketRepository tickets, UserRepository users, OrganisationRepository organisations, SecurityUtils security, ResourceTypeRepository resourceTypes) {
-  this.statusSettings = statusSettings; this.prioritySettings = prioritySettings; this.profiles = profiles; this.contacts = contacts; this.tickets = tickets; this.users = users; this.organisations = organisations; this.security = security; this.resourceTypes = resourceTypes;
+ public TicketSettingsService(TicketPrioritySettingRepository prioritySettings, TicketAgentProfileRepository profiles, TicketCustomerContactRepository contacts, TicketRepository tickets, UserRepository users, OrganisationRepository organisations, SecurityUtils security, ResourceTypeRepository resourceTypes) {
+  this.prioritySettings = prioritySettings; this.profiles = profiles; this.contacts = contacts; this.tickets = tickets; this.users = users; this.organisations = organisations; this.security = security; this.resourceTypes = resourceTypes;
  }
 
- public TicketSettingsDto settings() { Long org = organisationId(); return new TicketSettingsDto(statuses(org), new ArrayList<>(priorities(org).values())); }
-
- public TicketSettingsDto saveStatuses(List<StatusSettingDto> request) {
-  AppUser lead = requireLead(); Long org = lead.getOrganisation().getId();
-  Map<TicketStatus, TicketStatusSetting> saved = statusSettings.findByOrganisation_Id(org).stream().collect(Collectors.toMap(TicketStatusSetting::getStatus, Function.identity()));
-  for (StatusSettingDto dto : request) {
-   if (dto.status() == null || blank(dto.label())) throw bad("Every status needs a label.");
-   if (!COLORS.contains(dto.color())) throw bad("Unknown colour " + dto.color() + ".");
-   TicketStatusSetting s = saved.computeIfAbsent(dto.status(), k -> { TicketStatusSetting n = new TicketStatusSetting(); n.setOrganisation(lead.getOrganisation()); n.setStatus(k); return n; });
-   s.setLabel(dto.label().trim()); s.setDescription(trimToNull(dto.description())); s.setColor(dto.color());
-   statusSettings.save(s);
-  }
-  return settings();
- }
+ /** Priority settings; the statuses and categories are added by the controller (TicketStatusService, TicketConfigService). */
+ public TicketSettingsDto settings() { Long org = organisationId(); return new TicketSettingsDto(List.of(), new ArrayList<>(priorities(org).values())); }
 
  public TicketSettingsDto savePriorities(List<PrioritySettingDto> request) {
   AppUser lead = requireLead(); Long org = lead.getOrganisation().getId();
@@ -89,12 +65,6 @@ public class TicketSettingsService {
   return result;
  }
 
- private List<StatusSettingDto> statuses(Long org) {
-  Map<TicketStatus, StatusSettingDto> result = new LinkedHashMap<>(DEFAULT_STATUSES);
-  for (TicketStatusSetting s : statusSettings.findByOrganisation_Id(org)) result.put(s.getStatus(), new StatusSettingDto(s.getStatus(), s.getLabel(), s.getDescription(), s.getColor()));
-  return new ArrayList<>(result.values());
- }
-
  /** Support staff of the organisation plus the employees flagged as L2 technicians, with their ticketing profile and current load. */
  public List<AgentDto> agents() { return agents(null); }
 
@@ -114,7 +84,7 @@ public class TicketSettingsService {
    byUser.values().stream().filter(TicketAgentProfile::isL2Technician).map(TicketAgentProfile::getUser).filter(AppUser::isActive).forEach(u -> merged.putIfAbsent(u.getId(), u));
    people = merged.values().stream().sorted(Comparator.comparing(u -> Objects.toString(u.getFullName(), ""))).toList();
   }
-  List<Ticket> active = tickets.findActive(org, DONE);
+  List<Ticket> active = tickets.findActive(org);
   return people.stream().distinct().map(u -> agent(u, byUser.get(u.getId()), active)).toList();
  }
 
@@ -125,7 +95,7 @@ public class TicketSettingsService {
   TicketAgentProfile p = profile(user);
   p.setL2Technician(request.l2Technician()); p.setSpecialization(trimToNull(request.specialization())); p.setPreferredLanguage(language(request.preferredLanguage()));
   profiles.save(p);
-  return agent(user, p, tickets.findActive(org, DONE));
+  return agent(user, p, tickets.findActive(org));
  }
 
  /** Users that can be set as L2 technician on a ticket: active support staff or employees flagged in Settings > L2 technicians. */

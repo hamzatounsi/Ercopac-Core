@@ -5,6 +5,7 @@ import com.ercopac.ercopac_tracker.ticketing.service.TicketAccountService;
 import com.ercopac.ercopac_tracker.ticketing.service.TicketAnalyticsService;
 import com.ercopac.ercopac_tracker.ticketing.service.TicketConfigService;
 import com.ercopac.ercopac_tracker.ticketing.service.TicketSettingsService;
+import com.ercopac.ercopac_tracker.ticketing.service.TicketStatusService;
 import com.ercopac.ercopac_tracker.ticketing.service.TicketTranslationService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -13,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.List;
 
-// Ticketing settings (status wording, priority SLA targets, support team) and the performance dashboard.
+// Ticketing settings (statuses, priority SLA targets, support team) and the performance dashboard.
 // Reading the settings is open to every Ticketing user; changes and the dashboard are for support leads.
 @RestController
 @RequestMapping("/api/tickets")
@@ -28,8 +29,10 @@ public class TicketSettingsController {
     private final TicketTranslationService translation;
     private final TicketConfigService config;
     private final TicketAccountService accounts;
+    private final TicketStatusService statuses;
 
-    public TicketSettingsController(TicketSettingsService settings, TicketAnalyticsService analytics, TicketTranslationService translation, TicketConfigService config, TicketAccountService accounts) {
+    public TicketSettingsController(TicketSettingsService settings, TicketAnalyticsService analytics, TicketTranslationService translation, TicketConfigService config, TicketAccountService accounts, TicketStatusService statuses) {
+        this.statuses = statuses;
         this.config = config;
         this.accounts = accounts;
         this.settings = settings;
@@ -43,9 +46,9 @@ public class TicketSettingsController {
         return withConfig(settings.settings());
     }
 
-    // Settings plus the organisation's categories and custom statuses
+    // Priority settings plus the organisation's statuses (all of them, inactive included, for labels) and categories
     private TicketSettingsDto withConfig(TicketSettingsDto base) {
-        return new TicketSettingsDto(base.statuses(), base.priorities(), config.categories(), config.customStatuses());
+        return new TicketSettingsDto(statuses.list(false), base.priorities(), config.categories());
     }
 
     @PostMapping("/settings/categories")
@@ -68,23 +71,45 @@ public class TicketSettingsController {
         config.deleteCategory(id, reassignTo);
     }
 
-    @PostMapping("/settings/custom-statuses")
-    @PreAuthorize(LEAD_ACCESS)
-    public CustomStatusDto createStatus(@Valid @RequestBody CustomStatusRequest request) {
-        return config.createStatus(request);
+    // ---------- ticket statuses ----------
+    /** activeOnly=true: the statuses offered in dropdowns; otherwise every status (labels of old tickets, settings table). */
+    @GetMapping("/statuses")
+    @PreAuthorize(STANDARD_ACCESS)
+    public List<TicketStatusDto> statuses(@RequestParam(defaultValue = "false") boolean activeOnly) {
+        return statuses.list(activeOnly);
     }
 
-    @PutMapping("/settings/custom-statuses/{id}")
-    @PreAuthorize(LEAD_ACCESS)
-    public CustomStatusDto updateStatus(@PathVariable Long id, @Valid @RequestBody CustomStatusRequest request) {
-        return config.updateStatus(id, request);
+    @GetMapping("/statuses/active")
+    @PreAuthorize(STANDARD_ACCESS)
+    public List<TicketStatusDto> activeStatuses() {
+        return statuses.list(true);
     }
 
-    @DeleteMapping("/settings/custom-statuses/{id}")
+    @PostMapping("/settings/statuses")
+    @PreAuthorize(LEAD_ACCESS)
+    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    public TicketStatusDto createStatus(@Valid @RequestBody TicketStatusRequest request) {
+        return statuses.create(request);
+    }
+
+    @PutMapping("/settings/statuses/{id}")
+    @PreAuthorize(LEAD_ACCESS)
+    public TicketStatusDto updateStatus(@PathVariable Long id, @Valid @RequestBody TicketStatusRequest request) {
+        return statuses.update(id, request);
+    }
+
+    @PutMapping("/settings/statuses/order")
+    @PreAuthorize(LEAD_ACCESS)
+    public List<TicketStatusDto> reorderStatuses(@Valid @RequestBody StatusOrderRequest request) {
+        return statuses.reorder(request.ids());
+    }
+
+    /** reassignTo: id of the status the tickets of a status in use are moved to; without it a status in use answers 409 with ticketCount. */
+    @DeleteMapping("/settings/statuses/{id}")
     @PreAuthorize(LEAD_ACCESS)
     @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
-    public void deleteStatus(@PathVariable Long id) {
-        config.deleteStatus(id);
+    public void deleteStatus(@PathVariable Long id, @RequestParam(required = false) Long reassignTo) {
+        statuses.delete(id, reassignTo);
     }
 
     /** New support account (H24 agent, H24 lead or L2 technician employee) in the lead's organisation. */
@@ -92,12 +117,6 @@ public class TicketSettingsController {
     @PreAuthorize(LEAD_ACCESS)
     public AgentDto createAccount(@Valid @RequestBody AccountRequest request) {
         return accounts.create(request);
-    }
-
-    @PutMapping("/settings/statuses")
-    @PreAuthorize(LEAD_ACCESS)
-    public TicketSettingsDto saveStatuses(@Valid @RequestBody List<@Valid StatusSettingDto> request) {
-        return withConfig(settings.saveStatuses(request));
     }
 
     @PutMapping("/settings/priorities")

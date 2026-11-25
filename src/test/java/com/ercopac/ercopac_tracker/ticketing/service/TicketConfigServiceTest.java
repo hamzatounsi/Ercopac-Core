@@ -2,10 +2,7 @@ package com.ercopac.ercopac_tracker.ticketing.service;
 
 import com.ercopac.ercopac_tracker.organisation.domain.Organisation;
 import com.ercopac.ercopac_tracker.ticketing.domain.TicketCategorySetting;
-import com.ercopac.ercopac_tracker.ticketing.domain.TicketCustomStatus;
-import com.ercopac.ercopac_tracker.ticketing.domain.TicketStatus;
 import com.ercopac.ercopac_tracker.ticketing.repository.TicketCategorySettingRepository;
-import com.ercopac.ercopac_tracker.ticketing.repository.TicketCustomStatusRepository;
 import com.ercopac.ercopac_tracker.ticketing.repository.TicketRepository;
 import com.ercopac.ercopac_tracker.user.AppUser;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,13 +20,12 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-// Ticket categories (system ones protected, in-use ones reassigned) and custom statuses (deleting falls back to the lifecycle status)
+// Ticket categories (system ones protected, in-use ones reassigned)
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class TicketConfigServiceTest {
 
     @Mock TicketCategorySettingRepository categories;
-    @Mock TicketCustomStatusRepository statuses;
     @Mock TicketRepository tickets;
     @Mock TicketSettingsService settings;
 
@@ -37,7 +33,7 @@ class TicketConfigServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TicketConfigService(categories, statuses, tickets, settings);
+        service = new TicketConfigService(categories, tickets, settings);
         Organisation org = new Organisation();
         org.setId(5L);
         AppUser lead = new AppUser();
@@ -85,16 +81,5 @@ class TicketConfigServiceTest {
         when(categories.findByOrganisation_IdAndCodeIgnoreCase(5L, "NOPE")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.requireCategory(5L, "NOPE")).isInstanceOf(ResponseStatusException.class);
         assertThat(service.requireCategory(5L, "access")).isEqualTo("ACCESS");
-    }
-
-    @Test
-    void deletingACustomStatusClearsItFromTickets() {
-        TicketCustomStatus waiting = new TicketCustomStatus();
-        ReflectionTestUtils.setField(waiting, "id", 9L);
-        waiting.setBaseStatus(TicketStatus.IN_PROGRESS);
-        when(statuses.findByIdAndOrganisation_Id(9L, 5L)).thenReturn(Optional.of(waiting));
-        service.deleteStatus(9L);
-        verify(tickets).clearCustomStatus(9L);
-        verify(statuses).delete(waiting);
     }
 }

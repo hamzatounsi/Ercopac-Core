@@ -47,6 +47,7 @@ class TicketServiceAssignmentTest {
     @Mock TicketAnalyticsService analytics;
     @Mock TicketNotifier notifier;
     @Mock TicketConfigService config;
+    @Mock TicketStatusService statuses;
 
     private TicketService service;
     private Organisation organisation;
@@ -57,7 +58,7 @@ class TicketServiceAssignmentTest {
     @BeforeEach
     void setUp() {
         service = new TicketService(tickets, messages, activities, attachments, readStates, users, organisations, security,
-                new TicketStatusTransitionValidator(), customers, settings, analytics, notifier, config);
+                statuses, customers, settings, analytics, notifier, config);
         organisation = new Organisation();
         organisation.setId(5L);
         agent = user(1L, Role.H24);
@@ -73,7 +74,7 @@ class TicketServiceAssignmentTest {
         ticket.setDescription("Lost connection");
         ticket.setOrganisation(organisation);
         ticket.setCreatedByUser(agent);
-        ticket.setStatus(TicketStatus.ESCALATED);
+        ticket.setStatus(TicketStatusFixtures.standard("ESCALATED"));
         ticket.setPriority(TicketPriority.HIGH);
         ticket.setCategory(TicketCategory.SOFTWARE);
 
@@ -218,7 +219,7 @@ class TicketServiceAssignmentTest {
 
     @Test
     void closedTicketsKeepTheirProblemStatement() {
-        ticket.setStatus(TicketStatus.CLOSED);
+        ticket.setStatus(TicketStatusFixtures.standard("CLOSED"));
 
         assertThatThrownBy(() -> service.updateProblemStatement(100L, new ProblemStatementRequest("x", null, null, 3L)))
                 .isInstanceOf(TicketConflictException.class);

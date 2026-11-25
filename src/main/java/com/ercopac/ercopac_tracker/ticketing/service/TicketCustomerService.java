@@ -232,7 +232,7 @@ public class TicketCustomerService {
  private CustomerDto customer(Customer c, List<Project> orgProjects) {
   long projectCount = orgProjects.stream().filter(p -> p.getCustomerEntity() != null && p.getCustomerEntity().getId().equals(c.getId())).count() + manualProjects.countByCustomer_Id(c.getId());
   return new CustomerDto(c.getId(), c.getCustomerCode(), c.getName(), c.getCountry(), c.getTown(), c.getAddress(), c.getEmail(), c.getPhone(), c.getContactPerson(), c.isActive(),
-    sites.countByCustomer_Id(c.getId()), contacts.countByCustomer_Id(c.getId()), equipment.countByCustomer_Id(c.getId()), projectCount, tickets.countByCustomer_IdAndStatusNotIn(c.getId(), TicketSettingsService.DONE));
+    sites.countByCustomer_Id(c.getId()), contacts.countByCustomer_Id(c.getId()), equipment.countByCustomer_Id(c.getId()), projectCount, tickets.countOpenByCustomer(c.getId()));
  }
  private void apply(Customer c, CustomerRequest r) {
   c.setCustomerCode(r.code().trim()); c.setName(r.name().trim()); c.setCountry(trim(r.country())); c.setTown(trim(r.town())); c.setAddress(trim(r.address()));

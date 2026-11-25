@@ -18,11 +18,11 @@ import java.util.stream.Collectors;
 // First response = first public message on the ticket from someone other than its client.
 // Resolution = resolvedAt (or closedAt) minus createdAt.
 // A ticket meets its SLA when neither the first response nor the resolution took longer than the targets of its priority;
-// unfinished tickets are measured up to now. Cancelled tickets are left out of SLA figures.
+// unfinished tickets are measured up to now. "Done" and "resolved" mean a status flagged closed in Ticketing settings.
 @Service @Transactional
 public class TicketAnalyticsService {
- private final TicketRepository tickets; private final TicketMessageRepository messages; private final UserRepository users; private final TicketSettingsService settings;
- public TicketAnalyticsService(TicketRepository tickets, TicketMessageRepository messages, UserRepository users, TicketSettingsService settings) { this.tickets = tickets; this.messages = messages; this.users = users; this.settings = settings; }
+ private final TicketRepository tickets; private final TicketMessageRepository messages; private final UserRepository users; private final TicketSettingsService settings; private final TicketStatusService statuses;
+ public TicketAnalyticsService(TicketRepository tickets, TicketMessageRepository messages, UserRepository users, TicketSettingsService settings, TicketStatusService statuses) { this.tickets = tickets; this.messages = messages; this.users = users; this.settings = settings; this.statuses = statuses; }
 
  public TicketAnalytics analytics(Instant from, Instant to, Long customerId) { return analytics(from, to, customerId, null, null); }
 
@@ -39,7 +39,8 @@ public class TicketAnalyticsService {
   Instant now = Instant.now();
   List<Measure> measures = list.stream().map(t -> measure(t, firstResponse.get(t.getId()), sla.get(t.getPriority()), now)).toList();
 
-  List<Breakdown> byStatus = Arrays.stream(TicketStatus.values()).map(s -> new Breakdown(s.name(), measures.stream().filter(m -> m.ticket.getStatus() == s).count())).toList();
+  // Per status code, in the display order of Ticketing settings
+  List<Breakdown> byStatus = statuses.statusesOf(lead.getOrganisation()).stream().map(s -> new Breakdown(s.getCode(), measures.stream().filter(m -> m.ticket.getStatus() != null && s.getId().equals(m.ticket.getStatus().getId())).count())).toList();
   List<Breakdown> byPriority = Arrays.stream(TicketPriority.values()).map(p -> new Breakdown(p.name(), measures.stream().filter(m -> m.ticket.getPriority() == p).count())).toList();
 
   Map<Long, List<Measure>> perCustomer = measures.stream().filter(m -> m.ticket.getCustomer() != null).collect(Collectors.groupingBy(m -> m.ticket.getCustomer().getId(), LinkedHashMap::new, Collectors.toList()));
@@ -74,7 +75,7 @@ public class TicketAnalyticsService {
     measures.stream().filter(m -> m.escalated).count(), measures.stream().filter(m -> m.overdue).count(),
     average(measures.stream().map(m -> m.responseHours)), average(measures.stream().map(m -> m.resolutionHours)), compliance(measures));
   List<EquipmentTicket> equipmentTickets = !equipmentFilter ? List.of() : list.stream().sorted(Comparator.comparing(Ticket::getCreatedAt).reversed()).map(t -> new EquipmentTicket(t.getId(), t.getTicketNumber(), t.getSubject(),
-    t.getCustomer() == null ? t.getCustomerName() : t.getCustomer().getName(), t.getSite(), t.getEquipment().getName(), t.getEquipment().getSerialNumber(), t.getStatus())).toList();
+    t.getCustomer() == null ? t.getCustomerName() : t.getCustomer().getName(), t.getSite(), t.getEquipment().getName(), t.getEquipment().getSerialNumber(), t.getStatus() == null ? null : t.getStatus().getCode())).toList();
   return new TicketAnalytics(start, end, daily ? "day" : "month", totals, byStatus, byPriority, byCustomer, timeline, agents, equipmentTickets);
  }
 
@@ -94,19 +95,19 @@ public class TicketAnalyticsService {
 
  /** Unfinished ticket older than the resolution target of its priority. */
  public static boolean overdue(Ticket t, PrioritySettingDto target, Instant now) {
-  return !TicketSettingsService.DONE.contains(t.getStatus()) && target != null && Duration.between(t.getCreatedAt(), now).toMinutes() > target.resolutionHours() * 60L;
+  return !t.isClosed() && target != null && Duration.between(t.getCreatedAt(), now).toMinutes() > target.resolutionHours() * 60L;
  }
 
  static Measure measure(Ticket t, Instant firstResponse, PrioritySettingDto target, Instant now) {
-  boolean done = TicketSettingsService.DONE.contains(t.getStatus());
+  boolean done = t.isClosed();
   Instant finished = t.getResolvedAt() != null ? t.getResolvedAt() : t.getClosedAt() != null ? t.getClosedAt() : done ? t.getUpdatedAt() : null;
   Instant responseEnd = firstResponse != null ? firstResponse : finished != null ? finished : now;
   Instant resolutionEnd = finished != null ? finished : now;
   boolean breached = target != null && (minutes(t.getCreatedAt(), responseEnd) > target.firstResponseMinutes() || minutes(t.getCreatedAt(), resolutionEnd) > target.resolutionHours() * 60L);
-  return new Measure(t, done, t.getStatus() == TicketStatus.RESOLVED || t.getStatus() == TicketStatus.CLOSED,
-    t.getStatus() == TicketStatus.ESCALATED || t.getEscalationLevel() > 0 || t.getL2Technician() != null,
-    overdue(t, target, now), t.getStatus() == TicketStatus.CANCELLED ? null : !breached,
-    firstResponse == null ? null : hours(t.getCreatedAt(), firstResponse), finished == null || t.getStatus() == TicketStatus.CANCELLED ? null : hours(t.getCreatedAt(), finished));
+  return new Measure(t, done, done,
+    t.getEscalationLevel() > 0 || t.getL2Technician() != null,
+    overdue(t, target, now), !breached,
+    firstResponse == null ? null : hours(t.getCreatedAt(), firstResponse), finished == null ? null : hours(t.getCreatedAt(), finished));
  }
 
  /** Share of tickets that met their SLA, in percent; null when there is nothing to measure. */

@@ -47,7 +47,8 @@ public class TicketController {
     @PreAuthorize(STANDARD_ACCESS)
     public Page<TicketSummary> list(
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) TicketStatus status,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long statusId,
             @RequestParam(required = false) TicketPriority priority,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) Long organisationId,
@@ -64,7 +65,7 @@ public class TicketController {
         String[] s = sort.split(",");
         String property = SORTABLE.getOrDefault(s[0].trim(), "id");
         return service.list(
-                search, status, priority, category, organisationId, assigneeId, creatorId, customerId, from, to,
+                search, statusId, status, priority, category, organisationId, assigneeId, creatorId, customerId, from, to,
                 PageRequest.of(
                         Math.max(0, page),
                         Math.min(Math.max(1, size), 100),
@@ -75,7 +76,7 @@ public class TicketController {
     }
 
     private static final Map<String, String> SORTABLE = Map.ofEntries(
-            Map.entry("id", "id"), Map.entry("ticketNumber", "ticketNumber"), Map.entry("subject", "subject"), Map.entry("status", "status"),
+            Map.entry("id", "id"), Map.entry("ticketNumber", "ticketNumber"), Map.entry("subject", "subject"), Map.entry("status", "status.displayOrder"),
             Map.entry("priority", "priority"), Map.entry("category", "category"), Map.entry("customer", "customerName"), Map.entry("site", "site"),
             Map.entry("projectNumber", "projectNumber"), Map.entry("createdAt", "createdAt"), Map.entry("updatedAt", "updatedAt"));
 

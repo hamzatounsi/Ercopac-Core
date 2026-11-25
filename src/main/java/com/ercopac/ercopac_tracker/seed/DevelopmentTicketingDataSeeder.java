@@ -34,6 +34,7 @@ import com.ercopac.ercopac_tracker.ticketing.domain.TicketOrigin;
 import com.ercopac.ercopac_tracker.ticketing.domain.TicketPriority;
 import com.ercopac.ercopac_tracker.ticketing.domain.TicketReadState;
 import com.ercopac.ercopac_tracker.ticketing.domain.TicketStatus;
+import com.ercopac.ercopac_tracker.ticketing.service.TicketStatusService;
 import com.ercopac.ercopac_tracker.ticketing.repository.TicketActivityRepository;
 import com.ercopac.ercopac_tracker.ticketing.repository.TicketMessageRepository;
 import com.ercopac.ercopac_tracker.ticketing.repository.TicketReadStateRepository;
@@ -85,6 +86,7 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
     private final ChangeRequestRepository changeRequests;
     private final ActionItemRepository actions;
     private final PasswordEncoder passwordEncoder;
+    private final TicketStatusService ticketStatuses;
 
     public DevelopmentTicketingDataSeeder(
             OrganisationRepository organisations,
@@ -104,8 +106,10 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
             RiskItemRepository risks,
             ChangeRequestRepository changeRequests,
             ActionItemRepository actions,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            TicketStatusService ticketStatuses
     ) {
+        this.ticketStatuses = ticketStatuses;
         this.organisations = organisations;
         this.departments = departments;
         this.users = users;
@@ -178,25 +182,25 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
         seedOperationalData(atRisk, quality, gm, qualityEmployee);
 
         ticket("TKT-2026-100001", ercopac, ercopacClient, ercopacClient, null,
-                "Unable to activate new user account", TicketCategory.ACCESS, TicketPriority.HIGH, TicketStatus.OPEN,
+                "Unable to activate new user account", TicketCategory.ACCESS, TicketPriority.HIGH, "OPEN",
                 "Berlin HQ", "A new employee cannot access the planning workspace.", false);
         ticket("TKT-2026-100002", ercopac, ercopacClient, ercopacClient, ercopacSales,
-                "Integration timeout on purchase orders", TicketCategory.INTEGRATION, TicketPriority.CRITICAL, TicketStatus.IN_PROGRESS,
+                "Integration timeout on purchase orders", TicketCategory.INTEGRATION, TicketPriority.CRITICAL, "IN_PROGRESS",
                 "Berlin HQ", "The ERP integration times out during peak processing.", true);
         ticket("TKT-2026-100003", ercopac, ercopacSales, ercopacClient, ercopacSales,
-                "Slow dashboard load for engineering", TicketCategory.PERFORMANCE, TicketPriority.MEDIUM, TicketStatus.ESCALATED,
+                "Slow dashboard load for engineering", TicketCategory.PERFORMANCE, TicketPriority.MEDIUM, "ESCALATED",
                 "Munich Site", "Engineering dashboard needs more than 20 seconds to load.", true);
         ticket("TKT-2026-100004", ercopac, ercopacClient, ercopacClient, ercopacSales,
-                "Clarify invoice export fields", TicketCategory.BILLING, TicketPriority.LOW, TicketStatus.RESOLVED,
+                "Clarify invoice export fields", TicketCategory.BILLING, TicketPriority.LOW, "RESOLVED",
                 "Berlin HQ", "The client requested clarification of the invoice export columns.", true);
         ticket("TKT-2026-100005", ercopac, ercopacSales, ercopacClient, ercopacSales,
-                "Feature request: saved ticket filters", TicketCategory.FEATURE_REQUEST, TicketPriority.LOW, TicketStatus.CLOSED,
+                "Feature request: saved ticket filters", TicketCategory.FEATURE_REQUEST, TicketPriority.LOW, "CLOSED",
                 "Berlin HQ", "Saved ticket filters have been delivered and accepted.", true);
         ticket("TKT-2026-100006", ercopac, ercopacClient, ercopacClient, ercopacSales,
-                "Client reopened a resolved access request", TicketCategory.ACCESS, TicketPriority.MEDIUM, TicketStatus.REOPENED,
+                "Client reopened a resolved access request", TicketCategory.ACCESS, TicketPriority.MEDIUM, "REOPENED",
                 "Berlin HQ", "The original workaround did not resolve the access issue.", true);
         ticket("TKT-2026-200001", testIndustries, testClient, testClient, testSales,
-                "Demo tenant data import question", TicketCategory.DATA, TicketPriority.MEDIUM, TicketStatus.OPEN,
+                "Demo tenant data import question", TicketCategory.DATA, TicketPriority.MEDIUM, "OPEN",
                 "Hamburg Site", "Imported project dates require confirmation.", true);
 
         printCredentials();
@@ -542,7 +546,7 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
             String subject,
             TicketCategory category,
             TicketPriority priority,
-            TicketStatus status,
+            String statusCode,
             String site,
             String description,
             boolean includeInternalNote
@@ -561,24 +565,25 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
         ticket.setDescription(description);
         ticket.setCategory(category);
         ticket.setPriority(priority);
+        TicketStatus status = ticketStatuses.legacy(organisation, statusCode);
         ticket.setStatus(status);
         ticket.setOrigin(TicketOrigin.WEB);
         ticket.setSite(site);
-        ticket.setEscalationLevel(status == TicketStatus.ESCALATED ? 1 : 0);
-        if (status == TicketStatus.RESOLVED || status == TicketStatus.CLOSED) {
+        ticket.setEscalationLevel("ESCALATED".equals(statusCode) ? 1 : 0);
+        if (status.isClosed()) {
             ticket.setResolvedAt(Instant.now().minusSeconds(86_400));
         }
-        if (status == TicketStatus.CLOSED) {
+        if ("CLOSED".equals(statusCode)) {
             ticket.setClosedAt(Instant.now().minusSeconds(3_600));
         }
         ticket = tickets.save(ticket);
 
-        activity(ticket, creator, TicketActivityType.CREATED, null, status.name(), "Ticket created");
+        activity(ticket, creator, TicketActivityType.CREATED, null, status.getName(), "Ticket created");
         if (assignee != null) {
             activity(ticket, assignee, TicketActivityType.ASSIGNED, null, assignee.getFullName(), "Assigned to sales manager");
         }
-        if (status != TicketStatus.OPEN) {
-            activity(ticket, assignee == null ? creator : assignee, activityFor(status), TicketStatus.OPEN.name(), status.name(), "Ticket lifecycle updated");
+        if (!status.isDefault()) {
+            activity(ticket, assignee == null ? creator : assignee, activityFor(statusCode), "Open", status.getName(), "Ticket lifecycle updated");
         }
 
         message(ticket, client, "We need help with: " + subject, false);
@@ -596,13 +601,13 @@ public class DevelopmentTicketingDataSeeder implements CommandLineRunner {
         readStates.save(clientReadState);
     }
 
-    private TicketActivityType activityFor(TicketStatus status) {
-        return switch (status) {
-            case IN_PROGRESS -> TicketActivityType.STATUS_CHANGED;
-            case ESCALATED -> TicketActivityType.ESCALATED;
-            case RESOLVED -> TicketActivityType.RESOLVED;
-            case CLOSED -> TicketActivityType.CLOSED;
-            case REOPENED -> TicketActivityType.REOPENED;
+    private TicketActivityType activityFor(String statusCode) {
+        return switch (statusCode) {
+            case "IN_PROGRESS" -> TicketActivityType.STATUS_CHANGED;
+            case "ESCALATED" -> TicketActivityType.ESCALATED;
+            case "RESOLVED" -> TicketActivityType.RESOLVED;
+            case "CLOSED" -> TicketActivityType.CLOSED;
+            case "REOPENED" -> TicketActivityType.REOPENED;
             default -> TicketActivityType.UPDATED;
         };
     }

@@ -81,6 +81,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorBody(HttpStatus.CONFLICT, ex.getMessage()));
     }
 
+    @ExceptionHandler(com.ercopac.ercopac_tracker.ticketing.service.TicketStatusInUseException.class)
+    public ResponseEntity<Map<String, Object>> handleTicketStatusInUse(com.ercopac.ercopac_tracker.ticketing.service.TicketStatusInUseException ex) {
+        Map<String, Object> body = errorBody(HttpStatus.CONFLICT, ex.getMessage());
+        body.put("code", "STATUS_IN_USE");
+        body.put("ticketCount", ex.getTicketCount());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
     @ExceptionHandler(CustomerConflictException.class)
     public ResponseEntity<Map<String, Object>> handleCustomerConflict(CustomerConflictException ex) {
         Map<String, Object> body = errorBody(HttpStatus.CONFLICT, ex.getMessage());
